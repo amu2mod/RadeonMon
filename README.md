@@ -43,6 +43,7 @@ This project uses CMake and can be built using MSVC with Ninja.
 
 ### Prerequisites
 
+- ADLX 1.5 SDK extracted in the folder /third_party/AMD/ADLX-1.5/
 - CMake (≥ 3.25)
 - MSVC (Visual Studio Build Tools)
 - Ninja build system
