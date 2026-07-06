@@ -2,6 +2,8 @@
 
 An ultra-lightweight Windows monitoring application for AMD Radeon RDNA4 graphics cards on Windows.
 
+This is a personal project developed independently, with no affiliation with AMD Corporation.
+
 ---
 
 ## Overview
