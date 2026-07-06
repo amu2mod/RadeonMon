@@ -1,0 +1,4 @@
+{
+    "cmake.generator": "Ninja",
+    "cmake.configureOnOpen": true
+}

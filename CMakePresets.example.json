@@ -1,0 +1,23 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "debug",
+            "displayName": "Debug (Ninja + MSVC environment)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "release",
+            "displayName": "Release (Ninja + MSVC environment)",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ]
+}
