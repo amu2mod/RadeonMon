@@ -11,8 +11,10 @@ add_executable(radeonmon WIN32
     src/ryzen_sdk.cpp
 )
 
-target_include_directories(radeonmon PRIVATE include)
-target_include_directories(radeonmon PRIVATE third_party)
+target_include_directories(radeonmon PRIVATE
+    include
+    third_party
+)
 
 target_compile_features(radeonmon PRIVATE cxx_std_23)
 

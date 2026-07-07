@@ -450,16 +450,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_COMMAND:
     {
-        switch (LOWORD(wParam))
-        {
-        case IDM_ALWAYS_ON_TOP:
+        if (LOWORD(wParam) == IDM_ALWAYS_ON_TOP)
         {
             g_alwaysOnTop = !g_alwaysOnTop;
             SetWindowPos(hwnd, g_alwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-            HMENU hMenu = GetMenu(hwnd);
-            CheckMenuItem(hMenu, IDM_ALWAYS_ON_TOP, MF_BYCOMMAND | (g_alwaysOnTop ? MF_CHECKED : MF_UNCHECKED));
             return 0;
-        }
         }
 
         break;
@@ -482,6 +477,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     default:
         return DefWindowProc(hwnd, msg, wParam, lParam);
     }
+
+    return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
