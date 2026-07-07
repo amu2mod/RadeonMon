@@ -246,28 +246,12 @@ void ADLXGpuTelemetry::Destroy()
     }
 }
 
-template <typename T, typename SupportFn, typename MetricFn>
-int ADLXGpuTelemetry::ReadMetric(const char *name, SupportFn supportFn, MetricFn metricFn, IADLXGPUMetrics *metrics)
+template <typename T, typename MetricFn>
+int ADLXGpuTelemetry::ReadMetric(const char *name, MetricFn metricFn, IADLXGPUMetrics *metrics)
 {
-    adlx_bool supported = false;
-
-    ADLX_RESULT res = (gpuMetricsSupport->*supportFn)(&supported);
-
-    if (!ADLX_SUCCEEDED(res))
-    {
-        LOG_ERROR("%s support query failed: %d", name, res);
-        return AdlxStates::Error;
-    }
-
-    if (!supported)
-    {
-        LOG_WARN("%s not supported", name);
-        return AdlxStates::NotSupported;
-    }
-
     T value{};
 
-    res = (metrics->*metricFn)(&value);
+    ADLX_RESULT res = (metrics->*metricFn)(&value);
 
     if (!ADLX_SUCCEEDED(res))
     {
@@ -286,11 +270,9 @@ int ADLXGpuTelemetry::ReadMetric(const char *name, SupportFn supportFn, MetricFn
     }
 }
 
-template <typename T, typename SupportFn, typename MetricFn>
-int ADLXGpuTelemetry::ReadMetricV1(const char *name, SupportFn supportFn, MetricFn metricFn, IADLXGPUMetrics *gpuMetrics)
+template <typename T, typename MetricFn>
+int ADLXGpuTelemetry::ReadMetricV1(const char *name, MetricFn metricFn, IADLXGPUMetrics *gpuMetrics)
 {
-    adlx_bool supported = false;
-
     IADLXGPUMetrics1Ptr metrics1(gpuMetrics);
 
     if (!gpuMetricsSupport1 || !metrics1)
@@ -299,23 +281,9 @@ int ADLXGpuTelemetry::ReadMetricV1(const char *name, SupportFn supportFn, Metric
         return AdlxStates::Error;
     }
 
-    ADLX_RESULT res = (gpuMetricsSupport1->*supportFn)(&supported);
-
-    if (!ADLX_SUCCEEDED(res))
-    {
-        LOG_ERROR("%s support query failed: %d", name, res);
-        return AdlxStates::Error;
-    }
-
-    if (!supported)
-    {
-        LOG_WARN("%s not supported", name);
-        return AdlxStates::NotSupported;
-    }
-
     T value{};
 
-    res = (metrics1->*metricFn)(&value);
+    ADLX_RESULT res = (metrics1->*metricFn)(&value);
 
     if (!ADLX_SUCCEEDED(res))
     {
@@ -354,35 +322,35 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
         // GPU temp
         if (IsEnabled(GPU_CAP_TEMP))
         {
-            snapshot.temperature = ReadMetric<adlx_double>("GPUTemperature", &IADLXGPUMetricsSupport::IsSupportedGPUTemperature, &IADLXGPUMetrics::GPUTemperature, gpuMetrics);
+            snapshot.temperature = ReadMetric<adlx_double>("GPUTemperature", &IADLXGPUMetrics::GPUTemperature, gpuMetrics);
             anyMetricRead = true;
         }
 
         // Hotspot
         if (IsEnabled(GPU_CAP_HOTSPOT))
         {
-            snapshot.hotspot = ReadMetric<adlx_double>("HotspotTemperature", &IADLXGPUMetricsSupport::IsSupportedGPUHotspotTemperature, &IADLXGPUMetrics::GPUHotspotTemperature, gpuMetrics);
+            snapshot.hotspot = ReadMetric<adlx_double>("HotspotTemperature", &IADLXGPUMetrics::GPUHotspotTemperature, gpuMetrics);
             anyMetricRead = true;
         }
 
         // VRAM Temp
         if (IsEnabled(GPU_CAP_MEM_TEMP))
         {
-            snapshot.vram = ReadMetricV1<adlx_double>("GPUMemoryTemperature", &IADLXGPUMetricsSupport1::IsSupportedGPUMemoryTemperature, &IADLXGPUMetrics1::GPUMemoryTemperature, gpuMetrics);
+            snapshot.vram = ReadMetricV1<adlx_double>("GPUMemoryTemperature", &IADLXGPUMetrics1::GPUMemoryTemperature, gpuMetrics);
             anyMetricRead = true;
         }
 
         // Fan Speed
         if (IsEnabled(GPU_CAP_FAN_SPEED))
         {
-            snapshot.fanSpeed = ReadMetric<adlx_int>("GPUFanSpeed", &IADLXGPUMetricsSupport::IsSupportedGPUFanSpeed, &IADLXGPUMetrics::GPUFanSpeed, gpuMetrics);
+            snapshot.fanSpeed = ReadMetric<adlx_int>("GPUFanSpeed", &IADLXGPUMetrics::GPUFanSpeed, gpuMetrics);
             anyMetricRead = true;
         }
 
         // Power Consumption
         if (IsEnabled(GPU_CAP_BOARD_POWER))
         {
-            snapshot.power = ReadMetric<adlx_double>("GPUTotalBoardPower", &IADLXGPUMetricsSupport::IsSupportedGPUTotalBoardPower, &IADLXGPUMetrics::GPUTotalBoardPower, gpuMetrics);
+            snapshot.power = ReadMetric<adlx_double>("GPUTotalBoardPower", &IADLXGPUMetrics::GPUTotalBoardPower, gpuMetrics);
             anyMetricRead = true;
         }
 

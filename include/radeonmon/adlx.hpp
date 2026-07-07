@@ -40,12 +40,12 @@ private:
     GpuMetricsSnapshot m_snapshot;
 
     // Generic template to read ADLX metrics
-    template <typename T, typename SupportFn, typename MetricFn>
-    int ReadMetric(const char *name, SupportFn supportFn, MetricFn metricFn, IADLXGPUMetrics *metrics);
+    template <typename T, typename MetricFn>
+    int ReadMetric(const char *name, MetricFn metricFn, IADLXGPUMetrics *metrics);
 
     // Use IADLXGPUMetrics1Ptr for newer metrics of ADLX 1.5
-    template <typename T, typename SupportFn, typename MetricFn>
-    int ReadMetricV1(const char *name, SupportFn supportFn, MetricFn metricFn, IADLXGPUMetrics *metrics);
+    template <typename T, typename MetricFn>
+    int ReadMetricV1(const char *name, MetricFn metricFn, IADLXGPUMetrics *metrics);
 
     // heavy function to get all metrics
     GpuMetricsSnapshot Query();

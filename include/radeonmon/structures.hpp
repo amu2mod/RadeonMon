@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 #include <cstdint>
+#include <string>
 
 extern UINT g_dpi;
 
@@ -15,6 +16,7 @@ struct PropertyItem
 {
     LPCWSTR label;
     int value;
+    int value2;
     WCHAR textValue[32];
     RECT labelRc;
     RECT valueRc;
@@ -145,4 +147,22 @@ enum GPU_CAPS : uint32_t
 
     // V3
     GPU_CAP_FAN_DUTY = 1 << 15
+};
+
+enum RyzenCpuState
+{
+    AdminRequired = -3,
+    SdkRequired = -4,
+};
+
+enum class RyzenMetricState
+{
+    NotSupported = -1,
+    Error = 0,
+};
+
+struct RyzenMetrics
+{
+    double dTemperature = 0.0;
+    double dPower = 0.0;
 };

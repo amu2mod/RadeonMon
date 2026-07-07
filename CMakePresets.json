@@ -6,13 +6,9 @@
             "displayName": "MSVC + Ninja x64 (Debug)",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/debug",
-            "architecture": {
-                "value": "x64"
-            },
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_CXX_COMPILER": "cl",
-                "CMAKE_MAKE_PROGRAM": "C:/Program Files (x86)/Microsoft Visual Studio/18/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe"
+                "CMAKE_CXX_COMPILER": "cl"
             }
         },
         {
@@ -20,13 +16,9 @@
             "displayName": "MSVC + Ninja x64 (Release)",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/release",
-            "architecture": {
-                "value": "x64"
-            },
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_CXX_COMPILER": "cl",
-                "CMAKE_MAKE_PROGRAM": "C:/Program Files (x86)/Microsoft Visual Studio/18/BuildTools/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe"
+                "CMAKE_CXX_COMPILER": "cl"
             }
         }
     ]

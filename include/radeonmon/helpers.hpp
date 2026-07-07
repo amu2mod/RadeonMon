@@ -341,3 +341,142 @@ inline bool FormatPowerConsumption(wchar_t *buffer, int watts)
     *p = L'\0';
     return true;
 }
+
+inline bool FormatCpuMetrics(wchar_t *buffer, int temp, int power)
+{
+    constexpr int MAXBUFSIZE = 20;
+
+    if (temp == AdminRequired)
+    {
+        buffer[0] = L'a';
+        buffer[1] = L'd';
+        buffer[2] = L'm';
+        buffer[3] = L'i';
+        buffer[4] = L'n';
+        buffer[5] = L' ';
+        buffer[6] = L'r';
+        buffer[7] = L'e';
+        buffer[8] = L'q';
+        buffer[9] = L'u';
+        buffer[10] = L'i';
+        buffer[11] = L'r';
+        buffer[12] = L'e';
+        buffer[13] = L'd';
+        buffer[14] = L'\0';
+        return false;
+    }
+
+    if (temp == SdkRequired)
+    {
+        buffer[0] = L's';
+        buffer[1] = L'd';
+        buffer[2] = L'k';
+        buffer[3] = L' ';
+        buffer[4] = L'r';
+        buffer[5] = L'e';
+        buffer[6] = L'q';
+        buffer[7] = L'u';
+        buffer[8] = L'i';
+        buffer[9] = L'r';
+        buffer[10] = L'e';
+        buffer[11] = L'd';
+        buffer[12] = L'\0';
+        return false;
+    }
+
+    if (temp == NotSupported)
+    {
+        buffer[0] = L'n';
+        buffer[1] = L'o';
+        buffer[2] = L't';
+        buffer[3] = L' ';
+        buffer[4] = L's';
+        buffer[5] = L'u';
+        buffer[6] = L'p';
+        buffer[7] = L'p';
+        buffer[8] = L'o';
+        buffer[9] = L'r';
+        buffer[10] = L't';
+        buffer[11] = L'e';
+        buffer[12] = L'd';
+        buffer[13] = L'\0';
+        return false;
+    }
+
+    if (temp < NotSupported || temp == Error || temp > 150 || power < NotSupported || power == Error || power > 999)
+    {
+        buffer[0] = L'e';
+        buffer[1] = L'r';
+        buffer[2] = L'r';
+        buffer[3] = L'o';
+        buffer[4] = L'r';
+        buffer[5] = L'\0';
+        return false;
+    }
+
+    wchar_t *p = buffer;
+
+    // Temperature
+    if (temp >= 100)
+        *p++ = static_cast<wchar_t>(L'0' + temp / 100);
+
+    if (temp >= 10)
+        *p++ = L'0' + (temp / 10) % 10;
+
+    *p++ = L'0' + temp % 10;
+    *p++ = L'°';
+    *p++ = L'C';
+
+    // Power
+    *p++ = L',';
+    *p++ = L' ';
+
+    if (power >= 100)
+        *p++ = static_cast<wchar_t>(L'0' + power / 100);
+
+    if (power >= 10)
+        *p++ = L'0' + (power / 10) % 10;
+
+    *p++ = L'0' + power % 10;
+    *p++ = L' ';
+    *p++ = L'W';
+
+    // Padding
+    constexpr int MAX = MAXBUFSIZE - 1;
+    while (p - buffer < MAX)
+        *p++ = L' ';
+
+    *p = L'\0';
+
+    return true;
+}
+
+inline bool IsAMDVendor(const char *vendorId)
+{
+    if (vendorId == nullptr)
+        return false;
+
+    return std::strcmp(vendorId, "1002") == 0;
+}
+
+inline bool IsRunningAsAdministrator()
+{
+    HANDLE hToken = nullptr;
+
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &hToken))
+        return false;
+
+    TOKEN_ELEVATION elevation;
+    DWORD size = sizeof(elevation);
+
+    BOOL success = GetTokenInformation(
+        hToken,
+        TokenElevation,
+        &elevation,
+        sizeof(elevation),
+        &size);
+
+    CloseHandle(hToken);
+
+    return success && elevation.TokenIsElevated;
+}

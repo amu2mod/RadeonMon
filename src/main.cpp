@@ -1,8 +1,9 @@
 #include <windows.h>
 #include <shellscalingapi.h>
+#include <windowsx.h>
 
 #include <cstdio>
-
+#include <cmath>
 #include <cassert>
 
 #include "radeonmon/globals.hpp"
@@ -11,6 +12,8 @@
 #include "radeonmon/helpers.hpp"
 #include "radeonmon/adlx.hpp"
 #include "radeonmon/logging.hpp"
+#include "radeonmon/ryzen.hpp"
+#include "radeonmon/ryzen_sdk.hpp"
 
 #pragma comment(lib, "Shcore.lib")
 
@@ -20,7 +23,8 @@ enum MetricsIndex
     Hotspot = 2,
     Vram = 4,
     FanSpeed = 6,
-    Power = 8
+    Power = 8,
+    Cpu = 10,
 };
 
 void ResetDirty()
@@ -58,8 +62,10 @@ bool SetPropertyValueAtLine(int line, LPCWSTR textValue, int valueSize, bool war
 bool SetPropertyValueAtIndex(int index, int value, LPCWSTR textValue, int valueSize, bool warning = false)
 {
     if (index < 0 || index >= g_propCount)
-        // TODO: log error index
+    {
+        LOG_ERROR("Wrong index: %d", index);
         return false;
+    }
 
     PropertyItem &p = g_props[index];
     p.value = value;
@@ -70,12 +76,26 @@ bool SetPropertyValueAtIndex(int index, int value, LPCWSTR textValue, int valueS
     return true;
 }
 
-int GetPropertyValueAtIndex(int index)
+bool SetPropertyValue2OnlyAtIndex(int index, int value)
+{
+    if (index < 0 || index >= g_propCount)
+    {
+        LOG_ERROR("Wrong index: %d", index);
+        return false;
+    }
+
+    PropertyItem &p = g_props[index];
+    p.value2 = value;
+
+    return true;
+}
+
+int GetPropertyValueAtIndex(int index, bool secondValue = false)
 {
     if (index < 0 || index >= g_propCount)
         return -1;
 
-    return g_props[index].value;
+    return secondValue ? g_props[index].value2 : g_props[index].value;
 }
 
 void SetAllPropertiesInitFlag(bool state)
@@ -198,6 +218,15 @@ void PaintProperties(HDC hdc)
 #endif
 
     SelectObject(hdc, oldPen);
+}
+
+void SetAlwaysOnTop(HWND hWnd, bool enable)
+{
+    SetWindowPos(
+        hWnd,
+        enable ? HWND_TOPMOST : HWND_NOTOPMOST,
+        0, 0, 0, 0,
+        SWP_NOMOVE | SWP_NOSIZE);
 }
 
 // ── window procedure ─────────────────────────────────────────────────────────
@@ -365,10 +394,75 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 SetPropertyValueAtIndex(MetricsIndex::Power, snapshot.power, powerBuffer, 16);
             }
 
+            if (g_cpu.IsInitialized())
+            {
+                RyzenMetrics cpuMetrics;
+
+                if (g_cpu.GetRyzenMetrics(cpuMetrics))
+                {
+                    // round to nearest integer for more accuracy than truncating
+                    const int cpuIntegerTemp = static_cast<int>(std::round(cpuMetrics.dTemperature));
+                    const int cpuIntegerPower = static_cast<int>(std::round(cpuMetrics.dPower));
+                    // LOG_DEBUG("CPU Temp: %0.2f -> %d°C", cpuMetrics.dTemperature, cpuIntegerTemp);
+                    // LOG_DEBUG("CPU Power: %0.2f -> %dW", cpuMetrics.dPower, cpuIntegerPower);
+
+                    if ((GetPropertyValueAtIndex(MetricsIndex::Cpu) != cpuIntegerTemp) || (GetPropertyValueAtIndex(MetricsIndex::Cpu, true) != cpuIntegerPower))
+                    {
+                        dirty = true;
+                        wchar_t cpuBuffer[20];
+                        FormatCpuMetrics(cpuBuffer, cpuIntegerTemp, cpuIntegerPower);
+                        SetPropertyValueAtIndex(MetricsIndex::Cpu, cpuIntegerTemp, cpuBuffer, 16);
+                        SetPropertyValue2OnlyAtIndex(MetricsIndex::Cpu, cpuIntegerPower);
+                    }
+                }
+            }
+
             if (dirty)
                 InvalidateRect(hwnd, nullptr, FALSE);
         }
         return 0;
+    }
+
+    case WM_CONTEXTMENU:
+    {
+        HMENU hMenu = CreatePopupMenu();
+
+        AppendMenu(hMenu, MF_STRING | (g_alwaysOnTop ? MF_CHECKED : MF_UNCHECKED), IDM_ALWAYS_ON_TOP, L"Always on Top");
+
+        POINT pt;
+        pt.x = GET_X_LPARAM(lParam);
+        pt.y = GET_Y_LPARAM(lParam);
+
+        // Keyboard context menu (Shift+F10 or Menu key)
+        if (pt.x == -1 && pt.y == -1)
+        {
+            RECT rc;
+            GetWindowRect(hwnd, &rc);
+            pt.x = rc.left + 20;
+            pt.y = rc.top + 20;
+        }
+
+        TrackPopupMenu(hMenu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, nullptr);
+
+        DestroyMenu(hMenu);
+        return 0;
+    }
+
+    case WM_COMMAND:
+    {
+        switch (LOWORD(wParam))
+        {
+        case IDM_ALWAYS_ON_TOP:
+        {
+            g_alwaysOnTop = !g_alwaysOnTop;
+            SetWindowPos(hwnd, g_alwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            HMENU hMenu = GetMenu(hwnd);
+            CheckMenuItem(hMenu, IDM_ALWAYS_ON_TOP, MF_BYCOMMAND | (g_alwaysOnTop ? MF_CHECKED : MF_UNCHECKED));
+            return 0;
+        }
+        }
+
+        break;
     }
 
     case WM_DESTROY:
@@ -438,6 +532,28 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 
     g_AdlxGPUTelemetry.Init();
     g_AdlxGPUTelemetry.Discover();
+
+    bool isAdmin = IsRunningAsAdministrator();
+    LOG_DEBUG("Admin mode: %s", isAdmin ? "yes" : "no");
+
+    if (isAdmin)
+    {
+        if (!LoadAMDDLLs())
+        {
+            SetPropertyValueAtIndex(MetricsIndex::Cpu, SdkRequired, L"Ryzen SDK required", 19);
+        }
+        else
+        {
+            if (!g_cpu.Init())
+            {
+                SetPropertyValueAtIndex(MetricsIndex::Cpu, NotSupported, L"not supported", 14);
+            }
+        }
+    }
+    else
+    {
+        SetPropertyValueAtIndex(MetricsIndex::Cpu, AdminRequired, L"admin required", 15);
+    }
 
     ShowWindow(hwnd, nCmdShow);
 

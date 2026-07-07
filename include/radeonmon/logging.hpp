@@ -1,3 +1,6 @@
+#ifndef LOGGING_HPP
+#define LOGGING_HPP
+
 #include <cstdio>
 #include <cstring>
 
@@ -28,3 +31,5 @@ inline const char *BaseFileName(const char *path)
     {                       \
     } while (0)
 #endif
+
+#endif // LOGGING_HPP
