@@ -208,7 +208,7 @@ inline bool FormatFanSpeed(wchar_t *buffer, int rpm)
 
 inline bool FormatPowerConsumption(wchar_t *buffer, int watts)
 {
-    constexpr int MAXBUFSIZE = 5; // 999W
+    constexpr int MAXBUFSIZE = 6; // 999 W
 
     if (watts < 0 || watts > 999)
     {
@@ -252,7 +252,7 @@ inline bool FormatPowerConsumption(wchar_t *buffer, int watts)
 
 inline bool FormatCpuMetrics(wchar_t *buffer, int temp, int power)
 {
-    constexpr int MAXBUFSIZE = 12; // 150°C, 999W
+    constexpr int MAXBUFSIZE = 13; // 150°C, 999 W
 
     if (temp < 0 || temp > 150 || power < 0 || power > 999)
     {
