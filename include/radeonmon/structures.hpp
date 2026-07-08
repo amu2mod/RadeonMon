@@ -36,10 +36,36 @@ struct PropertyItem
             return;
         }
 
-        MultiByteToWideChar(CP_UTF8, 0, src, -1, textValue, 128);
+        MultiByteToWideChar(CP_UTF8, 0, src, -1, textValue, _countof(textValue));
 
-        textValue[31] = L'\0';
         dirty = true;
+    }
+
+    void SetValue(const wchar_t *src)
+    {
+        if (src)
+        {
+            wcsncpy_s(textValue, _countof(textValue), src, _TRUNCATE);
+        }
+        else
+        {
+            textValue[0] = L'\0';
+        }
+
+        dirty = true;
+    }
+
+    void DrawTextValue(HDC hdc, COLORREF color, HFONT font)
+    {
+        HFONT oldFont = (HFONT)SelectObject(hdc, font);
+        COLORREF oldColor = SetTextColor(hdc, color);
+        int oldBkMode = SetBkMode(hdc, TRANSPARENT);
+
+        DrawTextW(hdc, textValue, -1, &valueRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+
+        SetBkMode(hdc, oldBkMode);
+        SetTextColor(hdc, oldColor);
+        SelectObject(hdc, oldFont);
     }
 };
 

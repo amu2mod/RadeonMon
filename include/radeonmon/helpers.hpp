@@ -24,9 +24,14 @@ inline void RecreateFont()
     if (g_font)
         DeleteObject(g_font);
 
+    if (g_notificationFont)
+        DeleteObject(g_notificationFont);
+
     int fontSize = -MulDiv(g_fontSize, g_dpi, 96);
     g_font = CreateFontW(fontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, FONT_FAMILY);
-    LOG_DEBUG("Font created: %d (%d dpi)", fontSize, g_dpi);
+    int notificationFontSize = -MulDiv(g_notificationFontSize, g_dpi, 96);
+    g_notificationFont = CreateFontW(notificationFontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, FONT_FAMILY);
+    LOG_DEBUG("Font created: %d (%d dpi), notification font: %d", fontSize, g_dpi, notificationFontSize);
 }
 
 template <size_t N>
@@ -38,36 +43,14 @@ void MarkAllPropsDirty(PropertyItem (&props)[N])
 
 inline bool FormatTemperature(wchar_t *buffer, int temp)
 {
-    constexpr int MAXBUFSIZE = 14;
+    constexpr int MAXBUFSIZE = 6; // 150°C
 
-    if (temp == NotSupported)
+    if (temp < 0 || temp > 150)
     {
-        // display "not supported"
         buffer[0] = L'n';
-        buffer[1] = L'o';
-        buffer[2] = L't';
-        buffer[3] = L' ';
-        buffer[4] = L's';
-        buffer[5] = L'u';
-        buffer[6] = L'p';
-        buffer[7] = L'p';
-        buffer[8] = L'o';
-        buffer[9] = L'r';
-        buffer[10] = L't';
-        buffer[11] = L'e';
-        buffer[12] = L'd';
-        buffer[13] = L'\0';
-        return false;
-    }
-    if (temp < NotSupported || temp == Error || temp > 150)
-    {
-        // display "error"
-        buffer[0] = L'e';
-        buffer[1] = L'r';
-        buffer[2] = L'r';
-        buffer[3] = L'o';
-        buffer[4] = L'r';
-        buffer[5] = L'\0';
+        buffer[1] = L'/';
+        buffer[2] = L'a';
+        buffer[3] = L'\0';
         return false;
     }
 
@@ -93,37 +76,14 @@ inline bool FormatTemperature(wchar_t *buffer, int temp)
 
 inline bool FormatHotspot(wchar_t *buffer, int temp, int hotspot)
 {
-    constexpr int MAXBUFSIZE = 14;
+    constexpr int MAXBUFSIZE = 13; // 150°C (+100)
 
-    if (hotspot == NotSupported)
+    if (hotspot < 0 || hotspot > 150)
     {
-        // display "not supported"
         buffer[0] = L'n';
-        buffer[1] = L'o';
-        buffer[2] = L't';
-        buffer[3] = L' ';
-        buffer[4] = L's';
-        buffer[5] = L'u';
-        buffer[6] = L'p';
-        buffer[7] = L'p';
-        buffer[8] = L'o';
-        buffer[9] = L'r';
-        buffer[10] = L't';
-        buffer[11] = L'e';
-        buffer[12] = L'd';
-        buffer[13] = L'\0';
-        return false;
-    }
-
-    if (hotspot < NotSupported || hotspot == Error || hotspot > 150)
-    {
-        // display "error"
-        buffer[0] = L'e';
-        buffer[1] = L'r';
-        buffer[2] = L'r';
-        buffer[3] = L'o';
-        buffer[4] = L'r';
-        buffer[5] = L'\0';
+        buffer[1] = L'/';
+        buffer[2] = L'a';
+        buffer[3] = L'\0';
         return false;
     }
 
@@ -195,37 +155,14 @@ inline bool FormatHotspot(wchar_t *buffer, int temp, int hotspot)
 
 inline bool FormatFanSpeed(wchar_t *buffer, int rpm)
 {
-    constexpr int MAXBUFSIZE = 14;
+    constexpr int MAXBUFSIZE = 9; // 9999 RPM
 
-    if (rpm == AdlxStates::NotSupported)
+    if (rpm < 0 || rpm > 9999)
     {
-        // display "not supported"
         buffer[0] = L'n';
-        buffer[1] = L'o';
-        buffer[2] = L't';
-        buffer[3] = L' ';
-        buffer[4] = L's';
-        buffer[5] = L'u';
-        buffer[6] = L'p';
-        buffer[7] = L'p';
-        buffer[8] = L'o';
-        buffer[9] = L'r';
-        buffer[10] = L't';
-        buffer[11] = L'e';
-        buffer[12] = L'd';
-        buffer[13] = L'\0';
-        return false;
-    }
-
-    if (rpm < NotSupported || rpm == Error || rpm > 9999)
-    {
-        // display "error"
-        buffer[0] = L'e';
-        buffer[1] = L'r';
-        buffer[2] = L'r';
-        buffer[3] = L'o';
-        buffer[4] = L'r';
-        buffer[5] = L'\0';
+        buffer[1] = L'/';
+        buffer[2] = L'a';
+        buffer[3] = L'\0';
         return false;
     }
 
@@ -271,37 +208,14 @@ inline bool FormatFanSpeed(wchar_t *buffer, int rpm)
 
 inline bool FormatPowerConsumption(wchar_t *buffer, int watts)
 {
-    constexpr int MAXBUFSIZE = 14;
+    constexpr int MAXBUFSIZE = 5; // 999W
 
-    if (watts == NotSupported)
+    if (watts < 0 || watts > 999)
     {
-        // display "not supported"
         buffer[0] = L'n';
-        buffer[1] = L'o';
-        buffer[2] = L't';
-        buffer[3] = L' ';
-        buffer[4] = L's';
-        buffer[5] = L'u';
-        buffer[6] = L'p';
-        buffer[7] = L'p';
-        buffer[8] = L'o';
-        buffer[9] = L'r';
-        buffer[10] = L't';
-        buffer[11] = L'e';
-        buffer[12] = L'd';
-        buffer[13] = L'\0';
-        return false;
-    }
-
-    if (watts < NotSupported || watts == Error || watts > 999)
-    {
-        // display "error"
-        buffer[0] = L'e';
-        buffer[1] = L'r';
-        buffer[2] = L'r';
-        buffer[3] = L'o';
-        buffer[4] = L'r';
-        buffer[5] = L'\0';
+        buffer[1] = L'/';
+        buffer[2] = L'a';
+        buffer[3] = L'\0';
         return false;
     }
 
@@ -338,73 +252,14 @@ inline bool FormatPowerConsumption(wchar_t *buffer, int watts)
 
 inline bool FormatCpuMetrics(wchar_t *buffer, int temp, int power)
 {
-    constexpr int MAXBUFSIZE = 20;
+    constexpr int MAXBUFSIZE = 12; // 150°C, 999W
 
-    if (temp == AdminRequired)
-    {
-        buffer[0] = L'a';
-        buffer[1] = L'd';
-        buffer[2] = L'm';
-        buffer[3] = L'i';
-        buffer[4] = L'n';
-        buffer[5] = L' ';
-        buffer[6] = L'r';
-        buffer[7] = L'e';
-        buffer[8] = L'q';
-        buffer[9] = L'u';
-        buffer[10] = L'i';
-        buffer[11] = L'r';
-        buffer[12] = L'e';
-        buffer[13] = L'd';
-        buffer[14] = L'\0';
-        return false;
-    }
-
-    if (temp == SdkRequired)
-    {
-        buffer[0] = L's';
-        buffer[1] = L'd';
-        buffer[2] = L'k';
-        buffer[3] = L' ';
-        buffer[4] = L'r';
-        buffer[5] = L'e';
-        buffer[6] = L'q';
-        buffer[7] = L'u';
-        buffer[8] = L'i';
-        buffer[9] = L'r';
-        buffer[10] = L'e';
-        buffer[11] = L'd';
-        buffer[12] = L'\0';
-        return false;
-    }
-
-    if (temp == NotSupported)
+    if (temp < 0 || temp > 150 || power < 0 || power > 999)
     {
         buffer[0] = L'n';
-        buffer[1] = L'o';
-        buffer[2] = L't';
-        buffer[3] = L' ';
-        buffer[4] = L's';
-        buffer[5] = L'u';
-        buffer[6] = L'p';
-        buffer[7] = L'p';
-        buffer[8] = L'o';
-        buffer[9] = L'r';
-        buffer[10] = L't';
-        buffer[11] = L'e';
-        buffer[12] = L'd';
-        buffer[13] = L'\0';
-        return false;
-    }
-
-    if (temp < NotSupported || temp == Error || temp > 150 || power < NotSupported || power == Error || power > 999)
-    {
-        buffer[0] = L'e';
-        buffer[1] = L'r';
-        buffer[2] = L'r';
-        buffer[3] = L'o';
-        buffer[4] = L'r';
-        buffer[5] = L'\0';
+        buffer[1] = L'/';
+        buffer[2] = L'a';
+        buffer[3] = L'\0';
         return false;
     }
 

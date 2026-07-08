@@ -23,7 +23,7 @@ void ADLXGpuTelemetry::Init()
     if (!ADLX_SUCCEEDED(res))
     {
         LOG_ERROR("ADLX initialization failed");
-        g_cardName.SetValue("ADLX init failed");
+        g_cardName.SetValue(L"ADLX init failed");
         return;
     }
 
@@ -33,7 +33,7 @@ void ADLXGpuTelemetry::Init()
     if (!ADLX_SUCCEEDED(res) || !perfMonitoringService)
     {
         LOG_ERROR("Get performance monitoring services failed");
-        g_cardName.SetValue("ADLX perf services failed");
+        g_cardName.SetValue(L"ADLX perf services failed");
         return;
     }
 
@@ -44,7 +44,7 @@ void ADLXGpuTelemetry::Init()
     if (!ADLX_SUCCEEDED(res) || !gpus || gpus->Empty())
     {
         LOG_ERROR("Failed to get the GPU list");
-        g_cardName.SetValue("No GPU found");
+        g_cardName.SetValue(L"No GPU found");
         return;
     }
 
@@ -79,7 +79,7 @@ void ADLXGpuTelemetry::Init()
     if (!selectedGPU)
     {
         LOG_WARN("No AMD GPU found");
-        g_cardName.SetValue("No AMD GPU found");
+        g_cardName.SetValue(L"No AMD GPU found");
         return;
     }
 
@@ -92,7 +92,7 @@ void ADLXGpuTelemetry::Init()
     if (!ADLX_SUCCEEDED(res) || !gpuMetricsSupport)
     {
         LOG_ERROR("gpuMetricsSupport failed");
-        g_cardName.SetValue("GPU metrics not supported");
+        g_cardName.SetValue(L"GPU metrics not supported");
         gpuMetricsSupport = nullptr;
         return;
     }
@@ -360,7 +360,7 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
     {
         snapshot.valid = false;
         LOG_ERROR("GetCurrentGPUMetrics failed");
-        g_cardName.SetValue("Current metrics failed");
+        g_cardName.SetValue(L"Current metrics failed");
     }
 
     return snapshot;
