@@ -92,7 +92,7 @@ public:
         }
 
         outMetrics.dTemperature = stData.dTemperature;
-        outMetrics.dPower = static_cast<double>(stData.fVDDCR_VDD_Power) + static_cast<double>(stData.fVDDCR_SOC_Power);
+        outMetrics.dPower = static_cast<double>(stData.fPPTValue);
 
         return true;
     }

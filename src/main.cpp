@@ -16,6 +16,8 @@
 #include "radeonmon/ryzen_sdk.hpp"
 #include "radeonmon/preferences.hpp"
 #include "radeonmon/version_checker.hpp"
+#include "radeonmon/autostart.hpp"
+
 #include <version.hpp>
 
 #pragma comment(lib, "Shcore.lib")
@@ -32,6 +34,7 @@ enum MetricsIndex
 
 void ResetDirty()
 {
+    g_notification.dirty = true;
     g_cardName.dirty = true;
     MarkAllPropsDirty(g_props);
 }
@@ -141,7 +144,8 @@ void LayoutFrame(RECT rc)
 
 void LayoutProperties(RECT rc)
 {
-    LOG_DEBUG("LayoutProperties rc={%ld,%ld,%ld,%ld}", rc.left, rc.top, rc.right, rc.bottom);
+    LOG_DEBUG("LayoutProperties rc={%ld,%ld,%ld,%ld}",
+              rc.left, rc.top, rc.right, rc.bottom);
 
     if (rc.right <= 0 || rc.bottom <= 0)
     {
@@ -149,41 +153,33 @@ void LayoutProperties(RECT rc)
         return;
     }
 
-    float fontScale = static_cast<float>(g_fontSize) / FONTSIZE;
+    const int border = DPIScale(BORDER);
+    const int titleHeight = DPIScale(TITLE_HEIGHT);
+    const int paddingLeft = DPIScale(PADDING_LEFT);
+    const int paddingTop = DPIScale(PADDING_TOP);
+    const int labelWidth = DPIScale(LABEL_WIDTH);
+    const int lineHeight = DPIScale(LINE_HEIGHT);
+    const int gap = DPIScale(GAP);
 
-    auto ScaleFont = [&](int value)
-    {
-        return DPIScale(static_cast<int>(value * fontScale));
-    };
+    const int x = border + paddingLeft;
+    int y = border + titleHeight + paddingTop;
 
-    int border = ScaleFont(BORDER);
-    int titleHeight = ScaleFont(TITLE_HEIGHT);
-
-    int x = border + ScaleFont(PADDING_LEFT);
-    int y = border + titleHeight + ScaleFont(PADDING_TOP);
-
-    int labelWidth = ScaleFont(LABEL_WIDTH);
-    int lineHeight = ScaleFont(LINE_HEIGHT);
-    int gap = ScaleFont(GAP);
-
-    int right = rc.right - border - ScaleFont(PADDING_LEFT);
+    const int right = rc.right - border - paddingLeft;
 
     // Window frame
     g_windowRc = {0, 0, rc.right, rc.bottom};
-
-    // Border
     LayoutFrame(rc);
 
-    // Center title
-    g_titleTextRc = {g_titleRc.left, g_titleRc.top, g_titleRc.right, g_titleRc.bottom};
+    // Title
+    g_titleTextRc = g_titleRc;
 
-    // Layout regular properties
+    // Properties
     for (auto &p : g_props)
     {
         if (p.type == PropertyType::Separator)
         {
             y += gap;
-            p.labelRc = {x, y, right, y + ScaleFont(1)};
+            p.labelRc = {x, y, right, y + DPIScale(1)};
             y += gap;
             continue;
         }
@@ -194,10 +190,12 @@ void LayoutProperties(RECT rc)
         y += lineHeight;
     }
 
-    // Card name at bottom
-    int bottomY = rc.bottom - border - ScaleFont(PADDING_TOP) - lineHeight;
-
-    g_cardName.valueRc = {x, bottomY, right, bottomY + lineHeight};
+    // notification + card name
+    const int gap2 = DPIScale(3);
+    const int cardNameY = rc.bottom - border - paddingTop - lineHeight;
+    const int notificationY = cardNameY - gap2 - lineHeight;
+    g_notification.valueRc = {x, notificationY, right, notificationY + lineHeight};
+    g_cardName.valueRc = {x, cardNameY, right, cardNameY + lineHeight};
 }
 
 void PaintProperties(HDC hdc)
@@ -244,6 +242,15 @@ void PaintProperties(HDC hdc)
 #endif
 
         p.dirty = false;
+    }
+
+    if (g_notification.dirty)
+    {
+        g_notification.DrawTextValue(g_backBuffer.memDC, NOTIFICATIONCOLOR, g_notificationFont);
+#ifdef _DEBUG
+        g_gdiDrawCallCount++;
+#endif
+        g_notification.dirty = false;
     }
 
     // Paint Card Name
@@ -500,7 +507,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 dirty = true;
                 wchar_t tempBuffer[16];
                 FormatTemperature(tempBuffer, snapshot.temperature);
-                SetPropertyValueAtIndex(MetricsIndex::Temp, snapshot.temperature, tempBuffer, 16, snapshot.temperature > TEMPERATURE_THRESHOLD);
+                SetPropertyValueAtIndex(MetricsIndex::Temp, snapshot.temperature, tempBuffer, 16, snapshot.temperature >= TEMPERATURE_THRESHOLD);
             }
 
             // Hotspot
@@ -509,7 +516,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 dirty = true;
                 wchar_t hotspotBuffer[16];
                 FormatHotspot(hotspotBuffer, snapshot.temperature, snapshot.hotspot);
-                SetPropertyValueAtIndex(MetricsIndex::Hotspot, snapshot.hotspot, hotspotBuffer, 16, snapshot.hotspot > TEMPERATURE_THRESHOLD);
+                SetPropertyValueAtIndex(MetricsIndex::Hotspot, snapshot.hotspot, hotspotBuffer, 16, snapshot.hotspot >= TEMPERATURE_THRESHOLD);
             }
 
             // VRAM Temp
@@ -518,7 +525,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 dirty = true;
                 wchar_t vramBuffer[16];
                 FormatTemperature(vramBuffer, snapshot.vram);
-                SetPropertyValueAtIndex(MetricsIndex::Vram, snapshot.vram, vramBuffer, 16, snapshot.vram > TEMPERATURE_THRESHOLD);
+                SetPropertyValueAtIndex(MetricsIndex::Vram, snapshot.vram, vramBuffer, 16, snapshot.vram >= TEMPERATURE_THRESHOLD);
             }
 
             // Fan Speed
@@ -575,6 +582,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         AppendMenu(hMenu, MF_STRING | (g_isAdmin ? MF_GRAYED : 0), IDM_RESTART_AS_ADMIN, L"Restart as Admin");
         AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
         AppendMenu(hMenu, MF_STRING | (g_alwaysOnTop ? MF_CHECKED : MF_UNCHECKED), IDM_ALWAYS_ON_TOP, L"Always on Top");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+        AppendMenu(hMenu, MF_STRING | (g_autostart ? MF_CHECKED : MF_UNCHECKED), IDM_AUTOSTART, L"Autostart");
         AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
         AppendMenu(hMenu, MF_STRING, IDM_CHECK_VERSION, L"Check update");
         AppendMenu(hMenu, MF_STRING, IDM_ABOUT, L"About");
@@ -635,6 +644,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             g_alwaysOnTop = !g_alwaysOnTop;
             SetWindowPos(hwnd, g_alwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
             break;
+
+        case IDM_AUTOSTART:
+        {
+            g_autostart = !g_autostart;
+
+            if (g_autostart)
+            {
+                if (!EnableStartupShortcut())
+                    g_autostart = false;
+            }
+            else
+            {
+                if (!DisableStartupShortcut())
+                    g_autostart = true;
+            }
+
+            HMENU hMenu = GetMenu(hwnd);
+            CheckMenuItem(hMenu, IDM_AUTOSTART, MF_BYCOMMAND | (g_autostart ? MF_CHECKED : MF_UNCHECKED));
+
+            break;
+        }
 
         case IDM_CHECK_VERSION:
         {
@@ -798,6 +828,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 
     LoadPreferences();
 
+    g_autostart = IsAutostartEnabled();
+
     POINT pt = {g_xPos, g_yPos};
     POINT pt2 = {g_xPos + g_width, g_yPos + g_height};
     if (isPointValid(pt) && isPointValid(pt2))
@@ -853,7 +885,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     }
     else
     {
-        SetPropertyValueAtIndex(MetricsIndex::Cpu, AdminRequired, L"admin required", 15);
+        // SetPropertyValueAtIndex(MetricsIndex::Cpu, AdminRequired, L"admin required", 15);
+        g_notification.SetValue(L"cpu requires admin rights");
     }
 
     ShowWindow(hwnd, nCmdShow);

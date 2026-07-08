@@ -51,3 +51,9 @@ inline UINT g_gdiDrawCallCount = 0;
 inline POINT g_dragStart{};
 inline RECT g_wndStart{};
 inline bool g_dragging = false;
+
+inline PropertyItem g_notification;
+inline UINT g_notificationFontSize = NOTIFICATION_FONTSIZE;
+inline HFONT g_notificationFont;
+
+inline bool g_autostart;
