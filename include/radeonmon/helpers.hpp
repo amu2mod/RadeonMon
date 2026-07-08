@@ -2,9 +2,13 @@
 
 #include <Windows.h>
 #include <cstddef>
+#include "shellscalingapi.h"
+#include <commctrl.h>
 
 #include "radeonmon/constants.hpp"
 #include "radeonmon/structures.hpp"
+
+#pragma comment(lib, "Comctl32.lib")
 
 extern UINT g_dpi;
 extern HFONT g_font;
@@ -20,19 +24,9 @@ inline void RecreateFont()
     if (g_font)
         DeleteObject(g_font);
 
-    int fontSize = -MulDiv(FONTSIZE, g_dpi, 96); // 12pt base font
-
-    g_font = CreateFontW(
-        fontSize, 0,
-        0, 0,
-        FW_NORMAL,
-        FALSE, FALSE, FALSE,
-        DEFAULT_CHARSET,
-        OUT_DEFAULT_PRECIS,
-        CLIP_DEFAULT_PRECIS,
-        CLEARTYPE_QUALITY,
-        DEFAULT_PITCH | FF_DONTCARE,
-        FONT_FAMILY);
+    int fontSize = -MulDiv(g_fontSize, g_dpi, 96);
+    g_font = CreateFontW(fontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, FONT_FAMILY);
+    LOG_DEBUG("Font created: %d (%d dpi)", fontSize, g_dpi);
 }
 
 template <size_t N>
@@ -479,4 +473,66 @@ inline bool IsRunningAsAdministrator()
     CloseHandle(hToken);
 
     return success && elevation.TokenIsElevated;
+}
+
+inline UINT getDpiFromPoint(POINT pt)
+{
+    HMONITOR hMonitor = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+
+    if (!hMonitor)
+        return 96;
+
+    UINT dpiX = 96;
+    UINT dpiY = 96;
+
+    GetDpiForMonitor(hMonitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+
+    return dpiX;
+}
+
+inline bool isPointValid(POINT pt)
+{
+    HMONITOR monitor = MonitorFromPoint(pt, MONITOR_DEFAULTTONULL);
+    return monitor != nullptr;
+}
+
+#ifdef _DEBUG
+inline void DebugRect(const char *name, const RECT &rc)
+{
+    LOG_DEBUG(
+        "%s: {%ld, %ld, %ld, %ld}  w=%ld h=%ld",
+        name,
+        rc.left,
+        rc.top,
+        rc.right,
+        rc.bottom,
+        rc.right - rc.left,
+        rc.bottom - rc.top);
+}
+#endif
+
+inline HRESULT CALLBACK DialogCallback(HWND hwnd, UINT msg, [[maybe_unused]] WPARAM wParam, [[maybe_unused]] LPARAM lParam, [[maybe_unused]] LONG_PTR refData)
+{
+    if (msg == TDN_HYPERLINK_CLICKED)
+    {
+        ShellExecuteW(hwnd, L"open", (LPCWSTR)lParam, nullptr, nullptr, SW_SHOWNORMAL);
+    }
+
+    return S_OK;
+}
+
+inline void ShowUpdateDialog(HWND hwnd, const wchar_t *title, const wchar_t *instruction, const std::wstring &content, bool error = false)
+{
+    TASKDIALOGCONFIG config = {};
+    config.cbSize = sizeof(config);
+    config.hwndParent = hwnd;
+    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_ENABLE_HYPERLINKS;
+    config.dwCommonButtons = TDCBF_OK_BUTTON;
+    config.pszWindowTitle = title;
+    config.pszMainInstruction = instruction;
+    config.pszContent = content.c_str();
+    config.pszMainIcon = error ? TD_ERROR_ICON : TD_INFORMATION_ICON;
+    config.pfCallback = DialogCallback;
+
+    TaskDialogIndirect(&config, nullptr, nullptr, nullptr);
 }

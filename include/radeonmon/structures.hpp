@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <string>
 
+#include "radeonmon/logging.hpp"
+
 extern UINT g_dpi;
 
 enum class PropertyType
@@ -57,6 +59,8 @@ struct GdiBackBuffer
 
         width = w;
         height = h;
+
+        LOG_DEBUG("Creating back buffer: %dx%d", w, h);
 
         memDC = CreateCompatibleDC(referenceDC);
 
@@ -165,4 +169,12 @@ struct RyzenMetrics
 {
     double dTemperature = 0.0;
     double dPower = 0.0;
+};
+
+struct WindowBorder
+{
+    RECT top{};
+    RECT bottom{};
+    RECT left{};
+    RECT right{};
 };

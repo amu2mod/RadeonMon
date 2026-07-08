@@ -1,0 +1,6 @@
+#pragma once
+
+namespace Version
+{
+    inline constexpr wchar_t String[] = L"@GIT_TAG@";
+}

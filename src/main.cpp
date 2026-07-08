@@ -14,6 +14,9 @@
 #include "radeonmon/logging.hpp"
 #include "radeonmon/ryzen.hpp"
 #include "radeonmon/ryzen_sdk.hpp"
+#include "radeonmon/preferences.hpp"
+#include "radeonmon/version_checker.hpp"
+#include <version.hpp>
 
 #pragma comment(lib, "Shcore.lib")
 
@@ -104,16 +107,75 @@ void SetAllPropertiesInitFlag(bool state)
         p.initialized = state;
 }
 
+void LayoutFrame(RECT rc)
+{
+    float fontScale = static_cast<float>(g_fontSize) / FONTSIZE;
+
+    auto ScaleFont = [&](int value)
+    {
+        return DPIScale(static_cast<int>(value * fontScale));
+    };
+
+    int border = ScaleFont(BORDER);
+    int titleHeight = ScaleFont(TITLE_HEIGHT);
+
+    g_border.top = {0, 0, rc.right, border};
+    g_border.bottom = {0, rc.bottom - border, rc.right, rc.bottom};
+    g_border.left = {0, border, border, rc.bottom - border};
+    g_border.right = {rc.right - border, border, rc.right, rc.bottom - border};
+    g_titleRc = {border, border, rc.right - border, border + titleHeight};
+    g_titleTextRc = g_titleRc;
+
+#ifdef _DEBUG
+    LOG_DEBUG("LayoutFrame: window={%ld,%ld,%ld,%ld} border=%d titleHeight=%d", rc.left, rc.top, rc.right, rc.bottom, border, titleHeight);
+
+    DebugRect("border.top", g_border.top);
+    DebugRect("border.bottom", g_border.bottom);
+    DebugRect("border.left", g_border.left);
+    DebugRect("border.right", g_border.right);
+
+    DebugRect("title", g_titleRc);
+    DebugRect("titleText", g_titleTextRc);
+#endif
+}
+
 void LayoutProperties(RECT rc)
 {
-    int x = DPIScale(PADDING_LEFT);
-    int y = DPIScale(PADDING_TOP);
+    LOG_DEBUG("LayoutProperties rc={%ld,%ld,%ld,%ld}", rc.left, rc.top, rc.right, rc.bottom);
 
-    int labelWidth = DPIScale(LABEL_WIDTH);
-    int lineHeight = DPIScale(LINE_HEIGHT);
-    int gap = DPIScale(GAP);
+    if (rc.right <= 0 || rc.bottom <= 0)
+    {
+        LOG_DEBUG("LayoutProperties skipped invalid rect");
+        return;
+    }
 
-    int right = rc.right - DPIScale(PADDING_LEFT);
+    float fontScale = static_cast<float>(g_fontSize) / FONTSIZE;
+
+    auto ScaleFont = [&](int value)
+    {
+        return DPIScale(static_cast<int>(value * fontScale));
+    };
+
+    int border = ScaleFont(BORDER);
+    int titleHeight = ScaleFont(TITLE_HEIGHT);
+
+    int x = border + ScaleFont(PADDING_LEFT);
+    int y = border + titleHeight + ScaleFont(PADDING_TOP);
+
+    int labelWidth = ScaleFont(LABEL_WIDTH);
+    int lineHeight = ScaleFont(LINE_HEIGHT);
+    int gap = ScaleFont(GAP);
+
+    int right = rc.right - border - ScaleFont(PADDING_LEFT);
+
+    // Window frame
+    g_windowRc = {0, 0, rc.right, rc.bottom};
+
+    // Border
+    LayoutFrame(rc);
+
+    // Center title
+    g_titleTextRc = {g_titleRc.left, g_titleRc.top, g_titleRc.right, g_titleRc.bottom};
 
     // Layout regular properties
     for (auto &p : g_props)
@@ -121,18 +183,20 @@ void LayoutProperties(RECT rc)
         if (p.type == PropertyType::Separator)
         {
             y += gap;
-            p.labelRc = {x, y, right, y + DPIScale(1)};
+            p.labelRc = {x, y, right, y + ScaleFont(1)};
             y += gap;
             continue;
         }
 
         p.labelRc = {x, y, x + labelWidth, y + lineHeight};
         p.valueRc = {x + labelWidth + gap, y, right, y + lineHeight};
+
         y += lineHeight;
     }
 
-    // Layout Card Name at the bottom of the window
-    int bottomY = rc.bottom - DPIScale(PADDING_TOP) - lineHeight;
+    // Card name at bottom
+    int bottomY = rc.bottom - border - ScaleFont(PADDING_TOP) - lineHeight;
+
     g_cardName.valueRc = {x, bottomY, right, bottomY + lineHeight};
 }
 
@@ -140,10 +204,6 @@ void PaintProperties(HDC hdc)
 {
     static HPEN pen = CreatePen(PS_SOLID, 1, SEPARATORCOLOR);
     HGDIOBJ oldPen = SelectObject(hdc, pen);
-
-#ifdef _DEBUG
-    int gdiCount = 0;
-#endif
 
     // Paint regular properties
     for (auto &p : g_props)
@@ -154,7 +214,7 @@ void PaintProperties(HDC hdc)
             LineTo(hdc, p.labelRc.right, p.labelRc.top);
 
 #ifdef _DEBUG
-            gdiCount++;
+            g_gdiDrawCallCount++;
 #endif
 
             p.dirty = false;
@@ -172,7 +232,7 @@ void PaintProperties(HDC hdc)
             SetTextColor(hdc, LABELCOLOR);
             DrawTextW(hdc, p.label, -1, &p.labelRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 #ifdef _DEBUG
-            gdiCount++;
+            g_gdiDrawCallCount++;
 #endif
         }
 
@@ -180,7 +240,7 @@ void PaintProperties(HDC hdc)
         DrawTextW(hdc, p.textValue, -1, &p.valueRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
 #ifdef _DEBUG
-        gdiCount++;
+        g_gdiDrawCallCount++;
 #endif
 
         p.dirty = false;
@@ -207,26 +267,91 @@ void PaintProperties(HDC hdc)
         DrawTextW(hdc, g_cardName.textValue, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
 
 #ifdef _DEBUG
-        gdiCount += 3;
+        g_gdiDrawCallCount += 3;
 #endif
 
         g_cardName.dirty = false;
     }
-
-#ifdef _DEBUG
-    // LOG_DEBUG("gdi count=%d", gdiCount);
-#endif
 
     SelectObject(hdc, oldPen);
 }
 
 void SetAlwaysOnTop(HWND hWnd, bool enable)
 {
-    SetWindowPos(
-        hWnd,
-        enable ? HWND_TOPMOST : HWND_NOTOPMOST,
-        0, 0, 0, 0,
-        SWP_NOMOVE | SWP_NOSIZE);
+    SetWindowPos(hWnd, enable ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+}
+
+void ResizeWindow(HWND hwnd, int delta)
+{
+    RECT rc{};
+    GetWindowRect(hwnd, &rc);
+    SetWindowPos(hwnd, nullptr, rc.left, rc.top, rc.right - rc.left + delta, rc.bottom - rc.top + delta, SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+void OnResizeWindow(HWND hwnd, bool grow)
+{
+    UINT oldFontSize = g_fontSize;
+
+    if (grow)
+        g_fontSize = min(g_fontSize + 1, (UINT)FONTSIZE_MAX);
+    else
+        g_fontSize = max(g_fontSize - 1, (UINT)FONTSIZE_MIN);
+
+    // Already at min/max
+    if (g_fontSize == oldFontSize)
+        return;
+
+    RecreateFont();
+    g_forceFrameRedraw = true;
+    ResizeWindow(hwnd, grow ? WINDOW_RESIZE_STEP : -WINDOW_RESIZE_STEP);
+    RECT rc{};
+    GetClientRect(hwnd, &rc);
+    LayoutProperties(rc);
+    SetAllPropertiesInitFlag(false);
+    InvalidateRect(hwnd, nullptr, TRUE);
+
+    LOG_DEBUG("new window: %dx%d, font@%dpx", rc.right - rc.left, rc.bottom - rc.top, g_fontSize);
+}
+
+void PaintFrame(HDC hdc)
+{
+    static bool drawn = false;
+    static HBRUSH frameBrush = CreateSolidBrush(BORDERCOLOR);
+
+    if (!g_forceFrameRedraw && drawn)
+        return;
+
+    LOG_DEBUG("Painting FRAME (border+title)");
+
+    drawn = true;
+    g_forceFrameRedraw = false;
+
+    // Border sides
+    FillRect(hdc, &g_border.top, frameBrush);
+    FillRect(hdc, &g_border.bottom, frameBrush);
+    FillRect(hdc, &g_border.left, frameBrush);
+    FillRect(hdc, &g_border.right, frameBrush);
+
+    // Title bar
+    FillRect(hdc, &g_titleRc, frameBrush);
+
+    // Title text
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, RGB(255, 255, 255));
+
+    DrawText(hdc, APPNAME, -1, &g_titleTextRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+#ifdef _DEBUG
+    g_gdiDrawCallCount += 6;
+#endif
+}
+
+void UpdateCurrentPosition(HWND hwnd)
+{
+    RECT rc;
+    GetWindowRect(hwnd, &rc);
+    g_xPos = rc.left;
+    g_yPos = rc.top;
 }
 
 // ── window procedure ─────────────────────────────────────────────────────────
@@ -237,7 +362,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
     case WM_CREATE:
     {
-        g_dpi = GetDpiForWindow(hwnd);
+        LOG_DEBUG("WM_CREATE");
         RecreateFont();
 
         RECT rc{};
@@ -261,29 +386,42 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             return 0;
         }
 
-        RECT rc{};
-        GetClientRect(hwnd, &rc);
+        // RECT rc{};
+        // GetClientRect(hwnd, &rc);
 
-        // draw into backbuffer
-        SetBkMode(g_backBuffer.memDC, TRANSPARENT);
+        HDC memDC = g_backBuffer.memDC;
+
+        // Clear backbuffer
+        // FillRect(memDC, &rc, g_backgroundBrush);
+
+        SetBkMode(memDC, TRANSPARENT);
 
         if (g_font)
-            SelectObject(g_backBuffer.memDC, g_font);
+            SelectObject(memDC, g_font);
 
-        PaintProperties(g_backBuffer.memDC);
+        // Window chrome
+        PaintFrame(memDC);
 
-        // present
-        BitBlt(hdc, 0, 0, rc.right - rc.left, rc.bottom - rc.top, g_backBuffer.memDC, 0, 0, SRCCOPY);
+        // Content
+        PaintProperties(memDC);
+
+        // Present
+        // BitBlt(hdc, 0, 0, rc.right - rc.left, rc.bottom - rc.top, memDC, 0, 0, SRCCOPY);
+        BitBlt(hdc, 0, 0, g_backBuffer.width, g_backBuffer.height, memDC, 0, 0, SRCCOPY);
 
         EndPaint(hwnd, &ps);
 
-        // POST 1st paint hook
         static bool firstPaintDone = false;
         if (!firstPaintDone)
         {
             firstPaintDone = true;
             SetAllPropertiesInitFlag(true);
         }
+
+#ifdef _DEBUG
+        // LOG_DEBUG("GDI draw count=%u", g_gdiDrawCallCount); // very verbose
+        g_gdiDrawCallCount = 0;
+#endif
 
         return 0;
     }
@@ -292,6 +430,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         int w = LOWORD(lParam);
         int h = HIWORD(lParam);
+
+        LOG_DEBUG("WM_SIZE: received params w=%d, h=%d", w, h);
 
         if (w > 0 && h > 0)
         {
@@ -316,16 +456,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_DPICHANGED:
     {
         g_dpi = HIWORD(wParam);
-        LOG_DEBUG("New DPI: %u (%.0f%%)", g_dpi, (g_dpi / 96.0) * 100.0);
 
         RecreateFont();
 
         const RECT *r = reinterpret_cast<const RECT *>(lParam);
 
-        SetWindowPos(hwnd, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        g_width = r->right - r->left;
+        g_height = r->bottom - r->top;
+
+        SetWindowPos(hwnd, nullptr, r->left, r->top, g_width, g_height, SWP_NOZORDER | SWP_NOACTIVATE);
         SetAllPropertiesInitFlag(false); // force all labels repaint
+        g_forceFrameRedraw = true;       // force new border + title
 
         InvalidateRect(hwnd, nullptr, TRUE);
+
+        LOG_DEBUG("New DPI: %u (%.0f%%), %dxx%d", g_dpi, (g_dpi / 96.0) * 100.0, g_width, g_height);
 
         return 0;
     }
@@ -427,13 +572,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         HMENU hMenu = CreatePopupMenu();
 
+        AppendMenu(hMenu, MF_STRING | (g_isAdmin ? MF_GRAYED : 0), IDM_RESTART_AS_ADMIN, L"Restart as Admin");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
         AppendMenu(hMenu, MF_STRING | (g_alwaysOnTop ? MF_CHECKED : MF_UNCHECKED), IDM_ALWAYS_ON_TOP, L"Always on Top");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+        AppendMenu(hMenu, MF_STRING, IDM_CHECK_VERSION, L"Check update");
+        AppendMenu(hMenu, MF_STRING, IDM_ABOUT, L"About");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+        AppendMenu(hMenu, MF_STRING, IDM_EXIT, L"Exit");
 
         POINT pt;
         pt.x = GET_X_LPARAM(lParam);
         pt.y = GET_Y_LPARAM(lParam);
 
-        // Keyboard context menu (Shift+F10 or Menu key)
         if (pt.x == -1 && pt.y == -1)
         {
             RECT rc;
@@ -450,14 +601,148 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_COMMAND:
     {
-        if (LOWORD(wParam) == IDM_ALWAYS_ON_TOP)
+        switch (LOWORD(wParam))
         {
-            g_alwaysOnTop = !g_alwaysOnTop;
-            SetWindowPos(hwnd, g_alwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        case IDM_RESTART_AS_ADMIN:
+        {
+            if (!g_isAdmin)
+            {
+                UpdateCurrentPosition(hwnd);
+                SavePreferences(); // to save current position
+
+                wchar_t exePath[MAX_PATH];
+
+                if (GetModuleFileNameW(nullptr, exePath, MAX_PATH))
+                {
+                    SHELLEXECUTEINFOW sei = {};
+                    sei.cbSize = sizeof(sei);
+                    sei.lpVerb = L"runas";
+                    sei.lpFile = exePath;
+                    sei.nShow = SW_SHOWNORMAL;
+
+                    if (ShellExecuteExW(&sei))
+                    {
+                        // Close the current non-admin instance
+                        PostQuitMessage(0);
+                    }
+                }
+            }
+
             return 0;
         }
 
+        case IDM_ALWAYS_ON_TOP:
+            g_alwaysOnTop = !g_alwaysOnTop;
+            SetWindowPos(hwnd, g_alwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            break;
+
+        case IDM_CHECK_VERSION:
+        {
+            std::wstring latestVersion;
+
+            if (!VersionChecker::GetLatestVersion(latestVersion))
+            {
+                LOG_ERROR("Failed to check update");
+                ShowUpdateDialog(hwnd, L"Update Check", L"Error", L"Failed to check for updates.", true);
+                break;
+            }
+
+            LOG_DEBUG("Latest version found: %ls", latestVersion.c_str());
+
+            if (latestVersion != Version::String)
+            {
+                std::wstring message = L"Current version: " + std::wstring(Version::String) + L"\n" +
+                                       L"Latest version: " + latestVersion + L"\n" +
+                                       +L"\n" +
+                                       L"<a href=\"" +
+                                       LATESTURL + L"\">Download latest version here</a>\n";
+                ShowUpdateDialog(hwnd, L"Update Check", L"Update available", message);
+            }
+            else
+            {
+                std::wstring message = L"You are already running the latest version:\n" + std::wstring(Version::String);
+                ShowUpdateDialog(hwnd, L"Update Check", L"No update available", message);
+            }
+
+            break;
+        }
+
+        case IDM_ABOUT:
+        {
+            std::wstring message = L"Version " + std::wstring(Version::String) + L"\r\n" +
+                                   L"\r\n"
+                                   L"Free and open source software\r\n"
+                                   L"\r\n"
+                                   L"© 2026 Amu\r\n"
+                                   L"\r\n"
+                                   L"Official project: "
+                                   L"<a href=\"" +
+                                   ABOUTURL + L"\">GitHub repository</a>\r\n" +
+                                   L"\r\n"
+                                   L"Licensed under the MIT License";
+            ShowUpdateDialog(hwnd, L"About", APPNAME, message);
+            break;
+        }
+
+        case IDM_EXIT:
+            DestroyWindow(hwnd);
+            break;
+        }
+
+        return 0;
+    }
+
+    case WM_KEYDOWN:
+    {
+        bool ctrlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+
+        if (ctrlDown)
+        {
+            switch (wParam)
+            {
+            case VK_ADD: // Numpad +
+                OnResizeWindow(hwnd, true);
+                return 0;
+
+            case VK_SUBTRACT: // Numpad -
+                OnResizeWindow(hwnd, false);
+                return 0;
+            }
+        }
+
         break;
+    }
+
+    case WM_LBUTTONDOWN:
+    {
+        SetCapture(hwnd);
+        g_dragging = true;
+        GetCursorPos(&g_dragStart);
+        GetWindowRect(hwnd, &g_wndStart);
+        return 0;
+    }
+
+    case WM_MOUSEMOVE:
+    {
+        if (g_dragging)
+        {
+            POINT cur{};
+            GetCursorPos(&cur);
+            int dx = cur.x - g_dragStart.x;
+            int dy = cur.y - g_dragStart.y;
+            SetWindowPos(hwnd, nullptr, g_wndStart.left + dx, g_wndStart.top + dy, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        return 0;
+    }
+
+    case WM_LBUTTONUP:
+    {
+        if (g_dragging)
+        {
+            g_dragging = false;
+            ReleaseCapture();
+        }
+        return 0;
     }
 
     case WM_DESTROY:
@@ -469,6 +754,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             DeleteObject(g_font);
             g_font = nullptr;
         }
+
+        UpdateCurrentPosition(hwnd);
+        SavePreferences();
 
         PostQuitMessage(0);
         return 0;
@@ -491,6 +779,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     freopen_s(&f, "CONIN$", "r", stdin);
     LOG_DEBUG("Starting App");
 #endif
+    g_isAdmin = IsRunningAsAdministrator();
 
     const wchar_t CLASS_NAME[] = L"radeonmon";
 
@@ -507,33 +796,48 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
         return 1;
     }
 
-    // Center in primary screen + dpi scaling
-    UINT dpi = GetDpiForSystem();
-    LOG_DEBUG("DPI: %u (%.0f%%)", dpi, (dpi / 96.0) * 100.0);
-    int width = MulDiv(APPWIDTH, dpi, 96);
-    int height = MulDiv(APPHEIGHT, dpi, 96);
+    LoadPreferences();
 
-    // Primary screen size
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    POINT pt = {g_xPos, g_yPos};
+    POINT pt2 = {g_xPos + g_width, g_yPos + g_height};
+    if (isPointValid(pt) && isPointValid(pt2))
+    {
+        g_dpi = getDpiFromPoint(pt);
+        g_width = DPIScale(g_width);
+        g_height = DPIScale(g_height);
+    }
+    else
+    {
+        LOG_DEBUG("Invalid position from preferences, reseting the position");
+        g_dpi = GetDpiForSystem();
+        LOG_DEBUG("DPI: %u (%.0f%%)", g_dpi, (g_dpi / 96.0) * 100.0);
+        g_width = MulDiv(APPWIDTH, g_dpi, 96);
+        g_height = MulDiv(APPHEIGHT, g_dpi, 96);
 
-    // Center position on primary screen
-    int x = (screenWidth - width) / 2;
-    int y = (screenHeight - height) / 2;
+        // Primary screen size
+        int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+        int screenHeight = GetSystemMetrics(SM_CYSCREEN);
 
-    HWND hwnd = CreateWindowEx(0, CLASS_NAME, APPNAME, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX, x, y, width, height, nullptr, nullptr, hInstance, nullptr);
+        // Center position on primary screen
+        g_xPos = (screenWidth - g_width) / 2;
+        g_yPos = (screenHeight - g_height) / 2;
+    }
 
-    LayoutProperties({0, 0, width, height}); // Initial layout
+    RecreateFont();
+
+    LOG_DEBUG("window created %dx%d at position {%d,%d}", g_width, g_height, g_xPos, g_yPos);
+    HWND hwnd = CreateWindowEx(0, CLASS_NAME, APPNAME, WS_POPUP, g_xPos, g_yPos, g_width, g_height, nullptr, nullptr, hInstance, nullptr);
+
+    SetAlwaysOnTop(hwnd, g_alwaysOnTop);
 
     SetTimer(hwnd, 1, APP_REFRESH_TIMER, nullptr);
 
     g_AdlxGPUTelemetry.Init();
     g_AdlxGPUTelemetry.Discover();
 
-    bool isAdmin = IsRunningAsAdministrator();
-    LOG_DEBUG("Admin mode: %s", isAdmin ? "yes" : "no");
+    LOG_DEBUG("Admin mode: %s", g_isAdmin ? "yes" : "no");
 
-    if (isAdmin)
+    if (g_isAdmin)
     {
         if (!LoadAMDDLLs())
         {
