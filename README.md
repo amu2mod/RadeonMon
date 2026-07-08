@@ -1,6 +1,6 @@
 # RadeonMon
 
-An ultra-lightweight Windows monitoring application for AMD Radeon RDNA4 graphics cards on Windows.
+A very lightweight Windows monitoring application for AMD Radeon RDNA4 graphics cards on Windows.
 
 This is a personal project developed independently, with no affiliation with AMD Corporation.
 
@@ -8,21 +8,22 @@ This is a personal project developed independently, with no affiliation with AMD
 
 ## Overview
 <div align="center">
-<img width="386" height="393" alt="image" src="https://github.com/user-attachments/assets/97f2c386-dfdc-4b9e-bff1-ff02b99a3e97" />
+<img width="555" height="570" alt="image" src="https://github.com/user-attachments/assets/3de05f73-60b1-4d97-b34e-0adc1299a445" />
 </div>
 
-RadeonMon is a lightweight C++ utility that uses AMD’s ADLX SDK to provide critical metrics for Radeon RDNA4 graphics cards.
+RadeonMon is a lightweight C++ utility that uses AMD’s ADLX SDK to provide essential metrics for Radeon RDNA 4 graphics cards.
 
-It is designed to be very low-overhead with minimal impact on low fps. 
+It is designed to have a very low overhead with minimal impact on low fps. 
 
 ## Features
 
 - GPU Temperature sensor
-- GPU Hotspot sensor + delta
+- GPU hotspot sensor with delta calculation
 - GPU Memory sensor
 - Fan Speed
 - Total Power usage
 - CPU metrics (Ryzen support only for now)
+- Highlights high temperatures with a warm color
 
 ## Releases
 
