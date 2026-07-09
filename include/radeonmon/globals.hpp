@@ -1,14 +1,17 @@
 #pragma once
-
 #include <windows.h>
 
 #include <cstring>
+#include <vector>
+#include <mutex>
 
 #include "radeonmon/structures.hpp"
 #include "radeonmon/adlx.hpp"
 #include "AMD/ADLX-1.5/SDK/Include/IPerformanceMonitoring3.h"
 #include "radeonmon/ryzen.hpp"
 #include "radeonmon/constants.hpp"
+#include "radeonmon/networking.hpp"
+#include "radeonmon/webserver.hpp"
 
 inline UINT g_dpi = 96;
 inline HFONT g_font = nullptr;
@@ -57,3 +60,6 @@ inline UINT g_notificationFontSize = NOTIFICATION_FONTSIZE;
 inline HFONT g_notificationFont;
 
 inline bool g_autostart;
+inline WebServer g_webServer;
+inline NetworkManager g_networkManager;
+inline PropertyItem g_serverSeparatorRc, g_serverStatusRc;

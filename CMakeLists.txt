@@ -42,12 +42,19 @@ set(APP_VERSION_RC
 message(STATUS "Version string: ${APP_VERSION_STR}")
 message(STATUS "Version resource: ${APP_VERSION_RC}")
 
+set_source_files_properties(${CMAKE_SOURCE_DIR}/resources/resources.rc
+    PROPERTIES OBJECT_DEPENDS ${CMAKE_SOURCE_DIR}/web/index.html)
+
 add_executable(radeonmon WIN32
     src/main.cpp
     src/adlx.cpp
     third_party/AMD/ADLX-1.5/SDK/ADLXHelper/Windows/Cpp/ADLXHelper.cpp
     third_party/AMD/ADLX-1.5/SDK/platform/Windows/WinAPIs.cpp
     src/ryzen_sdk.cpp
+    src/ryzen.cpp
+    src/networking.cpp
+    src/webserver.cpp
+    resources/resources.rc
     ${CMAKE_BINARY_DIR}/generated/version.rc
 )
 

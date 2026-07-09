@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hardware Monitor</title>
+    <style>
+        :root {
+            --bg-color: rgb(30, 30, 30);
+            --card-bg: rgb(22, 22, 22); 
+            --card-border: rgb(45, 45, 45);
+            --text-main: #f1f1f3;
+            --text-muted: #8e8e9e;
+            --accent-red: rgb(200, 35, 35);
+            --accent-gpu: #f87171;
+            --accent-cpu: #fca5a5;
+            --status-ok: #22c55e;
+            --status-warn: #eab308;
+            --status-off: #45454e;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 0.5rem 1rem 1.5rem 1rem;
+        }
+
+        .dashboard {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin-top: 0;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--card-border);
+            margin-top: 10px;
+            padding-top: 0;
+        }
+
+        .header-title h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        /* View Toggle Switch */
+        .toggle-container {
+            display: flex;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            padding: 3px;
+        }
+
+        .toggle-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 0.4rem 0.8rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .toggle-btn.active {
+            background: var(--accent-red);
+            color: #ffffff;
+        }
+
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 0.4rem 0.75rem;
+            border-radius: 6px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--status-warn);
+            box-shadow: 0 0 8px var(--status-warn);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            padding: 1.25rem;
+            border: 1px solid var(--card-border);
+            transition: opacity 0.3s ease;
+        }
+
+        .card.disabled {
+            opacity: 0.35;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .card-header.gpu h2 { color: var(--accent-gpu); font-size: 1.1rem; }
+        .card-header.cpu h2 { color: var(--accent-cpu); font-size: 1.1rem; }
+
+        .tag {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
+        .tag.active { background: rgba(34, 197, 94, 0.15); color: var(--status-ok); border: 1px solid rgba(34, 197, 94, 0.3); }
+        .tag.inactive { background: rgba(114, 114, 126, 0.15); color: var(--status-off); border: 1px solid var(--card-border); }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+        }
+
+        .metric-box {
+            /* background-color: rgba(0, 0, 0, 0.3); */
+            padding: 0.65rem 0.8rem;
+            border-radius: 6px;
+            /* border: 1px solid rgba(255, 255, 255, 0.02); */
+            background-color: rgb(18, 18, 18);
+            border: 1px solid rgb(40, 40, 40);
+        }
+
+        .metric-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.2rem;
+        }
+
+        .metric-value {
+            font-size: 1.15rem;
+            font-weight: 600;
+        }
+
+        .unit {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-weight: normal;
+        }
+
+        /* Canvas Charts & Metric Selectors */
+        .chart-container {
+            display: none;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px dashed var(--card-border);
+        }
+
+        .chart-container.visible {
+            display: block;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.6rem;
+        }
+
+        .chart-title {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        /* Custom Radio Buttons Bar */
+        .metric-selector {
+            display: flex;
+            gap: 4px;
+            /* background: #0a0a0c; */
+            padding: 2px;
+            border-radius: 6px;
+            border: 1px solid var(--card-border);
+            background: rgb(15, 15, 15);
+        }
+
+        .metric-selector input[type="radio"] {
+            display: none;
+        }
+
+        .metric-selector label {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.15s ease;
+        }
+
+        .metric-selector input[type="radio"]:checked + label {
+            background: var(--accent-red);
+            color: #ffffff;
+        }
+
+        canvas {
+            width: 100%;
+            height: 90px;
+            /* background: #0a0a0c; */
+            border-radius: 6px;
+            /* border: 1px solid var(--card-border); */
+            display: block;
+            background: rgb(15, 15, 15);
+            border: 1px solid var(--card-border);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <div class="header">
+            <div class="header-title">
+                <h1>RadeonMon Dashboard</h1>
+            </div>
+            <div class="controls">
+                <div class="toggle-container">
+                    <button class="toggle-btn active" id="btn-simple" onclick="setView('simple')">Simple</button>
+                    <button class="toggle-btn" id="btn-advanced" onclick="setView('advanced')">Advanced</button>
+                </div>
+                <div class="status-badge">
+                    <span class="dot" id="api-dot"></span>
+                    <span id="api-status">Connecting</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card" id="gpu-card">
+                <div class="card-header gpu">
+                    <h2>GPU</h2>
+                    <span class="tag inactive" id="gpu-tag">Offline</span>
+                </div>
+                <div class="metrics">
+                    <div class="metric-box">
+                        <div class="metric-label">Temperature</div>
+                        <div class="metric-value"><span id="gpu-temp">--</span><span class="unit"> °C</span></div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-label">Hotspot</div>
+                        <div class="metric-value"><span id="gpu-hotspot">--</span><span class="unit"> °C</span></div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-label">VRAM Temp</div>
+                        <div class="metric-value"><span id="gpu-vram">--</span><span class="unit"> °C</span></div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-label">Power</div>
+                        <div class="metric-value"><span id="gpu-power">--</span><span class="unit"> W</span></div>
+                    </div>
+                    <div class="metric-box" style="grid-column: span 2;">
+                        <div class="metric-label">Fan Speed</div>
+                        <div class="metric-value"><span id="gpu-fan">--</span><span class="unit"> RPM</span></div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title">GPU Telemetry</div>
+                        <div class="metric-selector">
+                            <input type="radio" id="gpu-m-temp" name="gpu-metric" value="temperature" checked onchange="renderCharts()">
+                            <label for="gpu-m-temp">Temp</label>
+
+                            <input type="radio" id="gpu-m-hotspot" name="gpu-metric" value="hotspot" onchange="renderCharts()">
+                            <label for="gpu-m-hotspot">Tj</label>
+
+                            <input type="radio" id="gpu-m-vram" name="gpu-metric" value="vram" onchange="renderCharts()">
+                            <label for="gpu-m-vram">VRAM</label>
+
+                            <input type="radio" id="gpu-m-power" name="gpu-metric" value="power" onchange="renderCharts()">
+                            <label for="gpu-m-power">PWR</label>
+
+                            <input type="radio" id="gpu-m-fan" name="gpu-metric" value="fan_speed" onchange="renderCharts()">
+                            <label for="gpu-m-fan">Fan</label>
+                        </div>
+                    </div>
+                    <canvas id="gpu-chart"></canvas>
+                </div>
+            </div>
+
+            <div class="card" id="cpu-card">
+                <div class="card-header cpu">
+                    <h2>CPU</h2>
+                    <span class="tag inactive" id="cpu-tag">Offline</span>
+                </div>
+                <div class="metrics">
+                    <div class="metric-box">
+                        <div class="metric-label">Temperature</div>
+                        <div class="metric-value"><span id="cpu-temp">--</span><span class="unit"> °C</span></div>
+                    </div>
+                    <div class="metric-box">
+                        <div class="metric-label">Power</div>
+                        <div class="metric-value"><span id="cpu-power">--</span><span class="unit"> W</span></div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <div class="chart-title">CPU Telemetry</div>
+                        <div class="metric-selector">
+                            <input type="radio" id="cpu-m-temp" name="cpu-metric" value="temperature" checked onchange="renderCharts()">
+                            <label for="cpu-m-temp">Temp</label>
+
+                            <input type="radio" id="cpu-m-power" name="cpu-metric" value="power" onchange="renderCharts()">
+                            <label for="cpu-m-power">PWR</label>
+                        </div>
+                    </div>
+                    <canvas id="cpu-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = `http://${window.location.hostname}:9090/api`;
+        const POLL_INTERVAL = 2000;
+        const MAX_HISTORY = 30; // 60s sliding window
+
+        let currentView = 'simple';
+        
+        const historyData = {
+            gpu: [],
+            cpu: []
+        };
+
+        const METRIC_SCALES = { 
+            temperature: 100,
+            hotspot: 100,
+            vram: 100,
+            power: 350,
+            fan_speed: 100
+        };
+
+        function setView(mode) {
+            currentView = mode;
+            document.getElementById('btn-simple').classList.toggle('active', mode === 'simple');
+            document.getElementById('btn-advanced').classList.toggle('active', mode === 'advanced');
+            
+            document.querySelectorAll('.chart-container').forEach(el => {
+                el.classList.toggle('visible', mode === 'advanced');
+            });
+
+            if (mode === 'advanced') {
+                renderCharts();
+            }
+        }
+
+        function drawCanvasChart(canvasId, dataList, metricKey, strokeColor) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+
+            const ctx = canvas.getContext('2d');
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+            const width = rect.width;
+            const height = rect.height;
+
+            ctx.clearRect(0, 0, width, height);
+
+            ctx.strokeStyle = '#1e1e24';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2);
+            ctx.moveTo(0, height / 4); ctx.lineTo(width, height / 4);
+            ctx.moveTo(0, (height * 3) / 4); ctx.lineTo(width, (height * 3) / 4);
+            ctx.stroke();
+
+            if (dataList.length < 2) return;
+
+            const maxVal = METRIC_SCALES[metricKey] || 100;
+            const step = width / (MAX_HISTORY - 1);
+            
+            const points = dataList.map((entry, i) => {
+                const rawVal = entry ? entry[metricKey] : null;
+                const normalized = (rawVal === null || rawVal === undefined) 
+                    ? 0 
+                    : Math.min(Math.max(rawVal / maxVal, 0), 1);
+                
+                const x = i * step;
+                const y = height - (normalized * (height - 12)) - 6;
+                return { x, y, valid: rawVal !== null && rawVal !== undefined };
+            });
+
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, height);
+            points.forEach(p => ctx.lineTo(p.x, p.valid ? p.y : height));
+            ctx.lineTo(points[points.length - 1].x, height);
+            ctx.closePath();
+            
+            const gradient = ctx.createLinearGradient(0, 0, 0, height);
+            gradient.addColorStop(0, 'rgba(200, 35, 35, 0.25)'); 
+            gradient.addColorStop(1, 'rgba(200, 35, 35, 0.00)'); 
+            ctx.fillStyle = gradient;
+            ctx.fill();
+
+            ctx.beginPath();
+            points.forEach((p, i) => {
+                if (i === 0) {
+                    ctx.moveTo(p.x, p.y);
+                } else {
+                    ctx.lineTo(p.x, p.y);
+                }
+            });
+            ctx.strokeStyle = strokeColor;
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+        }
+
+        function renderCharts() {
+            const selectedGpuMetric = document.querySelector('input[name="gpu-metric"]:checked').value;
+            const selectedCpuMetric = document.querySelector('input[name="cpu-metric"]:checked').value;
+
+            drawCanvasChart('gpu-chart', historyData.gpu, selectedGpuMetric, 'rgb(200, 35, 35)');
+            drawCanvasChart('cpu-chart', historyData.cpu, selectedCpuMetric, '#fca5a5');
+        }
+
+        const setVal = (id, val) => {
+            document.getElementById(id).textContent = (val !== null && val !== undefined) ? val : '--';
+        };
+
+        function updateCardState(cardId, tagId, isOnline) {
+            const card = document.getElementById(cardId);
+            const tag = document.getElementById(tagId);
+            if (isOnline) {
+                card.classList.remove('disabled');
+                tag.textContent = 'Active';
+                tag.className = 'tag active';
+            } else {
+                card.classList.add('disabled');
+                tag.textContent = 'Offline';
+                tag.className = 'tag inactive';
+            }
+        }
+
+        function setApiStatus(online, message, colorOverride = null) {
+            const dot = document.getElementById('api-dot');
+            const status = document.getElementById('api-status');
+            status.textContent = message;
+            
+            const color = colorOverride || (online ? 'var(--status-ok)' : 'var(--status-warn)');
+            dot.style.backgroundColor = color;
+            dot.style.boxShadow = `0 0 8px ${color}`;
+        }
+
+        async function fetchMetrics() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                setApiStatus(true, 'Live');
+
+                if (data.gpu && data.gpu.valid) {
+                    updateCardState('gpu-card', 'gpu-tag', true);
+                    setVal('gpu-temp', data.gpu.temperature);
+                    setVal('gpu-hotspot', data.gpu.hotspot);
+                    setVal('gpu-vram', data.gpu.vram);
+                    setVal('gpu-power', data.gpu.power);
+                    setVal('gpu-fan', data.gpu.fan_speed);
+                    historyData.gpu.push(data.gpu);
+                } else {
+                    updateCardState('gpu-card', 'gpu-tag', false);
+                    ['gpu-temp', 'gpu-hotspot', 'gpu-vram', 'gpu-power', 'gpu-fan'].forEach(id => setVal(id, null));
+                    historyData.gpu.push(null);
+                }
+
+                if (data.cpu && (data.cpu.temperature !== null || data.cpu.power !== null)) {
+                    updateCardState('cpu-card', 'cpu-tag', true);
+                    setVal('cpu-temp', data.cpu.temperature);
+                    setVal('cpu-power', data.cpu.power);
+                    historyData.cpu.push(data.cpu);
+                } else {
+                    updateCardState('cpu-card', 'cpu-tag', false);
+                    ['cpu-temp', 'cpu-power'].forEach(id => setVal(id, null));
+                    historyData.cpu.push(null);
+                }
+
+            } catch (err) {
+                setApiStatus(false, 'Offline', 'var(--accent-red)');
+                updateCardState('gpu-card', 'gpu-tag', false);
+                updateCardState('cpu-card', 'cpu-tag', false);
+                
+                historyData.gpu.push(null);
+                historyData.cpu.push(null);
+            }
+
+            if (historyData.gpu.length > MAX_HISTORY) historyData.gpu.shift();
+            if (historyData.cpu.length > MAX_HISTORY) historyData.cpu.shift();
+
+            if (currentView === 'advanced') {
+                renderCharts();
+            }
+        }
+
+        window.addEventListener('resize', () => {
+            if (currentView === 'advanced') renderCharts();
+        });
+
+        fetchMetrics();
+        setInterval(fetchMetrics, POLL_INTERVAL);
+    </script>
+</body>
+</html>

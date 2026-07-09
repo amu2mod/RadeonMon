@@ -1,8 +1,17 @@
 #pragma once
 
+#define WIN32_LEAN_AND_MEAN
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <Windows.h>
+
 #include <cstdint>
 #include <string>
+
+#include <ifdef.h>
+#include <iphlpapi.h>
+#include <netioapi.h>
 
 #include "radeonmon/logging.hpp"
 
@@ -66,6 +75,13 @@ struct PropertyItem
         SetBkMode(hdc, oldBkMode);
         SetTextColor(hdc, oldColor);
         SelectObject(hdc, oldFont);
+    }
+
+    void ClearRC(HDC hdc, COLORREF color)
+    {
+        HBRUSH brush = CreateSolidBrush(color);
+        FillRect(hdc, &valueRc, brush);
+        DeleteObject(brush);
     }
 };
 
@@ -150,6 +166,32 @@ struct GpuMetricsSnapshot
     int vram = NotSupported;
     int power = NotSupported;
     int fanSpeed = NotSupported;
+
+    // Builds a JSON representation of this snapshot. Unsupported metrics
+    // are emitted as JSON null rather than the internal NotSupported
+    // sentinel value, so the frontend doesn't need to know about it.
+    std::string BuildJson() const
+    {
+        char buffer[256];
+
+        auto field = [](int value) -> std::string
+        {
+            if (value == NotSupported)
+                return "null";
+            return std::to_string(value);
+        };
+
+        snprintf(buffer, sizeof(buffer),
+                 "{\"valid\":%s,\"temperature\":%s,\"hotspot\":%s,\"vram\":%s,\"power\":%s,\"fan_speed\":%s}",
+                 valid ? "true" : "false",
+                 field(temperature).c_str(),
+                 field(hotspot).c_str(),
+                 field(vram).c_str(),
+                 field(power).c_str(),
+                 field(fanSpeed).c_str());
+
+        return std::string(buffer);
+    }
 };
 
 enum GPU_CAPS : uint32_t
@@ -195,6 +237,15 @@ struct RyzenMetrics
 {
     double dTemperature = 0.0;
     double dPower = 0.0;
+
+    std::string BuildJson() const
+    {
+        char buffer[128];
+        snprintf(buffer, sizeof(buffer),
+                 "{\"temperature\":%.1f,\"power\":%.1f}",
+                 dTemperature, dPower);
+        return std::string(buffer);
+    }
 };
 
 struct WindowBorder
@@ -203,4 +254,21 @@ struct WindowBorder
     RECT bottom{};
     RECT left{};
     RECT right{};
+};
+
+struct NetworkInterface
+{
+    NET_LUID luid{};
+    std::wstring adapterName;
+    std::wstring address;
+
+    bool operator==(const NetworkInterface &other) const
+    {
+        return luid.Value == other.luid.Value && address == other.address;
+    }
+
+    std::wstring display() const
+    {
+        return adapterName + L": " + address;
+    }
 };

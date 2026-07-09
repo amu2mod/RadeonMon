@@ -12,8 +12,7 @@ namespace VersionChecker
     namespace detail
     {
         // Splits a full URL into host, path, and port/scheme info usable by WinHttpCrackUrl.
-        inline bool CrackUrl(const std::wstring &url, URL_COMPONENTS &urlComp,
-                             std::wstring &host, std::wstring &path)
+        inline bool CrackUrl(const std::wstring &url, URL_COMPONENTS &urlComp, std::wstring &host, std::wstring &path)
         {
             wchar_t hostBuf[256] = {0};
             wchar_t pathBuf[2048] = {0};
@@ -140,9 +139,7 @@ namespace VersionChecker
             }
 
             DWORD flags = useHttps ? WINHTTP_FLAG_SECURE : 0;
-            hRequest = WinHttpOpenRequest(hConnect, L"GET", path.c_str(),
-                                          nullptr, WINHTTP_NO_REFERER,
-                                          WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
+            hRequest = WinHttpOpenRequest(hConnect, L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
             if (!hRequest)
             {
                 LOG_ERROR("VersionChecker: WinHttpOpenRequest failed (err=%lu)", GetLastError());
@@ -151,8 +148,7 @@ namespace VersionChecker
 
             // Some APIs (e.g. GitHub) require a User-Agent header or they reject the request.
             const wchar_t *extraHeaders = L"User-Agent: VersionChecker/1.0\r\nAccept: application/json\r\n";
-            BOOL sent = WinHttpSendRequest(hRequest, extraHeaders, static_cast<DWORD>(-1),
-                                           WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
+            BOOL sent = WinHttpSendRequest(hRequest, extraHeaders, static_cast<DWORD>(-1), WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
             if (!sent)
             {
                 LOG_ERROR("VersionChecker: WinHttpSendRequest failed (err=%lu)", GetLastError());
