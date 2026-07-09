@@ -52,6 +52,10 @@ void ADLXGpuTelemetry::Init()
 
     adlx_uint count = gpus->Size();
 
+    IADLXGPUPtr amdGpuFallback = nullptr;
+    const char *amdGpuNameFallback = nullptr;
+    const char *amdVendorIdFallback = nullptr;
+
     for (adlx_uint i = 0; i < count; i++)
     {
         IADLXGPUPtr gpu = nullptr;
@@ -64,16 +68,39 @@ void ADLXGpuTelemetry::Init()
 
         gpu->VendorId(&vendorId);
 
-        if (IsAMDVendor(vendorId))
-        {
-            gpu->Name(&gpuName);
+        if (!IsAMDVendor(vendorId))
+            continue;
 
+        gpu->Name(&gpuName);
+
+        ADLX_ASIC_FAMILY_TYPE asicFamily = ASIC_UNDEFINED;
+        gpu->ASICFamilyType(&asicFamily);
+
+        if (asicFamily == ASIC_RADEON)
+        {
+            // Discrete Radeon GPU — take it immediately.
             selectedGPU = gpu;
             amdGpuName = gpuName;
             amdVendorId = vendorId;
-
             break;
         }
+
+        // Remember the first AMD GPU (e.g. embedded/Fusion APU) as a
+        // fallback in case no discrete Radeon GPU is found.
+        if (!amdGpuFallback)
+        {
+            amdGpuFallback = gpu;
+            amdGpuNameFallback = gpuName;
+            amdVendorIdFallback = vendorId;
+        }
+    }
+
+    if (!selectedGPU && amdGpuFallback)
+    {
+        selectedGPU = amdGpuFallback;
+        amdGpuName = amdGpuNameFallback;
+        amdVendorId = amdVendorIdFallback;
+        LOG_WARN("No discrete Radeon GPU found, falling back to integrated/embedded AMD GPU");
     }
 
     if (!selectedGPU)

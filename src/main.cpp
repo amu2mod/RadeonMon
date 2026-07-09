@@ -1,3 +1,6 @@
+
+#include "radeonmon/webserver.hpp"
+
 #include <windows.h>
 #include <shellscalingapi.h>
 #include <windowsx.h>
@@ -21,6 +24,7 @@
 #include <version.hpp>
 
 #pragma comment(lib, "Shcore.lib")
+#pragma comment(lib, "iphlpapi.lib")
 
 enum MetricsIndex
 {
@@ -36,6 +40,8 @@ void ResetDirty()
 {
     g_notification.dirty = true;
     g_cardName.dirty = true;
+    g_serverSeparatorRc.dirty = true;
+    g_serverStatusRc.dirty = true;
     MarkAllPropsDirty(g_props);
 }
 
@@ -190,6 +196,15 @@ void LayoutProperties(RECT rc)
         y += lineHeight;
     }
 
+    // Separator after the last property
+    y += gap;
+    g_serverSeparatorRc.valueRc = {x, y, right, y + DPIScale(1)};
+    y += gap;
+
+    // Server status
+    g_serverStatusRc.valueRc = {x, y, right, y + lineHeight};
+    y += lineHeight;
+
     // notification + card name
     const int gap2 = DPIScale(3);
     const int cardNameY = rc.bottom - border - paddingTop - lineHeight;
@@ -251,6 +266,31 @@ void PaintProperties(HDC hdc)
         g_gdiDrawCallCount++;
 #endif
         g_notification.dirty = false;
+    }
+
+    // Paint server separator
+    if (g_serverSeparatorRc.dirty)
+    {
+        MoveToEx(hdc, g_serverSeparatorRc.valueRc.left, g_serverSeparatorRc.valueRc.top, nullptr);
+        LineTo(hdc, g_serverSeparatorRc.valueRc.right, g_serverSeparatorRc.valueRc.top);
+
+#ifdef _DEBUG
+        g_gdiDrawCallCount++;
+#endif
+
+        g_serverSeparatorRc.dirty = false;
+    }
+
+    // Paint server status
+    if (g_serverStatusRc.dirty)
+    {
+        g_serverStatusRc.DrawTextValue(g_backBuffer.memDC, SERVERSTATUSCOLOR, g_notificationFont);
+
+#ifdef _DEBUG
+        g_gdiDrawCallCount++;
+#endif
+
+        g_serverStatusRc.dirty = false;
     }
 
     // Paint Card Name
@@ -484,7 +524,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_TIMER:
     {
-        if (wParam == 1)
+        if (wParam == APP_POLLING_ID)
         {
             if (!g_AdlxGPUTelemetry.isInitialized)
             {
@@ -548,10 +588,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             if (g_cpu.IsInitialized())
             {
-                RyzenMetrics cpuMetrics;
-
-                if (g_cpu.GetRyzenMetrics(cpuMetrics))
+                if (g_cpu.Update())
                 {
+                    RyzenMetrics cpuMetrics = g_cpu.GetMetrics();
                     // round to nearest integer for more accuracy than truncating
                     const int cpuIntegerTemp = static_cast<int>(std::round(cpuMetrics.dTemperature));
                     const int cpuIntegerPower = static_cast<int>(std::round(cpuMetrics.dPower));
@@ -572,6 +611,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (dirty)
                 InvalidateRect(hwnd, nullptr, FALSE);
         }
+        else if (wParam == NETWORK_TIMER_ID)
+        {
+            KillTimer(hwnd, NETWORK_TIMER_ID);
+            g_networkManager.Refresh();
+            g_networkManager.Log();
+            g_networkManager.m_timer = 0;
+        }
         return 0;
     }
 
@@ -585,6 +631,33 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
         AppendMenu(hMenu, MF_STRING | (g_autostart ? MF_CHECKED : MF_UNCHECKED), IDM_AUTOSTART, L"Autostart");
         AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+
+        ////////////////////////////////////////////////////////
+        // Web Server submenu
+        HMENU hWebServerMenu = CreatePopupMenu();
+
+        const auto &list = g_networkManager.GetAddresses();
+        const UINT flags = MF_STRING | (g_webServer.IsRunning() || !g_isAdmin) ? MF_DISABLED : 0;
+
+        if (g_webServer.IsRunning())
+        {
+            AppendMenu(hWebServerMenu, MF_STRING, IDM_WEBSERVER_STOP, L"Stop server");
+            AppendMenu(hWebServerMenu, MF_SEPARATOR, 0, nullptr);
+        }
+
+        if (!g_isAdmin)
+        {
+            AppendMenu(hWebServerMenu, MF_STRING, 0, L"Admin rights required");
+            AppendMenu(hWebServerMenu, MF_SEPARATOR, 0, nullptr);
+        }
+
+        for (size_t i = 0; i < list.size(); ++i)
+            AppendMenuW(hWebServerMenu, flags | (g_webServer.isBoundTo(list[i]) ? MF_CHECKED : MF_UNCHECKED), IDM_WEBSERVER_BASE + static_cast<UINT>(i), list[i].display().c_str());
+
+        AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hWebServerMenu), L"Web Server");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+        ////////////////////////////////////////////////////////
+
         AppendMenu(hMenu, MF_STRING, IDM_CHECK_VERSION, L"Check update");
         AppendMenu(hMenu, MF_STRING, IDM_ABOUT, L"About");
         AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
@@ -717,8 +790,38 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case IDM_EXIT:
             DestroyWindow(hwnd);
             break;
+
+        case IDM_WEBSERVER_STOP:
+        {
+            g_webServer.Stop();
+            g_serverStatusRc.SetValue(L"");
+            g_serverStatusRc.ClearRC(g_backBuffer.memDC, BACKGROUNDCOLOR);
+            InvalidateRect(hwnd, &g_serverStatusRc.valueRc, FALSE);
+            UpdateWindow(hwnd);
         }
 
+        default:
+        {
+            // WEB SERVER
+            const auto &list = g_networkManager.GetAddresses();
+            if (LOWORD(wParam) >= IDM_WEBSERVER_BASE && LOWORD(wParam) < IDM_WEBSERVER_BASE + list.size())
+            {
+                size_t index = LOWORD(wParam) - IDM_WEBSERVER_BASE;
+
+                const auto &netIf = list[index];
+
+                LOG_DEBUG("Selecting interface: %ls", netIf.display().c_str());
+
+                g_webServer.LaunchServerOnInterface(netIf);
+                auto addr = g_webServer.GetBoundInterface().value().address;
+                std::wstring txt = L"http://" + addr + L":" + WEBSERVER_PORT;
+                g_serverStatusRc.SetValue(txt.c_str());
+                g_serverStatusRc.DrawTextValue(g_backBuffer.memDC, SERVERSTATUSCOLOR, g_notificationFont);
+                InvalidateRect(hwnd, &g_serverStatusRc.valueRc, FALSE);
+                UpdateWindow(hwnd);
+            }
+        }
+        }
         return 0;
     }
 
@@ -787,6 +890,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         UpdateCurrentPosition(hwnd);
         SavePreferences();
+        g_networkManager.Shutdown();
 
         PostQuitMessage(0);
         return 0;
@@ -860,9 +964,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     LOG_DEBUG("window created %dx%d at position {%d,%d}", g_width, g_height, g_xPos, g_yPos);
     HWND hwnd = CreateWindowEx(0, CLASS_NAME, APPNAME, WS_POPUP, g_xPos, g_yPos, g_width, g_height, nullptr, nullptr, hInstance, nullptr);
 
+    g_networkManager.Initialize(hwnd);
+    g_networkManager.Log();
+
     SetAlwaysOnTop(hwnd, g_alwaysOnTop);
 
-    SetTimer(hwnd, 1, APP_REFRESH_TIMER, nullptr);
+    SetTimer(hwnd, APP_POLLING_ID, APP_REFRESH_TIMER, nullptr);
 
     g_AdlxGPUTelemetry.Init();
     g_AdlxGPUTelemetry.Discover();
@@ -873,7 +980,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     {
         if (!LoadAMDDLLs())
         {
-            SetPropertyValueAtIndex(MetricsIndex::Cpu, SdkRequired, L"Ryzen SDK required", 19);
+            SetPropertyValueAtIndex(MetricsIndex::Cpu, SdkRequired, L"SDK req", 19);
+            g_notification.SetValue(L"Ryzen SDK required");
+            g_notification.DrawTextValue(g_backBuffer.memDC, NOTIFICATIONCOLOR, g_notificationFont);
         }
         else
         {
