@@ -11,7 +11,7 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "FileDescription", "RadeonMon - GPU Monitoring tool"
+            VALUE "FileDescription", "RadeonMon - GPU Monitoring Tool"
             VALUE "FileVersion", "@APP_VERSION_STR@"
             VALUE "InternalName", "RadeonMon.exe"
             VALUE "OriginalFilename", "RadeonMon.exe"

@@ -1,0 +1,3 @@
+#include "radeonmon/resource_ids.h"
+
+IDR_INDEX_HTML RCDATA "..\\web\\index.html"
