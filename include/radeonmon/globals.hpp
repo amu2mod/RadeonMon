@@ -14,30 +14,43 @@
 #include "radeonmon/webserver.hpp"
 
 inline UINT g_dpi = 96;
-inline HFONT g_font = nullptr;
 inline GdiBackBuffer g_backBuffer;
 inline PropertyItem g_props[] =
     {
-        {L"GPU Temperature", 0, 0, L""},
+        {L"GPU Temperature", 0, 0, L"-"},
         {nullptr, 0, 0, L"", {}, {}, PropertyType::Separator},
-        {L"GPU Hotspot", 0, 0, L""},
+        {L"GPU Hotspot", 0, 0, L"-"},
         {nullptr, 0, 0, L"", {}, {}, PropertyType::Separator},
-        {L"VRAM Temperature", 0, 0, L""},
+        {L"VRAM Temperature", 0, 0, L"-"},
         {nullptr, 0, 0, L"", {}, {}, PropertyType::Separator},
-        {L"Fan Speed", -1, 0, L""},
+        {L"Fan Speed", -1, 0, L"-"},
         {nullptr, 0, 0, L"", {}, {}, PropertyType::Separator},
-        {L"Power Consumption", 0, 0, L""},
+        {L"Power Consumption", 0, 0, L"-"},
         {nullptr, 0, 0, L"", {}, {}, PropertyType::Separator},
-        {L"CPU", 0, 0, L""}};
+        {L"CPU", 0, 0, L"-"},
+        {nullptr, 0, 0, L"", {}, {}, PropertyType::Separator},
+};
 
 constexpr int g_propCount = _countof(g_props);
+constexpr int g_lineCount = g_propCount / 2;
 inline PropertyItem g_cardName = {L"", 0, 0, L"no card detected"};
 
 inline ADLXGpuTelemetry g_AdlxGPUTelemetry;
 inline RyzenCpu g_cpu;
 
 inline bool g_alwaysOnTop = false;
+
+// Fonts
+inline HFONT g_titleFont = nullptr;
+inline HFONT g_font = nullptr;
+inline HFONT g_notificationFont = nullptr;
+inline HFONT g_cardFont = nullptr;
+
+inline UINT g_titleFontSize = TITLE_FONTSIZE;
 inline UINT g_fontSize = FONTSIZE;
+inline UINT g_notificationFontSize = NOTIFICATION_FONTSIZE;
+inline UINT g_cardFontSize = CARD_FONTSIZE;
+
 inline int g_width = APPWIDTH;
 inline int g_height = APPHEIGHT;
 inline int g_xPos = CW_USEDEFAULT;
@@ -56,10 +69,10 @@ inline RECT g_wndStart{};
 inline bool g_dragging = false;
 
 inline PropertyItem g_notification;
-inline UINT g_notificationFontSize = NOTIFICATION_FONTSIZE;
-inline HFONT g_notificationFont;
 
 inline bool g_autostart;
 inline WebServer g_webServer;
 inline NetworkManager g_networkManager;
 inline PropertyItem g_serverSeparatorRc, g_serverStatusRc;
+
+inline LayoutMetrics g_layoutMetrics;

@@ -21,19 +21,37 @@ inline int DPIScale(int v)
     return MulDiv(v, g_dpi, 96);
 }
 
+inline HFONT CreateAppFont(int size, LPCWSTR family)
+{
+    int pixelSize = -MulDiv(size, g_dpi, 96);
+    return CreateFontW(pixelSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                       DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                       CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, family);
+}
+
 inline void RecreateFont()
 {
+    if (g_titleFont)
+        DeleteObject(g_titleFont);
     if (g_font)
         DeleteObject(g_font);
-
     if (g_notificationFont)
         DeleteObject(g_notificationFont);
+    if (g_cardFont)
+        DeleteObject(g_cardFont);
 
-    int fontSize = -MulDiv(g_fontSize, g_dpi, 96);
-    g_font = CreateFontW(fontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, FONT_FAMILY);
-    int notificationFontSize = -MulDiv(g_notificationFontSize, g_dpi, 96);
-    g_notificationFont = CreateFontW(notificationFontSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, FONT_FAMILY);
-    LOG_DEBUG("Font created: %d (%d dpi), notification font: %d", fontSize, g_dpi, notificationFontSize);
+    // g_fontSize is the user preference (base font size)
+    const float scale = static_cast<float>(g_fontSize) / static_cast<float>(FONTSIZE);
+    const int titleFontSize = max(1, static_cast<int>(roundf(TITLE_FONTSIZE * scale)));
+    const int notificationFontSize = max(1, static_cast<int>(roundf(NOTIFICATION_FONTSIZE * scale)));
+    const int cardFontSize = max(1, static_cast<int>(roundf(CARD_FONTSIZE * scale)));
+
+    g_font = CreateAppFont(g_fontSize, FONT_FAMILY);
+    g_titleFont = CreateAppFont(titleFontSize, FONT_FAMILY);
+    g_notificationFont = CreateAppFont(notificationFontSize, NOTIFICATION_FONT_FAMILY);
+    g_cardFont = CreateAppFont(cardFontSize, FONT_FAMILY);
+
+    LOG_DEBUG("Fonts recreated (DPI=%d base=%d title=%d notification=%d card=%d)", g_dpi, g_fontSize, titleFontSize, notificationFontSize, cardFontSize);
 }
 
 template <size_t N>
@@ -445,4 +463,13 @@ inline std::string LoadResourceString(int id)
     const char *data = static_cast<const char *>(LockResource(handle));
 
     return std::string(data, data + size);
+}
+
+inline int GetFontHeight(HDC hdc, HFONT font)
+{
+    HFONT oldFont = (HFONT)SelectObject(hdc, font);
+    TEXTMETRIC tm{};
+    GetTextMetrics(hdc, &tm);
+    SelectObject(hdc, oldFont);
+    return tm.tmHeight + tm.tmExternalLeading;
 }

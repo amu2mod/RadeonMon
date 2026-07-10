@@ -3,6 +3,9 @@
 
 #include <cstdio>
 #include <cstring>
+#ifdef _DEBUG
+#include <chrono>
+#endif
 
 inline const char *BaseFileName(const char *path)
 {
@@ -31,5 +34,18 @@ inline const char *BaseFileName(const char *path)
     {                       \
     } while (0)
 #endif
+
+#define START_CHRONO(name) \
+    auto name = std::chrono::high_resolution_clock::now()
+
+#define END_CHRONO(name, displayName)                                     \
+    do                                                                    \
+    {                                                                     \
+        auto __chrono_end = std::chrono::high_resolution_clock::now();    \
+        auto __chrono_duration =                                          \
+            std::chrono::duration<double, std::milli>(                    \
+                __chrono_end - name);                                     \
+        LOG_DEBUG("%s: %.3f ms", displayName, __chrono_duration.count()); \
+    } while (0)
 
 #endif // LOGGING_HPP

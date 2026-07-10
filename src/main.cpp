@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cmath>
 #include <cassert>
+#include <algorithm>
 
 #include "radeonmon/globals.hpp"
 #include "radeonmon/constants.hpp"
@@ -25,6 +26,175 @@
 
 #pragma comment(lib, "Shcore.lib")
 #pragma comment(lib, "iphlpapi.lib")
+
+LayoutMetrics CalculateLayoutMetrics()
+{
+    LayoutMetrics m{};
+
+    HDC hdc = g_backBuffer.memDC;
+
+    SIZE sz{};
+
+    HFONT originalFont = (HFONT)SelectObject(hdc, g_font);
+    if (!originalFont)
+        LOG_ERROR("SelectObject failed on g_font");
+
+    // ------------------------------------------------------------
+    // Calculate font scale from g_font (design size = FONTSIZE)
+    // ------------------------------------------------------------
+    if (!GetTextExtentPoint32W(hdc, L"X", 1, &sz))
+        LOG_ERROR("GetTextExtentPoint32W failed");
+
+    const int fontHeight = sz.cy;
+
+    const float fontScale =
+        static_cast<float>(fontHeight) / static_cast<float>(FONTSIZE);
+
+    auto ScaleFontMetric = [&](int value) -> int
+    {
+        return max(1, static_cast<int>(roundf(value * fontScale)));
+    };
+
+    LOG_DEBUG("[UI] fontHeight=%ld scale=%.2f", fontHeight, fontScale);
+
+    // ------------------------------------------------------------
+    // Width metrics (scaled constants only)
+    // ------------------------------------------------------------
+    m.border = ScaleFontMetric(BORDER);
+    m.paddingSide = ScaleFontMetric(PADDING_LEFT);
+    m.gap = ScaleFontMetric(GAP);
+
+    static constexpr wchar_t LABEL[] = L"Power Consumption";
+    if (!GetTextExtentPoint32W(
+            hdc,
+            LABEL,
+            _countof(LABEL) - 1,
+            &sz))
+        LOG_ERROR("GetTextExtentPoint32W failed");
+
+    // Font-derived: no scaling
+    m.labelWidth = sz.cx + 2;
+
+    static constexpr wchar_t VALUE[] = L"150°C (+100)";
+    if (!GetTextExtentPoint32W(
+            hdc,
+            VALUE,
+            _countof(VALUE) - 1,
+            &sz))
+        LOG_ERROR("GetTextExtentPoint32W failed");
+
+    // Font-derived: no scaling
+    m.valueWidth = sz.cx + 2;
+
+    // ------------------------------------------------------------
+    // Shared
+    // ------------------------------------------------------------
+    m.paddingTop = ScaleFontMetric(PADDING_TOP);
+    m.paddingBottom = ScaleFontMetric(PADDING_BOTTOM);
+
+    // ------------------------------------------------------------
+    // Title font
+    // ------------------------------------------------------------
+    if (!SelectObject(hdc, g_titleFont))
+        LOG_ERROR("SelectObject failed on g_titleFont");
+
+    if (!GetTextExtentPoint32W(hdc, L"X", 1, &sz))
+        LOG_ERROR("GetTextExtentPoint32W failed");
+
+    const int titleFontHeight = sz.cy;
+    const int titleFontWidth = sz.cx;
+
+    // Font-independent spacing: scale
+    m.titlePadding = ScaleFontMetric(TITLE_PADDING);
+
+    // Font-derived: no scaling
+    m.titleHeight = titleFontHeight;
+
+    if (!GetTextExtentPoint32W(
+            hdc,
+            APPNAME,
+            APPNAME_LENGTH,
+            &sz))
+        LOG_ERROR("GetTextExtentPoint32W failed");
+
+    // Font-derived: no scaling
+    m.titleWidth = sz.cx + titleFontWidth;
+
+    // ------------------------------------------------------------
+    // Body font
+    // ------------------------------------------------------------
+    if (!SelectObject(hdc, g_font))
+        LOG_ERROR("SelectObject failed on g_font");
+
+    if (!GetTextExtentPoint32W(hdc, L"X", 1, &sz))
+        LOG_ERROR("GetTextExtentPoint32W failed");
+
+    // Font-derived
+    m.lineHeight = sz.cy;
+
+    // Constants: scale
+    m.lineGap = ScaleFontMetric(LINE_GAP);
+    m.separatorHeight = ScaleFontMetric(SEPARATOR_HEIGHT);
+    m.spacer = ScaleFontMetric(SPACER);
+
+    // ------------------------------------------------------------
+    // Notification font
+    // ------------------------------------------------------------
+    if (!SelectObject(hdc, g_notificationFont))
+        LOG_ERROR("SelectObject failed on g_notificationFont");
+
+    if (!GetTextExtentPoint32W(hdc, L"X", 1, &sz))
+        LOG_ERROR("GetTextExtentPoint32W failed");
+
+    // Font-derived
+    m.lineHeight2 = sz.cy;
+
+    // ------------------------------------------------------------
+    // Card font
+    // ------------------------------------------------------------
+    if (!SelectObject(hdc, g_cardFont))
+        LOG_ERROR("SelectObject failed on g_cardFont");
+
+    if (!GetTextExtentPoint32W(hdc, L"X", 1, &sz))
+        LOG_ERROR("GetTextExtentPoint32W failed");
+
+    // Font-derived
+    m.cardHeight = sz.cy;
+
+    SelectObject(hdc, originalFont);
+
+    // ------------------------------------------------------------
+    // Window
+    // ------------------------------------------------------------
+    m.windowWidth =
+        m.border * 2 +
+        m.paddingSide * 2 +
+        m.labelWidth +
+        m.gap +
+        m.valueWidth;
+
+    m.windowHeight =
+        m.titlePadding +
+        m.titleHeight +
+        m.titlePadding +
+        m.paddingTop +
+        m.lineHeight * g_lineCount +
+        m.lineGap * g_lineCount +
+        m.separatorHeight * g_lineCount +
+        m.lineGap * g_lineCount +
+        m.spacer +
+        m.lineHeight2 +
+        m.lineGap +
+        m.lineHeight2 +
+        m.lineGap +
+        m.cardHeight +
+        m.paddingBottom +
+        m.border;
+
+    LOG_DEBUG("[UI] window=%dx%d", m.windowWidth, m.windowHeight);
+
+    return m;
+}
 
 enum MetricsIndex
 {
@@ -116,101 +286,104 @@ void SetAllPropertiesInitFlag(bool state)
         p.initialized = state;
 }
 
-void LayoutFrame(RECT rc)
+void LayoutFrame(const LayoutMetrics &m)
 {
-    float fontScale = static_cast<float>(g_fontSize) / FONTSIZE;
+    // float fontScale = static_cast<float>(g_fontSize) / FONTSIZE;
 
-    auto ScaleFont = [&](int value)
-    {
-        return DPIScale(static_cast<int>(value * fontScale));
-    };
+    // auto ScaleFont = [&](int value)
+    // {
+    //     return DPIScale(static_cast<int>(value * fontScale));
+    // };
 
-    int border = ScaleFont(BORDER);
-    int titleHeight = ScaleFont(TITLE_HEIGHT);
+    // int border = ScaleFont(BORDER);
+    // int titleHeight = ScaleFont(TITLE_HEIGHT);
 
-    g_border.top = {0, 0, rc.right, border};
-    g_border.bottom = {0, rc.bottom - border, rc.right, rc.bottom};
-    g_border.left = {0, border, border, rc.bottom - border};
-    g_border.right = {rc.right - border, border, rc.right, rc.bottom - border};
-    g_titleRc = {border, border, rc.right - border, border + titleHeight};
-    g_titleTextRc = g_titleRc;
+    g_border.top = {0, 0, m.windowWidth, m.titleHeight + m.titlePadding * 2};
+    g_border.bottom = {0, m.windowHeight - m.border, m.windowWidth, m.windowHeight};
+    g_border.left = {0, m.border, m.border, m.windowHeight - m.border};
+    g_border.right = {m.windowWidth - m.border, m.border, m.windowWidth, m.windowHeight - m.border};
+
+    // center the title inside the top border
+    int x = (m.windowWidth - m.titleWidth) / 2;
+    int y = (g_border.top.bottom - m.titleHeight) / 2;
+    g_titleRc = {x, y, x + m.titleWidth, y + m.titleHeight};
+    // g_titleTextRc = g_titleRc;
 
 #ifdef _DEBUG
-    LOG_DEBUG("LayoutFrame: window={%ld,%ld,%ld,%ld} border=%d titleHeight=%d", rc.left, rc.top, rc.right, rc.bottom, border, titleHeight);
+    // LOG_DEBUG("LayoutFrame: window={%ld,%ld,%ld,%ld} border=%d titleHeight=%d", rc.left, rc.top, rc.right, rc.bottom, border, titleHeight);
 
-    DebugRect("border.top", g_border.top);
-    DebugRect("border.bottom", g_border.bottom);
-    DebugRect("border.left", g_border.left);
-    DebugRect("border.right", g_border.right);
+    // DebugRect("border.top", g_border.top);
+    // DebugRect("border.bottom", g_border.bottom);
+    // DebugRect("border.left", g_border.left);
+    // DebugRect("border.right", g_border.right);
 
-    DebugRect("title", g_titleRc);
-    DebugRect("titleText", g_titleTextRc);
+    // DebugRect("title", g_titleRc);
 #endif
 }
 
-void LayoutProperties(RECT rc)
+void LayoutProperties2(const LayoutMetrics &m)
 {
-    LOG_DEBUG("LayoutProperties rc={%ld,%ld,%ld,%ld}",
-              rc.left, rc.top, rc.right, rc.bottom);
+    LOG_DEBUG("LayoutProperties2");
 
-    if (rc.right <= 0 || rc.bottom <= 0)
+    if (m.windowWidth <= 0 || m.windowHeight <= 0)
     {
-        LOG_DEBUG("LayoutProperties skipped invalid rect");
+        LOG_ERROR("[LayoutProperties2] incorrect metrics");
         return;
     }
 
-    const int border = DPIScale(BORDER);
-    const int titleHeight = DPIScale(TITLE_HEIGHT);
-    const int paddingLeft = DPIScale(PADDING_LEFT);
-    const int paddingTop = DPIScale(PADDING_TOP);
-    const int labelWidth = DPIScale(LABEL_WIDTH);
-    const int lineHeight = DPIScale(LINE_HEIGHT);
-    const int gap = DPIScale(GAP);
+    const int leftEdge = m.border + m.paddingSide;
+    const int rightEdge = m.windowWidth - m.border - m.paddingSide;
 
-    const int x = border + paddingLeft;
-    int y = border + titleHeight + paddingTop;
+    int y = m.titleHeight + m.titlePadding * 2 + m.paddingTop;
 
-    const int right = rc.right - border - paddingLeft;
+    // Window
+    g_windowRc = {0, 0, m.windowWidth, m.windowHeight};
 
-    // Window frame
-    g_windowRc = {0, 0, rc.right, rc.bottom};
-    LayoutFrame(rc);
-
-    // Title
-    g_titleTextRc = g_titleRc;
+    // Frame + title
+    LayoutFrame(m);
 
     // Properties
     for (auto &p : g_props)
     {
         if (p.type == PropertyType::Separator)
         {
-            y += gap;
-            p.labelRc = {x, y, right, y + DPIScale(1)};
-            y += gap;
+            y += m.lineGap;
+            p.labelRc = {leftEdge, y, rightEdge, y + m.separatorHeight};
+            y += m.separatorHeight;
+            y += m.lineGap;
             continue;
         }
 
-        p.labelRc = {x, y, x + labelWidth, y + lineHeight};
-        p.valueRc = {x + labelWidth + gap, y, right, y + lineHeight};
+        p.labelRc = {leftEdge, y, leftEdge + m.labelWidth, y + m.lineHeight};
+        p.valueRc = {leftEdge + m.labelWidth + m.gap, y, rightEdge, y + m.lineHeight};
 
-        y += lineHeight;
+        y += m.lineHeight;
     }
 
-    // Separator after the last property
-    y += gap;
-    g_serverSeparatorRc.valueRc = {x, y, right, y + DPIScale(1)};
-    y += gap;
+    // Spacer
+    y += m.spacer;
 
     // Server status
-    g_serverStatusRc.valueRc = {x, y, right, y + lineHeight};
-    y += lineHeight;
+    g_serverStatusRc.valueRc = {leftEdge, y, rightEdge, y + m.lineHeight2};
+    y += m.lineHeight2;
 
-    // notification + card name
-    const int gap2 = DPIScale(3);
-    const int cardNameY = rc.bottom - border - paddingTop - lineHeight;
-    const int notificationY = cardNameY - gap2 - lineHeight;
-    g_notification.valueRc = {x, notificationY, right, notificationY + lineHeight};
-    g_cardName.valueRc = {x, cardNameY, right, cardNameY + lineHeight};
+    // Notification
+    y += m.lineGap;
+    g_notification.valueRc = {leftEdge, y, rightEdge, y + m.lineHeight2};
+    y += m.lineHeight2;
+    y += m.lineGap;
+
+    // Card name
+    g_cardName.valueRc = {leftEdge, y, rightEdge, y + m.cardHeight};
+    y += m.cardHeight;
+
+#ifdef _DEBUG
+    const int expectedBottom = m.windowHeight - m.border - m.paddingBottom;
+    if (y != expectedBottom)
+    {
+        LOG_ERROR("[LayoutProperties2] Layout mismatch: y=%d expected=%d", y, expectedBottom);
+    }
+#endif
 }
 
 void PaintProperties(HDC hdc)
@@ -239,18 +412,36 @@ void PaintProperties(HDC hdc)
 
         SetBkMode(hdc, OPAQUE);
         SetBkColor(hdc, BACKGROUNDCOLOR);
+        // SetBkColor(hdc, RGB(255, 255, 255)); // test
 
         if (!p.initialized)
         {
             SetTextColor(hdc, LABELCOLOR);
-            DrawTextW(hdc, p.label, -1, &p.labelRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+            SIZE sz{};
+            int len = (int)wcslen(p.label);
+            GetTextExtentPoint32W(hdc, p.label, len, &sz);
+
+            int x = p.labelRc.left;
+            int y = p.labelRc.top + ((p.labelRc.bottom - p.labelRc.top) - sz.cy) / 2;
+
+            ExtTextOutW(hdc, x, y, ETO_CLIPPED, &p.labelRc, p.label, len, nullptr);
+
 #ifdef _DEBUG
             g_gdiDrawCallCount++;
 #endif
         }
 
         SetTextColor(hdc, p.warning ? WARNINGCOLOR : VALUECOLOR);
-        DrawTextW(hdc, p.textValue, -1, &p.valueRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+        SIZE sz{};
+        int len = (int)wcslen(p.textValue);
+        GetTextExtentPoint32W(hdc, p.label, len, &sz);
+
+        int x = p.valueRc.left;
+        int y = p.valueRc.top + ((p.valueRc.bottom - p.valueRc.top) - sz.cy) / 2;
+
+        ExtTextOutW(hdc, x, y, ETO_CLIPPED, &p.valueRc, p.textValue, len, nullptr);
 
 #ifdef _DEBUG
         g_gdiDrawCallCount++;
@@ -297,6 +488,7 @@ void PaintProperties(HDC hdc)
     if (g_cardName.dirty)
     {
         RECT rc = g_cardName.valueRc;
+        // LOG_DEBUG("card RECT = %d %d %d %d", rc.left, rc.top, rc.right, rc.bottom);
 
         // Fill background
         SetBkMode(hdc, OPAQUE);
@@ -311,7 +503,9 @@ void PaintProperties(HDC hdc)
         SetBkMode(hdc, TRANSPARENT);
         SetTextColor(hdc, LABELCOLOR);
 
+        HFONT oldFont = (HFONT)SelectObject(hdc, g_cardFont);
         DrawTextW(hdc, g_cardName.textValue, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        SelectObject(hdc, oldFont);
 
 #ifdef _DEBUG
         g_gdiDrawCallCount += 3;
@@ -328,21 +522,14 @@ void SetAlwaysOnTop(HWND hWnd, bool enable)
     SetWindowPos(hWnd, enable ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
 }
 
-void ResizeWindow(HWND hwnd, int delta)
-{
-    RECT rc{};
-    GetWindowRect(hwnd, &rc);
-    SetWindowPos(hwnd, nullptr, rc.left, rc.top, rc.right - rc.left + delta, rc.bottom - rc.top + delta, SWP_NOZORDER | SWP_NOACTIVATE);
-}
-
 void OnResizeWindow(HWND hwnd, bool grow)
 {
     UINT oldFontSize = g_fontSize;
 
     if (grow)
-        g_fontSize = min(g_fontSize + 1, (UINT)FONTSIZE_MAX);
+        g_fontSize = min(g_fontSize + 2, (UINT)FONTSIZE_MAX);
     else
-        g_fontSize = max(g_fontSize - 1, (UINT)FONTSIZE_MIN);
+        g_fontSize = max(g_fontSize - 2, (UINT)FONTSIZE_MIN);
 
     // Already at min/max
     if (g_fontSize == oldFontSize)
@@ -350,14 +537,13 @@ void OnResizeWindow(HWND hwnd, bool grow)
 
     RecreateFont();
     g_forceFrameRedraw = true;
-    ResizeWindow(hwnd, grow ? WINDOW_RESIZE_STEP : -WINDOW_RESIZE_STEP);
-    RECT rc{};
-    GetClientRect(hwnd, &rc);
-    LayoutProperties(rc);
     SetAllPropertiesInitFlag(false);
+
+    PostMessage(hwnd, WM_APP + 1, 0, 0);
+
     InvalidateRect(hwnd, nullptr, TRUE);
 
-    LOG_DEBUG("new window: %dx%d, font@%dpx", rc.right - rc.left, rc.bottom - rc.top, g_fontSize);
+    // LOG_DEBUG("new window: %dx%d, font@%dpx", rc.right - rc.left, rc.bottom - rc.top, g_fontSize);
 }
 
 void PaintFrame(HDC hdc)
@@ -379,17 +565,15 @@ void PaintFrame(HDC hdc)
     FillRect(hdc, &g_border.left, frameBrush);
     FillRect(hdc, &g_border.right, frameBrush);
 
-    // Title bar
-    FillRect(hdc, &g_titleRc, frameBrush);
-
     // Title text
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, RGB(255, 255, 255));
 
-    DrawText(hdc, APPNAME, -1, &g_titleTextRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    // DrawText(hdc, APPNAME, -1, &g_titleRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    TextOutW(hdc, g_titleRc.left, g_titleRc.top, APPNAME, APPNAME_LENGTH);
 
 #ifdef _DEBUG
-    g_gdiDrawCallCount += 6;
+    g_gdiDrawCallCount += 5;
 #endif
 }
 
@@ -418,6 +602,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         HDC hdc = GetDC(hwnd);
         g_backBuffer.Create(hdc, rc.right - rc.left, rc.bottom - rc.top, BACKGROUNDCOLOR);
         ReleaseDC(hwnd, hdc);
+
+        PostMessage(hwnd, WM_APP + 1, 0, 0);
+
+        return 0;
+    }
+
+    case WM_APP + 1:
+    {
+        g_layoutMetrics = CalculateLayoutMetrics();
+        SetWindowPos(hwnd, nullptr, 0, 0, g_layoutMetrics.windowWidth, g_layoutMetrics.windowHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        LayoutProperties2(g_layoutMetrics);
 
         return 0;
     }
@@ -489,7 +684,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 ReleaseDC(hwnd, hdc);
             }
 
-            LayoutProperties({0, 0, w, h});
             ResetDirty();
         }
 
@@ -515,6 +709,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         SetAllPropertiesInitFlag(false); // force all labels repaint
         g_forceFrameRedraw = true;       // force new border + title
 
+        PostMessage(hwnd, WM_APP + 1, 0, 0);
+
         InvalidateRect(hwnd, nullptr, TRUE);
 
         LOG_DEBUG("New DPI: %u (%.0f%%), %dxx%d", g_dpi, (g_dpi / 96.0) * 100.0, g_width, g_height);
@@ -535,8 +731,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             bool dirty = false;
 
+            // START_CHRONO(adlx);
             g_AdlxGPUTelemetry.Tick();
             GpuMetricsSnapshot snapshot = g_AdlxGPUTelemetry.Get();
+            // END_CHRONO(adlx, "ADLX");
 
             if (!snapshot.valid)
                 return 0;
@@ -588,23 +786,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             if (g_cpu.IsInitialized())
             {
-                if (g_cpu.Update())
-                {
-                    RyzenMetrics cpuMetrics = g_cpu.GetMetrics();
-                    // round to nearest integer for more accuracy than truncating
-                    const int cpuIntegerTemp = static_cast<int>(std::round(cpuMetrics.dTemperature));
-                    const int cpuIntegerPower = static_cast<int>(std::round(cpuMetrics.dPower));
-                    // LOG_DEBUG("CPU Temp: %0.2f -> %d°C", cpuMetrics.dTemperature, cpuIntegerTemp);
-                    // LOG_DEBUG("CPU Power: %0.2f -> %dW", cpuMetrics.dPower, cpuIntegerPower);
+                // START_CHRONO(cpu);
+                RyzenMetrics cpuMetrics = g_cpu.GetMetrics();
+                // END_CHRONO(cpu, "CPU");
+                // round to nearest integer for more accuracy than truncating
+                const int cpuIntegerTemp = static_cast<int>(std::round(cpuMetrics.dTemperature));
+                const int cpuIntegerPower = static_cast<int>(std::round(cpuMetrics.dPower));
+                // LOG_DEBUG("CPU Temp: %0.2f -> %d°C", cpuMetrics.dTemperature, cpuIntegerTemp);
+                // LOG_DEBUG("CPU Power: %0.2f -> %dW", cpuMetrics.dPower, cpuIntegerPower);
 
-                    if ((GetPropertyValueAtIndex(MetricsIndex::Cpu) != cpuIntegerTemp) || (GetPropertyValueAtIndex(MetricsIndex::Cpu, true) != cpuIntegerPower))
-                    {
-                        dirty = true;
-                        wchar_t cpuBuffer[20];
-                        FormatCpuMetrics(cpuBuffer, cpuIntegerTemp, cpuIntegerPower);
-                        SetPropertyValueAtIndex(MetricsIndex::Cpu, cpuIntegerTemp, cpuBuffer, 16);
-                        SetPropertyValue2OnlyAtIndex(MetricsIndex::Cpu, cpuIntegerPower);
-                    }
+                if ((GetPropertyValueAtIndex(MetricsIndex::Cpu) != cpuIntegerTemp) || (GetPropertyValueAtIndex(MetricsIndex::Cpu, true) != cpuIntegerPower))
+                {
+                    dirty = true;
+                    wchar_t cpuBuffer[20];
+                    FormatCpuMetrics(cpuBuffer, cpuIntegerTemp, cpuIntegerPower);
+                    SetPropertyValueAtIndex(MetricsIndex::Cpu, cpuIntegerTemp, cpuBuffer, 16);
+                    SetPropertyValue2OnlyAtIndex(MetricsIndex::Cpu, cpuIntegerPower);
                 }
             }
 
@@ -989,6 +1186,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
             if (!g_cpu.Init())
             {
                 SetPropertyValueAtIndex(MetricsIndex::Cpu, NotSupported, L"not supported", 14);
+            }
+            else
+            {
+                g_cpu.Start();
             }
         }
     }

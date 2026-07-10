@@ -272,3 +272,84 @@ struct NetworkInterface
         return adapterName + L": " + address;
     }
 };
+
+/**
+  ---------------------------------
+  |           TTTLE               |
+  ---------------------------------
+  | LABEL              VALUE      |
+  | ----------------------------- |
+  | LABEL              VALUE      |
+  | ----------------------------- |
+  | LABEL              VALUE      |
+  | ----------------------------- |
+  |                               |
+  |                               |
+  |        server status          |
+  |         notification          |
+  |             card              |
+  | ----------------------------- |
+
+
+ <-- border paddingSide  labelWidth gap valueWidth paddingSide border -->
+
+ ∧
+ |
+
+titlePadding
+titleHeight
+titlePadding
+
+paddingTop
+*lineHeight
+*lineGap
+*separatorHeight
+*lineGap
+
+spacer
+
+lineHeight2 (server status)
+lineGap
+lineHeight2 (notification)
+lineGap
+cardHeight
+paddingBottom
+
+ |
+ ∨
+
+
+ */
+struct LayoutMetrics
+{
+    // width related
+    int border;
+    int paddingSide;
+    int labelWidth;
+    int valueWidth;
+    int gap;
+
+    // shared
+    int paddingTop;
+
+    // title
+    int titlePadding;
+    int titleHeight;
+    int titleWidth;
+
+    // body font (g_font)
+    int lineHeight;
+    int separatorHeight;
+    int lineGap;
+    int spacer;
+
+    // notification font (g_notificationFont)
+    int lineHeight2;
+
+    // card font (g_cardFont)
+    int cardHeight;
+    int paddingBottom;
+
+    int windowWidth;
+    int windowHeight;
+};
