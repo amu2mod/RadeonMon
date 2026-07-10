@@ -7,9 +7,20 @@ This is a personal project developed independently, with no affiliation with AMD
 ---
 
 ## Overview
-<div align="center">
-<img width="555" height="570" alt="image" src="https://github.com/user-attachments/assets/3de05f73-60b1-4d97-b34e-0adc1299a445" />
-</div>
+<table align="center">
+  <tr>
+    <td align="center">
+      <img width="465" alt="Windows Application" src="https://github.com/user-attachments/assets/eeb2d856-05ce-490d-895a-e9766907c61d" />
+      <br />
+      <sub><b>Desktop App</b> — Main Application Window</sub>
+    </td>
+    <td align="center">
+      <img width="500" alt="HTML Dashboard" src="https://github.com/user-attachments/assets/859e16d2-6b14-4221-b69e-d64900632b02" />
+      <br />
+      <sub><b>Web Interface</b> — HTML Dashboard</sub>
+    </td>
+  </tr>
+</table>
 
 RadeonMon is a lightweight C++ utility that uses AMD’s ADLX SDK to provide essential metrics for Radeon RDNA 4 graphics cards.
 
@@ -24,6 +35,23 @@ It is designed to have a very low overhead with minimal impact on low fps.
 - Total Power usage
 - CPU metrics (Ryzen support only for now)
 - Highlights high temperatures with a warm color
+- Local Web Server on port 9090
+
+## How To use the local Web Server
+
+Right-click the application to open the context menu, navigate to the Web Server submenu, and select the network interface you want to bind to.
+
+The application must be run with administrator privileges in order to start the local Web Server.
+
+The URL will be displayed in the application in green.
+
+To access the web interface from another device on the network (for example, a smartphone), you need to add a Windows Firewall rule.
+
+Open Windows Terminal with administrator privileges and run the following command:
+
+```powershell
+New-NetFirewallRule -DisplayName "RadeonMon Web Server" -Direction Inbound -Protocol Tcp -LocalPort 9090 -Action Allow
+```
 
 ## Releases
 
@@ -35,6 +63,7 @@ It is designed to have a very low overhead with minimal impact on low fps.
 - AMD Radeon GPU (RDNA4 targeted)
 - Recent AMD drivers
 - AMD Ryzen™ Master Monitoring SDK (for CPU metrics) installed. Get installer [here](https://www.amd.com/en/developer/ryzen-master-monitoring-sdk.html)
+- Administrator privileges are required for CPU metrics and the local web server
 
 Tested with a RX 9070 XT on Windows 10.
 
