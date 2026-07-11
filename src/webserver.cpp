@@ -249,6 +249,8 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
     size_t pathLen = pRequest->CookedUrl.AbsPathLength / sizeof(WCHAR);
     std::wstring route(path, pathLen);
 
+    LOG_DEBUG("[WebServer] route: %ls", route.c_str());
+
     if (route == L"/api")
     {
         if (!m_apiHandler)
@@ -256,10 +258,29 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
             SendErrorResponse(pRequest->RequestId, 500, "No API handler registered");
             return;
         }
-        std::string json = m_apiHandler();
-        SendJsonResponse(pRequest->RequestId, json);
+
+        START_CHRONO(jsons);
+        // std::string json = m_apiHandler();
+        char jsonBuffer[GPU_JSON_BUFFER_SIZE];
+        int jsonLength = BuildCombinedJson(jsonBuffer, sizeof(jsonBuffer));
+        END_CHRONO(jsons, "json builder");
+        // SendJsonResponse(pRequest->RequestId, json);
+        SendJsonResponse(pRequest->RequestId, jsonBuffer, jsonLength);
+
         return;
     }
+
+    // if (route == L"/styles.css")
+    // {
+    //     SendFileResponse(pRequest->RequestId, L"styles.css");
+    //     return;
+    // }
+
+    // if (route == L"/script.js")
+    // {
+    //     SendFileResponse(pRequest->RequestId, L"script.js");
+    //     return;
+    // }
 
     // if (route == L"/")
     // {
@@ -267,6 +288,19 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
     //     return;
     // }
 
+    if (route == L"/styles.css")
+    {
+        if (!SendResourceResponse(pRequest->RequestId, IDR_STYLES_CSS))
+            SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
+        return;
+    }
+
+    if (route == L"/script.js")
+    {
+        if (!SendResourceResponse(pRequest->RequestId, IDR_SCRIPT_JS))
+            SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
+        return;
+    }
     if (route == L"/")
     {
         if (!SendResourceResponse(pRequest->RequestId, IDR_INDEX_HTML))
@@ -277,9 +311,29 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
     SendErrorResponse(pRequest->RequestId, 404, "Not Found");
 }
 
-bool WebServer::SendFileResponse(HTTP_REQUEST_ID requestId)
+static const char *GetContentType(const std::wstring &filename)
 {
-    std::ifstream file(m_htmlFilePath, std::ios::binary);
+    if (filename.ends_with(L".css"))
+        return "text/css; charset=utf-8";
+
+    if (filename.ends_with(L".js"))
+        return "application/javascript; charset=utf-8";
+
+    if (filename.ends_with(L".html"))
+        return "text/html; charset=utf-8";
+
+    return "text/html; charset=utf-8";
+}
+
+bool WebServer::SendFileResponse(HTTP_REQUEST_ID requestId, std::wstring filename)
+{
+    std::ifstream file;
+
+    if (filename.empty())
+        file = std::ifstream(m_htmlFilePath, std::ios::binary);
+    else
+        file = std::ifstream(filename, std::ios::binary);
+
     if (!file)
         return SendErrorResponse(requestId, 404, "Not Found");
 
@@ -293,7 +347,7 @@ bool WebServer::SendFileResponse(HTTP_REQUEST_ID requestId)
     response.pReason = "OK";
     response.ReasonLength = (USHORT)strlen(response.pReason);
 
-    const char *contentType = "text/html; charset=utf-8";
+    const char *contentType = GetContentType(filename);
     HTTP_KNOWN_HEADER contentTypeHeader;
     RtlZeroMemory(&contentTypeHeader, sizeof(contentTypeHeader));
     contentTypeHeader.pRawValue = contentType;
@@ -317,34 +371,33 @@ bool WebServer::SendFileResponse(HTTP_REQUEST_ID requestId)
     return result == NO_ERROR;
 }
 
-bool WebServer::SendJsonResponse(HTTP_REQUEST_ID requestId, const std::string &json)
+bool WebServer::SendJsonResponse(HTTP_REQUEST_ID requestId, const char *json, ULONG jsonSize)
 {
-    HTTP_RESPONSE response;
-    RtlZeroMemory(&response, sizeof(response));
+    if (json == nullptr)
+    {
+        json = "";
+        jsonSize = 0;
+    }
+
+    HTTP_RESPONSE response = {};
     response.StatusCode = 200;
     response.pReason = "OK";
-    response.ReasonLength = (USHORT)strlen(response.pReason);
+    response.ReasonLength = static_cast<USHORT>(strlen(response.pReason));
 
     const char *contentType = "application/json; charset=utf-8";
-    HTTP_KNOWN_HEADER contentTypeHeader;
-    RtlZeroMemory(&contentTypeHeader, sizeof(contentTypeHeader));
-    contentTypeHeader.pRawValue = contentType;
-    contentTypeHeader.RawValueLength = (USHORT)strlen(contentType);
-    response.Headers.KnownHeaders[HttpHeaderContentType] = contentTypeHeader;
+    response.Headers.KnownHeaders[HttpHeaderContentType].pRawValue = contentType;
+    response.Headers.KnownHeaders[HttpHeaderContentType].RawValueLength = static_cast<USHORT>(strlen(contentType));
 
-    HTTP_DATA_CHUNK dataChunk;
-    RtlZeroMemory(&dataChunk, sizeof(dataChunk));
+    HTTP_DATA_CHUNK dataChunk = {};
     dataChunk.DataChunkType = HttpDataChunkFromMemory;
-    dataChunk.FromMemory.pBuffer = (PVOID)json.data();
-    dataChunk.FromMemory.BufferLength = (ULONG)json.size();
+    dataChunk.FromMemory.pBuffer = const_cast<char *>(json);
+    dataChunk.FromMemory.BufferLength = jsonSize;
 
     response.EntityChunkCount = 1;
     response.pEntityChunks = &dataChunk;
 
     ULONG bytesSent = 0;
-    ULONG result = HttpSendHttpResponse(
-        m_hReqQueue, requestId, 0, &response, NULL,
-        &bytesSent, NULL, 0, NULL, NULL);
+    ULONG result = HttpSendHttpResponse(m_hReqQueue, requestId, 0, &response, nullptr, &bytesSent, nullptr, 0, nullptr, nullptr);
 
     return result == NO_ERROR;
 }

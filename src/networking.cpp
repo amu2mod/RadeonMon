@@ -220,9 +220,16 @@ void NetworkManager::Log() const
 {
     const auto addresses = GetAddresses();
 
-    LOG_DEBUG("Network List");
-    LOG_DEBUG("-------------");
+    LOG_INFO("");
+    LOG_INFO("Network List");
+    LOG_INFO("-------------");
     for (const auto &ip : addresses)
-        LOG_DEBUG("- IP found: %ls", ip.display().c_str());
-    LOG_DEBUG("-------------");
+    {
+        LOG_INFO("- IP found: %ls", ip.display().c_str());
+#ifndef _DEBUG
+        (void)ip;
+#endif
+    }
+    LOG_INFO("-------------");
+    LOG_INFO("");
 }

@@ -1,1 +1,3 @@
 #define IDR_INDEX_HTML 101
+#define IDR_STYLES_CSS 102
+#define IDR_SCRIPT_JS 103

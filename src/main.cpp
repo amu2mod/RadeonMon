@@ -24,8 +24,43 @@
 
 #include <version.hpp>
 
+using namespace RadeonMon::Hardware;
+
 #pragma comment(lib, "Shcore.lib")
 #pragma comment(lib, "iphlpapi.lib")
+#pragma comment(lib, "comctl32.lib")
+
+void UpdateToolTipText(HWND hwnd, UINT_PTR toolId, const std::wstring &text, int maxWidth)
+{
+    static std::wstring tooltipText;
+    tooltipText = text;
+
+    TOOLINFO ti = {};
+    ti.cbSize = sizeof(TOOLINFO);
+    ti.hwnd = hwnd;
+    ti.uId = toolId;
+    ti.lpszText = const_cast<LPWSTR>(tooltipText.c_str());
+
+    SendMessage(g_hwndTooltip, TTM_UPDATETIPTEXT, 0, reinterpret_cast<LPARAM>(&ti));
+    SendMessage(g_hwndTooltip, TTM_SETMAXTIPWIDTH, 0, maxWidth); // set max width large enough for multiline
+}
+
+void UpdateToolTipRect(HWND hwnd, UINT_PTR toolId, const RECT &rect)
+{
+    TOOLINFO ti = {};
+    ti.cbSize = sizeof(ti);
+    ti.hwnd = hwnd;
+    ti.uId = toolId;
+    ti.rect = rect;
+
+    SendMessage(g_hwndTooltip, TTM_NEWTOOLRECT, 0, reinterpret_cast<LPARAM>(&ti));
+}
+
+void InitTooltips(void)
+{
+    INITCOMMONCONTROLSEX icc = {sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES};
+    InitCommonControlsEx(&icc);
+}
 
 LayoutMetrics CalculateLayoutMetrics()
 {
@@ -47,8 +82,7 @@ LayoutMetrics CalculateLayoutMetrics()
 
     const int fontHeight = sz.cy;
 
-    const float fontScale =
-        static_cast<float>(fontHeight) / static_cast<float>(FONTSIZE);
+    const float fontScale = static_cast<float>(fontHeight) / static_cast<float>(FONTSIZE);
 
     auto ScaleFontMetric = [&](int value) -> int
     {
@@ -65,22 +99,14 @@ LayoutMetrics CalculateLayoutMetrics()
     m.gap = ScaleFontMetric(GAP);
 
     static constexpr wchar_t LABEL[] = L"Power Consumption";
-    if (!GetTextExtentPoint32W(
-            hdc,
-            LABEL,
-            _countof(LABEL) - 1,
-            &sz))
+    if (!GetTextExtentPoint32W(hdc, LABEL, _countof(LABEL) - 1, &sz))
         LOG_ERROR("GetTextExtentPoint32W failed");
 
     // Font-derived: no scaling
     m.labelWidth = sz.cx + 2;
 
     static constexpr wchar_t VALUE[] = L"150°C (+100)";
-    if (!GetTextExtentPoint32W(
-            hdc,
-            VALUE,
-            _countof(VALUE) - 1,
-            &sz))
+    if (!GetTextExtentPoint32W(hdc, VALUE, _countof(VALUE) - 1, &sz))
         LOG_ERROR("GetTextExtentPoint32W failed");
 
     // Font-derived: no scaling
@@ -110,11 +136,7 @@ LayoutMetrics CalculateLayoutMetrics()
     // Font-derived: no scaling
     m.titleHeight = titleFontHeight;
 
-    if (!GetTextExtentPoint32W(
-            hdc,
-            APPNAME,
-            APPNAME_LENGTH,
-            &sz))
+    if (!GetTextExtentPoint32W(hdc, APPNAME, APPNAME_LENGTH, &sz))
         LOG_ERROR("GetTextExtentPoint32W failed");
 
     // Font-derived: no scaling
@@ -603,6 +625,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         g_backBuffer.Create(hdc, rc.right - rc.left, rc.bottom - rc.top, BACKGROUNDCOLOR);
         ReleaseDC(hwnd, hdc);
 
+        /////////////////////
+        // Gpu Info Tooltip
+        g_hwndTooltip = CreateWindowEx(0, TOOLTIPS_CLASS, NULL, WS_POPUP | TTS_ALWAYSTIP, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hwnd, NULL, GetModuleHandle(NULL), NULL);
+        SetWindowPos(g_hwndTooltip, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+        RECT textRect = {0, 0, 200, 200};
+
+        TOOLINFO ti = {};
+        ti.cbSize = sizeof(ti);
+        ti.uFlags = TTF_SUBCLASS;
+        ti.hwnd = hwnd;
+        ti.uId = 1;
+        ti.rect = textRect;
+        /////////////////////
+
+        SendMessage(g_hwndTooltip, TTM_ADDTOOL, 0, (LPARAM)&ti);
+        SendMessage(g_hwndTooltip, TTM_SETDELAYTIME, TTDT_INITIAL, 0); // starts immediatly
+
         PostMessage(hwnd, WM_APP + 1, 0, 0);
 
         return 0;
@@ -613,6 +653,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         g_layoutMetrics = CalculateLayoutMetrics();
         SetWindowPos(hwnd, nullptr, 0, 0, g_layoutMetrics.windowWidth, g_layoutMetrics.windowHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
         LayoutProperties2(g_layoutMetrics);
+        UpdateToolTipRect(hwnd, TOOLID_GPUINFO, g_cardName.valueRc);
 
         return 0;
     }
@@ -740,48 +781,48 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 return 0;
 
             // GPU Temp
-            if (GetPropertyValueAtIndex(MetricsIndex::Temp) != snapshot.temperature)
+            if (snapshot.temperature.isSupported && GetPropertyValueAtIndex(MetricsIndex::Temp) != snapshot.temperature.value)
             {
                 dirty = true;
                 wchar_t tempBuffer[16];
-                FormatTemperature(tempBuffer, snapshot.temperature);
-                SetPropertyValueAtIndex(MetricsIndex::Temp, snapshot.temperature, tempBuffer, 16, snapshot.temperature >= TEMPERATURE_THRESHOLD);
+                FormatTemperature(tempBuffer, static_cast<int>(snapshot.temperature.value));
+                SetPropertyValueAtIndex(MetricsIndex::Temp, static_cast<int>(snapshot.temperature.value), tempBuffer, 16, snapshot.temperature.value >= TEMPERATURE_THRESHOLD);
             }
 
             // Hotspot
-            if (GetPropertyValueAtIndex(MetricsIndex::Hotspot) != snapshot.hotspot)
+            if (snapshot.hotspot.isSupported && GetPropertyValueAtIndex(MetricsIndex::Hotspot) != snapshot.hotspot.value)
             {
                 dirty = true;
                 wchar_t hotspotBuffer[16];
-                FormatHotspot(hotspotBuffer, snapshot.temperature, snapshot.hotspot);
-                SetPropertyValueAtIndex(MetricsIndex::Hotspot, snapshot.hotspot, hotspotBuffer, 16, snapshot.hotspot >= TEMPERATURE_THRESHOLD);
+                FormatHotspot(hotspotBuffer, static_cast<int>(snapshot.temperature.value), static_cast<int>(snapshot.hotspot.value));
+                SetPropertyValueAtIndex(MetricsIndex::Hotspot, static_cast<int>(snapshot.hotspot.value), hotspotBuffer, 16, snapshot.hotspot.value >= TEMPERATURE_THRESHOLD);
             }
 
-            // VRAM Temp
-            if (GetPropertyValueAtIndex(MetricsIndex::Vram) != snapshot.vram)
+            // VRAM Temperature
+            if (snapshot.memoryTemperature.isSupported && GetPropertyValueAtIndex(MetricsIndex::Vram) != snapshot.memoryTemperature.value)
             {
                 dirty = true;
                 wchar_t vramBuffer[16];
-                FormatTemperature(vramBuffer, snapshot.vram);
-                SetPropertyValueAtIndex(MetricsIndex::Vram, snapshot.vram, vramBuffer, 16, snapshot.vram >= TEMPERATURE_THRESHOLD);
+                FormatTemperature(vramBuffer, static_cast<int>(snapshot.memoryTemperature.value));
+                SetPropertyValueAtIndex(MetricsIndex::Vram, static_cast<int>(snapshot.memoryTemperature.value), vramBuffer, 16, snapshot.memoryTemperature.value >= TEMPERATURE_THRESHOLD);
             }
 
             // Fan Speed
-            if (GetPropertyValueAtIndex(MetricsIndex::FanSpeed) != snapshot.fanSpeed)
+            if (snapshot.fanSpeed.isSupported && GetPropertyValueAtIndex(MetricsIndex::FanSpeed) != snapshot.fanSpeed.value)
             {
                 dirty = true;
                 wchar_t fanBuffer[16];
-                FormatFanSpeed(fanBuffer, snapshot.fanSpeed);
-                SetPropertyValueAtIndex(MetricsIndex::FanSpeed, snapshot.fanSpeed, fanBuffer, 16);
+                FormatFanSpeed(fanBuffer, snapshot.fanSpeed.value);
+                SetPropertyValueAtIndex(MetricsIndex::FanSpeed, snapshot.fanSpeed.value, fanBuffer, 16);
             }
 
             // Power Consumption
-            if (GetPropertyValueAtIndex(MetricsIndex::Power) != snapshot.power)
+            if (snapshot.totalBoardPower.isSupported && GetPropertyValueAtIndex(MetricsIndex::Power) != snapshot.totalBoardPower.value)
             {
                 dirty = true;
                 wchar_t powerBuffer[16];
-                FormatPowerConsumption(powerBuffer, snapshot.power);
-                SetPropertyValueAtIndex(MetricsIndex::Power, snapshot.power, powerBuffer, 16);
+                FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value));
+                SetPropertyValueAtIndex(MetricsIndex::Power, static_cast<int>(snapshot.totalBoardPower.value), powerBuffer, 16);
             }
 
             if (g_cpu.IsInitialized())
@@ -832,7 +873,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         ////////////////////////////////////////////////////////
         // Web Server submenu
         HMENU hWebServerMenu = CreatePopupMenu();
-
         const auto &list = g_networkManager.GetAddresses();
         const UINT flags = MF_STRING | (g_webServer.IsRunning() || !g_isAdmin) ? MF_DISABLED : 0;
 
@@ -1013,6 +1053,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 auto addr = g_webServer.GetBoundInterface().value().address;
                 std::wstring txt = L"http://" + addr + L":" + WEBSERVER_PORT;
                 g_serverStatusRc.SetValue(txt.c_str());
+                g_clickableUrlRect = GetCenteredTextRect(g_backBuffer.memDC, g_notificationFont, &g_serverStatusRc.valueRc, txt.c_str());
                 g_serverStatusRc.DrawTextValue(g_backBuffer.memDC, SERVERSTATUSCOLOR, g_notificationFont);
                 InvalidateRect(hwnd, &g_serverStatusRc.valueRc, FALSE);
                 UpdateWindow(hwnd);
@@ -1024,17 +1065,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_KEYDOWN:
     {
-        bool ctrlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        const bool ctrlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        const bool isRepeat = (lParam & (1u << 30)) != 0;
 
-        if (ctrlDown)
+        if (ctrlDown && !isRepeat)
         {
             switch (wParam)
             {
-            case VK_ADD: // Numpad +
+            case VK_ADD:      // Ctrl + Numpad +
+            case VK_OEM_PLUS: // Ctrl + main keyboard +
                 OnResizeWindow(hwnd, true);
                 return 0;
 
-            case VK_SUBTRACT: // Numpad -
+            case VK_SUBTRACT:  // Ctrl + Numpad -
+            case VK_OEM_MINUS: // Ctrl + main keyboard - (QWERTY)
+            case '6':          // Ctrl + main keyboard - (AZERTY)
                 OnResizeWindow(hwnd, false);
                 return 0;
             }
@@ -1045,6 +1090,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_LBUTTONDOWN:
     {
+
+        POINT pt;
+        pt.x = LOWORD(lParam);
+        pt.y = HIWORD(lParam);
+
+        if (PtInRect(&g_clickableUrlRect, pt) && g_webServer.IsRunning())
+        {
+            LOG_DEBUG("Opening %ls", g_serverStatusRc.textValue);
+            INT_PTR ret = OpenUrl(g_serverStatusRc.textValue);
+            if (ret <= 32)
+                LOG_ERROR("Failed to open URL (ShellExecuteW): %td", ret);
+            return 0;
+        }
+
         SetCapture(hwnd);
         g_dragging = true;
         GetCursorPos(&g_dragStart);
@@ -1061,6 +1120,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int dx = cur.x - g_dragStart.x;
             int dy = cur.y - g_dragStart.y;
             SetWindowPos(hwnd, nullptr, g_wndStart.left + dx, g_wndStart.top + dy, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        else
+        {
+            POINT pt = {LOWORD(lParam), HIWORD(lParam)};
+
+            if (PtInRect(&g_clickableUrlRect, pt) && g_webServer.IsRunning())
+            {
+                SetCursor(LoadCursor(nullptr, IDC_HAND));
+            }
+            else
+            {
+                SetCursor(LoadCursor(nullptr, IDC_ARROW));
+            }
         }
         return 0;
     }
@@ -1170,6 +1242,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 
     g_AdlxGPUTelemetry.Init();
     g_AdlxGPUTelemetry.Discover();
+
+    if (g_AdlxGPUTelemetry.isInitialized)
+        UpdateToolTipText(hwnd, TOOLID_GPUINFO, g_AdlxGPUTelemetry.GetGpuInfo().GetTooltip(), g_AdlxGPUTelemetry.GetGpuInfo().GetDriverPathTooltipWidth(g_hwndTooltip));
 
     LOG_DEBUG("Admin mode: %s", g_isAdmin ? "yes" : "no");
 

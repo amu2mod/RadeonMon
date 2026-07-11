@@ -1,3 +1,5 @@
 #include "radeonmon/resource_ids.h"
 
 IDR_INDEX_HTML RCDATA "..\\web\\index.html"
+IDR_STYLES_CSS RCDATA "..\\web\\styles.css"
+IDR_SCRIPT_JS RCDATA "..\\web\\script.js"

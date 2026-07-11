@@ -76,3 +76,6 @@ inline NetworkManager g_networkManager;
 inline PropertyItem g_serverSeparatorRc, g_serverStatusRc;
 
 inline LayoutMetrics g_layoutMetrics;
+
+inline HWND g_hwndTooltip;
+inline RECT g_clickableUrlRect = {0};

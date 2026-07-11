@@ -42,8 +42,15 @@ set(APP_VERSION_RC
 message(STATUS "Version string: ${APP_VERSION_STR}")
 message(STATUS "Version resource: ${APP_VERSION_RC}")
 
+set(WEB_FILES
+    ${CMAKE_SOURCE_DIR}/web/index.html
+    ${CMAKE_SOURCE_DIR}/web/styles.css
+    ${CMAKE_SOURCE_DIR}/web/script.js
+)
+
 set_source_files_properties(${CMAKE_SOURCE_DIR}/resources/resources.rc
-    PROPERTIES OBJECT_DEPENDS ${CMAKE_SOURCE_DIR}/web/index.html)
+    PROPERTIES OBJECT_DEPENDS "${WEB_FILES}"
+)
 
 add_executable(radeonmon WIN32
     src/main.cpp

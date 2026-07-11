@@ -5,10 +5,13 @@
 #include "AMD/ADLX-1.5/SDK/Include/IPerformanceMonitoring3.h"
 #include "AMD/ADLX-1.5/SDK/ADLXHelper/Windows/Cpp/ADLXHelper.h"
 
+using namespace RadeonMon::Hardware;
+
 class ADLXGpuTelemetry
 {
 public:
     bool isInitialized = false;
+    RadeonMon::Hardware::GPUInfo gpuInfo;
 
     void Init();
     void Discover(); // Discover all supported metrics functions
@@ -25,6 +28,7 @@ public:
     }
 
     inline bool IsEnabled(uint32_t flag) const { return (gpuCaps & flag) != 0; }
+    inline const RadeonMon::Hardware::GPUInfo GetGpuInfo() const { return gpuInfo; }
 
 private:
     ADLXHelper ADLXHelp;
@@ -47,6 +51,12 @@ private:
     template <typename T, typename MetricFn>
     int ReadMetricV1(const char *name, MetricFn metricFn, IADLXGPUMetrics *metrics);
 
+    template <typename T, typename MetricFn>
+    int ReadMetricV3(const char *name, MetricFn metricFn, IADLXGPUMetrics *gpuMetrics);
+
     // heavy function to get all metrics
     GpuMetricsSnapshot Query();
+
+    // Retrieve all gpu info
+    void PopulateGPUInfo(IADLXGPU *gpu);
 };

@@ -35,7 +35,8 @@ class WebServer
 public:
     // Called on the server's worker thread whenever /api is requested.
     // Must return a JSON-encoded string.
-    using ApiHandler = std::function<std::string()>;
+    // using ApiHandler = std::function<std::string()>;
+    using ApiHandler = std::function<int(char *, int)>;
 
     WebServer();
     ~WebServer();
@@ -67,10 +68,11 @@ public:
 private:
     void WorkerThread();
     void HandleRequest(HTTP_REQUEST *pRequest);
-    bool SendFileResponse(HTTP_REQUEST_ID requestId);
-    bool SendJsonResponse(HTTP_REQUEST_ID requestId, const std::string &json);
+    bool SendFileResponse(HTTP_REQUEST_ID requestId, std::wstring filename = L"");
+    // bool SendJsonResponse(HTTP_REQUEST_ID requestId, const std::string &json);
     bool SendErrorResponse(HTTP_REQUEST_ID requestId, USHORT statusCode, const char *reason);
     bool SendResourceResponse(HTTP_REQUEST_ID requestId, int resourceId);
+    bool SendJsonResponse(HTTP_REQUEST_ID requestId, const char *json, ULONG jsonSize);
 
     HANDLE m_hReqQueue = NULL;
     HTTP_SERVER_SESSION_ID m_serverSession = 0;

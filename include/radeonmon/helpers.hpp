@@ -440,14 +440,57 @@ inline void ShowUpdateDialog(HWND hwnd, const wchar_t *title, const wchar_t *ins
     TaskDialogIndirect(&config, nullptr, nullptr, nullptr);
 }
 
-inline std::string BuildCombinedJson()
+// Returns the length of the written JSON (excluding null terminator)
+inline int BuildCombinedJson(char *buffer, int bufferSize)
 {
-    std::string gpuJson = g_AdlxGPUTelemetry.isInitialized ? g_AdlxGPUTelemetry.Get().BuildJson() : "null";
-    std::string cpuJson = g_cpu.IsInitialized() ? g_cpu.GetMetrics().BuildJson() : "null";
+    if (bufferSize < GPU_JSON_BUFFER_SIZE)
+        return 0;
 
-    char buffer[512];
-    snprintf(buffer, sizeof(buffer), "{\"gpu\":%s,\"cpu\":%s}", gpuJson.c_str(), cpuJson.c_str());
-    return std::string(buffer);
+    char *p = buffer;
+    char *end = buffer + bufferSize - 1;
+
+    auto write = [&](const char *s)
+    {
+        while (*s && p < end)
+            *p++ = *s++;
+    };
+
+    write("{\"gpu\":");
+
+    if (g_AdlxGPUTelemetry.isInitialized)
+    {
+        START_CHRONO(gpu);
+        int len = g_AdlxGPUTelemetry.Get().BuildJson(p, static_cast<int>(end - p + 1));
+        END_CHRONO(gpu, "gpu json");
+
+        if (len > 0)
+            p += len;
+    }
+    else
+    {
+        write("null");
+    }
+
+    write(",\"cpu\":");
+
+    if (g_cpu.IsInitialized())
+    {
+        START_CHRONO(cpu);
+        int len = g_cpu.GetMetrics().BuildJson(p, static_cast<int>(end - p + 1));
+        END_CHRONO(cpu, "cpu json");
+
+        if (len > 0)
+            p += len;
+    }
+    else
+    {
+        write("null");
+    }
+
+    *p++ = '}';
+    *p = '\0';
+
+    return static_cast<int>(p - buffer);
 }
 
 inline std::string LoadResourceString(int id)
@@ -472,4 +515,32 @@ inline int GetFontHeight(HDC hdc, HFONT font)
     GetTextMetrics(hdc, &tm);
     SelectObject(hdc, oldFont);
     return tm.tmHeight + tm.tmExternalLeading;
+}
+
+inline RECT GetCenteredTextRect(HDC hdc, HFONT hFont, const RECT *rc, const WCHAR *text)
+{
+    RECT textRc = {0};
+    SIZE textSize = {0};
+
+    HFONT oldFont = (HFONT)SelectObject(hdc, hFont);
+
+    GetTextExtentPoint32W(hdc, text, lstrlenW(text), &textSize);
+
+    SelectObject(hdc, oldFont);
+
+    textRc.left = rc->left + ((rc->right - rc->left) - textSize.cx) / 2;
+    textRc.top = rc->top + ((rc->bottom - rc->top) - textSize.cy) / 2;
+    textRc.right = textRc.left + textSize.cx;
+    textRc.bottom = textRc.top + textSize.cy;
+
+    return textRc;
+}
+
+// returned value > 32 indicate success.
+inline INT_PTR OpenUrl(const wchar_t *url)
+{
+    if (!url || !*url)
+        return false;
+
+    return reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", url, nullptr, nullptr, SW_SHOWNORMAL));
 }

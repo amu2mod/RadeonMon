@@ -42,8 +42,8 @@ constexpr COLORREF VALUECOLOR = rgb(240, 240, 240);
 constexpr COLORREF WARNINGCOLOR = rgb(255, 165, 0);
 constexpr COLORREF SEPARATORCOLOR = rgb(60, 60, 60);
 constexpr COLORREF BORDERCOLOR = rgb(200, 35, 35);
-constexpr COLORREF NOTIFICATIONCOLOR = rgb(212, 175, 55);
-constexpr COLORREF SERVERSTATUSCOLOR = RGB(0, 225, 255);
+constexpr COLORREF NOTIFICATIONCOLOR = rgb(241, 215, 5);
+constexpr COLORREF SERVERSTATUSCOLOR = rgb(0, 134, 223);
 
 // Timer IDs
 constexpr UINT_PTR APP_POLLING_ID = 1;
@@ -65,3 +65,8 @@ constexpr wchar_t LATESTURL[] = L"https://github.com/amu2mod/RadeonMon/releases/
 constexpr wchar_t ABOUTURL[] = L"https://github.com/amu2mod/RadeonMon";
 
 constexpr wchar_t WEBSERVER_PORT[] = L"9090";
+
+// Tooltips
+constexpr UINT_PTR TOOLID_GPUINFO = 1;
+
+constexpr int GPU_JSON_BUFFER_SIZE = 4096;
