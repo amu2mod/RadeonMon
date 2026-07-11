@@ -459,9 +459,9 @@ inline int BuildCombinedJson(char *buffer, int bufferSize)
 
     if (g_AdlxGPUTelemetry.isInitialized)
     {
-        START_CHRONO(gpu);
+        // START_CHRONO(gpu);
         int len = g_AdlxGPUTelemetry.Get().BuildJson(p, static_cast<int>(end - p + 1));
-        END_CHRONO(gpu, "gpu json");
+        // END_CHRONO(gpu, "gpu json");
 
         if (len > 0)
             p += len;
@@ -475,9 +475,9 @@ inline int BuildCombinedJson(char *buffer, int bufferSize)
 
     if (g_cpu.IsInitialized())
     {
-        START_CHRONO(cpu);
+        // START_CHRONO(cpu);
         int len = g_cpu.GetMetrics().BuildJson(p, static_cast<int>(end - p + 1));
-        END_CHRONO(cpu, "cpu json");
+        // END_CHRONO(cpu, "cpu json");
 
         if (len > 0)
             p += len;

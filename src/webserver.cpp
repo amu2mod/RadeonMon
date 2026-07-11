@@ -173,6 +173,33 @@ void WebServer::WorkerThread()
     }
 }
 
+static const char *GetContentTypeFromResourceId(int resourceId)
+{
+    switch (resourceId)
+    {
+    case IDR_INDEX_HTML:
+        return "text/html; charset=utf-8";
+
+    case IDR_STYLES_CSS:
+        return "text/css; charset=utf-8";
+
+    case IDR_SCRIPT_JS:
+        return "application/javascript; charset=utf-8";
+
+        // case IDR_JSON:
+        //     return "application/json; charset=utf-8";
+
+        // case IDR_PNG:
+        //     return "image/png";
+
+        // case IDR_ICO:
+        //     return "image/x-icon";
+
+    default:
+        return "text/html; charset=utf-8";
+    }
+}
+
 bool WebServer::SendResourceResponse(HTTP_REQUEST_ID requestId, int resourceId)
 {
     LOG_DEBUG("[WebServer] SendResourceResponse");
@@ -206,7 +233,7 @@ bool WebServer::SendResourceResponse(HTTP_REQUEST_ID requestId, int resourceId)
     response.pReason = "OK";
     response.ReasonLength = 2;
 
-    const char *contentType = "text/html; charset=utf-8";
+    const char *contentType = GetContentTypeFromResourceId(resourceId);
 
     HTTP_KNOWN_HEADER contentTypeHeader;
     RtlZeroMemory(&contentTypeHeader, sizeof(contentTypeHeader));
@@ -249,7 +276,7 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
     size_t pathLen = pRequest->CookedUrl.AbsPathLength / sizeof(WCHAR);
     std::wstring route(path, pathLen);
 
-    LOG_DEBUG("[WebServer] route: %ls", route.c_str());
+    // LOG_DEBUG("[WebServer] route: %ls", route.c_str());
 
     if (route == L"/api")
     {
@@ -259,11 +286,11 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
             return;
         }
 
-        START_CHRONO(jsons);
+        // START_CHRONO(jsons);
         // std::string json = m_apiHandler();
         char jsonBuffer[GPU_JSON_BUFFER_SIZE];
         int jsonLength = BuildCombinedJson(jsonBuffer, sizeof(jsonBuffer));
-        END_CHRONO(jsons, "json builder");
+        // END_CHRONO(jsons, "json builder");
         // SendJsonResponse(pRequest->RequestId, json);
         SendJsonResponse(pRequest->RequestId, jsonBuffer, jsonLength);
 
