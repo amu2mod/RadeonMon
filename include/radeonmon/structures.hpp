@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <string>
+#include <cmath>
 
 #include <ifdef.h>
 #include <iphlpapi.h>
