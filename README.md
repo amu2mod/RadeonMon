@@ -2,6 +2,8 @@
 
 A lightweight Windows monitoring application for AMD Radeon GPUs, built using the native Win32 API and AMD Display Library (ADLX).
 
+Designed for low-overhead real-time monitoring with minimal CPU and GPU resource usage, keeping performance impact as low as possible.
+
 Monitor GPU metrics such as temperatures, VRAM temp and power consumption. RadeonMon is read-only and does not modify GPU settings or apply configuration changes.
 
 This is an independent personal project and is not affiliated with AMD Corporation.
@@ -23,10 +25,6 @@ This is an independent personal project and is not affiliated with AMD Corporati
     </td>
   </tr>
 </table>
-
-RadeonMon is a lightweight C++ utility that uses AMD’s ADLX SDK to provide essential metrics for Radeon RDNA 4 graphics cards.
-
-It is designed to have a very low overhead with minimal impact on low fps. 
 
 ## Features
 
