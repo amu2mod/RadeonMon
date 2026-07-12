@@ -39,24 +39,27 @@ This is an independent personal project and is not affiliated with AMD Corporati
 - Highlights high temperatures with a warm color
 - Local Web Server on port 9090
 
-## How To use the local Web Server
+## How to use the local Web Server
 
-Right-click the application to open the context menu, navigate to the Web Server submenu, and select the network interface you want to bind to.
+Right-click the application to open the context menu, open the Web Server submenu, and select the network interface you want to bind to.
 
-The application must be run with administrator privileges in order to start the local Web Server.
+Administrator privileges are required to start the local web server.
 
-The URL will be displayed once enabled.
+Once enabled, the web interface URL will be displayed in the application.
 
 <img width="466" alt="Web Server" src="https://github.com/user-attachments/assets/4ed7b779-a5d6-4b29-8bd1-96faa22fe1e4" />
 
 
-To access the web interface from another device on the network (for example, a smartphone), you need to add a Windows Firewall rule.
+To access the web interface from another device on the network (for example, a smartphone), you must allow incoming connections through Windows Firewall.
 
 Open Windows Terminal with administrator privileges and run the following command:
 
 ```powershell
 New-NetFirewallRule -DisplayName "RadeonMon Web Server" -Direction Inbound -Protocol Tcp -LocalPort 9090 -Action Allow
 ```
+
+> [!NOTE]
+> The web interface is only accessible on your local network. No internet connection or external service is required.
 
 ## Releases
 
