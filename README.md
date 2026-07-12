@@ -10,12 +10,12 @@ This is a personal project developed independently, with no affiliation with AMD
 <table align="center">
   <tr>
     <td align="center">
-      <img width="465" alt="Windows Application" src="https://github.com/user-attachments/assets/eeb2d856-05ce-490d-895a-e9766907c61d" />
+      <img width="453" alt="image" src="https://github.com/user-attachments/assets/0ecdefb5-eed7-4b38-a024-942b534c633f" />
       <br />
       <sub><b>Desktop App</b> — Main Application Window</sub>
     </td>
     <td align="center">
-      <img width="500" alt="HTML Dashboard" src="https://github.com/user-attachments/assets/859e16d2-6b14-4221-b69e-d64900632b02" />
+     <img width="450"  alt="image" src="https://github.com/user-attachments/assets/bc160339-45b8-4e67-91fb-56cca84e7900" />
       <br />
       <sub><b>Web Interface</b> — HTML Dashboard</sub>
     </td>
