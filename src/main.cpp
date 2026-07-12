@@ -30,6 +30,43 @@ using namespace RadeonMon::Hardware;
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "comctl32.lib")
 
+enum MetricsIndex
+{
+    Temp = 0,
+    Hotspot = 2,
+    Vram = 4,
+    FanSpeed = 6,
+    Power = 8,
+    Cpu = 10,
+    Display = 12,
+    Fps = 14
+};
+
+void SetDisplayLine(const DisplayInfo &display, HWND hwnd = nullptr)
+{
+    PropertyItem &prop = g_props[MetricsIndex::Display];
+    const std::wstring label = L"Display " + std::to_wstring(display.index + 1);
+    int widthToDisplay = display.isPortrait ? display.width : display.height;
+    std::wstring resolution = widthToDisplay == 4320 ? L"8K @" : widthToDisplay == 2160 ? L"4K @"
+                                                                                        : std::to_wstring(widthToDisplay) + L"p @";
+    std::wstring value = resolution + std::to_wstring(display.frequency) + L"Hz";
+
+    if (value.length() < MAXLABEL_LENGTH)
+        value.append(MAXLABEL_LENGTH - value.length(), L' ');
+
+    prop.SetLabel(label.c_str());
+    prop.SetValue(value.c_str());
+    prop.dirty = true;
+    prop.repaintLabel = true;
+
+    if (hwnd)
+    {
+        RECT r = {prop.labelRc.left, prop.labelRc.top, prop.valueRc.right, prop.valueRc.bottom};
+        InvalidateRect(hwnd, &r, FALSE);
+        UpdateWindow(hwnd);
+    }
+}
+
 void DeleteFonts()
 {
 
@@ -132,8 +169,7 @@ LayoutMetrics CalculateLayoutMetrics()
     // Font-derived: no scaling
     m.labelWidth = sz.cx + 2;
 
-    static constexpr wchar_t VALUE[] = L"150°C (+100)";
-    if (!GetTextExtentPoint32W(hdc, VALUE, _countof(VALUE) - 1, &sz))
+    if (!GetTextExtentPoint32W(hdc, MAXLABEL, MAXLABEL_LENGTH, &sz))
         LOG_ERROR("GetTextExtentPoint32W failed");
 
     // Font-derived: no scaling
@@ -245,16 +281,6 @@ LayoutMetrics CalculateLayoutMetrics()
     return m;
 }
 
-enum MetricsIndex
-{
-    Temp = 0,
-    Hotspot = 2,
-    Vram = 4,
-    FanSpeed = 6,
-    Power = 8,
-    Cpu = 10,
-};
-
 void ResetDirty()
 {
     g_notification.dirty = true;
@@ -329,24 +355,14 @@ int GetPropertyValueAtIndex(int index, bool secondValue = false)
     return secondValue ? g_props[index].value2 : g_props[index].value;
 }
 
-void SetAllPropertiesInitFlag(bool state)
+void SetAllRepaintLabelFlag(bool state)
 {
     for (PropertyItem &p : g_props)
-        p.initialized = state;
+        p.repaintLabel = state;
 }
 
 void LayoutFrame(const LayoutMetrics &m)
 {
-    // float fontScale = static_cast<float>(g_fontSize) / FONTSIZE;
-
-    // auto ScaleFont = [&](int value)
-    // {
-    //     return DPIScale(static_cast<int>(value * fontScale));
-    // };
-
-    // int border = ScaleFont(BORDER);
-    // int titleHeight = ScaleFont(TITLE_HEIGHT);
-
     g_border.top = {0, 0, m.windowWidth, m.titleHeight + m.titlePadding * 2};
     g_border.bottom = {0, m.windowHeight - m.border, m.windowWidth, m.windowHeight};
     g_border.left = {0, m.border, m.border, m.windowHeight - m.border};
@@ -463,18 +479,21 @@ void PaintProperties(HDC hdc)
         SetBkColor(hdc, BACKGROUNDCOLOR);
         // SetBkColor(hdc, RGB(255, 255, 255)); // test
 
-        if (!p.initialized)
+        if (p.repaintLabel)
         {
             SetTextColor(hdc, LABELCOLOR);
 
             SIZE sz{};
-            int len = (int)wcslen(p.label);
-            GetTextExtentPoint32W(hdc, p.label, len, &sz);
+            // int len = (int)wcslen(p.label);
+            int len = static_cast<int>(p.label.length());
+            GetTextExtentPoint32W(hdc, p.label.c_str(), len, &sz);
 
             int x = p.labelRc.left;
             int y = p.labelRc.top + ((p.labelRc.bottom - p.labelRc.top) - sz.cy) / 2;
 
-            ExtTextOutW(hdc, x, y, ETO_CLIPPED, &p.labelRc, p.label, len, nullptr);
+            ExtTextOutW(hdc, x, y, ETO_CLIPPED, &p.labelRc, p.label.c_str(), len, nullptr);
+
+            p.repaintLabel = false;
 
 #ifdef _DEBUG
             g_gdiDrawCallCount++;
@@ -485,7 +504,7 @@ void PaintProperties(HDC hdc)
 
         SIZE sz{};
         int len = (int)wcslen(p.textValue);
-        GetTextExtentPoint32W(hdc, p.label, len, &sz);
+        GetTextExtentPoint32W(hdc, p.label.c_str(), len, &sz);
 
         int x = p.valueRc.left;
         int y = p.valueRc.top + ((p.valueRc.bottom - p.valueRc.top) - sz.cy) / 2;
@@ -586,7 +605,7 @@ void OnResizeWindow(HWND hwnd, bool grow)
 
     RecreateFont();
     g_forceFrameRedraw = true;
-    SetAllPropertiesInitFlag(false);
+    SetAllRepaintLabelFlag(true);
 
     PostMessage(hwnd, WM_APP + 1, 0, 0);
 
@@ -641,6 +660,7 @@ void Cleanup(HWND hwnd)
     UpdateCurrentPosition(hwnd);
     SavePreferences();
     g_networkManager.Shutdown();
+    g_AdlxGPUTelemetry.Destroy();
 }
 
 // ── window procedure ─────────────────────────────────────────────────────────
@@ -734,7 +754,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         if (!firstPaintDone)
         {
             firstPaintDone = true;
-            SetAllPropertiesInitFlag(true);
+            SetAllRepaintLabelFlag(false);
         }
 
 #ifdef _DEBUG
@@ -783,8 +803,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         g_height = r->bottom - r->top;
 
         SetWindowPos(hwnd, nullptr, r->left, r->top, g_width, g_height, SWP_NOZORDER | SWP_NOACTIVATE);
-        SetAllPropertiesInitFlag(false); // force all labels repaint
-        g_forceFrameRedraw = true;       // force new border + title
+        SetAllRepaintLabelFlag(true); // force all labels repaint
+        g_forceFrameRedraw = true;    // force new border + title
 
         PostMessage(hwnd, WM_APP + 1, 0, 0);
 
@@ -861,6 +881,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 SetPropertyValueAtIndex(MetricsIndex::Power, static_cast<int>(snapshot.totalBoardPower.value), powerBuffer, 16);
             }
 
+            // CPU
             if (g_cpu.IsInitialized())
             {
                 // START_CHRONO(cpu);
@@ -880,6 +901,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     SetPropertyValueAtIndex(MetricsIndex::Cpu, cpuIntegerTemp, cpuBuffer, 16);
                     SetPropertyValue2OnlyAtIndex(MetricsIndex::Cpu, cpuIntegerPower);
                 }
+            }
+
+            // FPS
+            int old = GetPropertyValueAtIndex(MetricsIndex::Fps);
+            int current = snapshot.fps;
+            if (current == -1 && old != -2)
+            {
+                g_props[MetricsIndex::Fps].ClearRC(g_backBuffer.memDC, BACKGROUNDCOLOR);
+                SetPropertyValueAtIndex(MetricsIndex::Fps, -2, L"-", 2);
+                // LOG_DEBUG("clear");
+            }
+
+            if (current != -1)
+            {
+                dirty = true;
+                wchar_t fpsBuffer[16];
+                int delta = current - old;
+                FormatFPS(fpsBuffer, current, old);
+                SetPropertyValueAtIndex(MetricsIndex::Fps, snapshot.fps, fpsBuffer, 16, delta <= -10);
             }
 
             if (dirty)
@@ -1131,13 +1171,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         pt.x = LOWORD(lParam);
         pt.y = HIWORD(lParam);
 
-        if (PtInRect(&g_clickableUrlRect, pt) && g_webServer.IsRunning())
+        if (PtInRect(&g_clickableUrlRect, pt) && g_webServer.IsRunning()) // web server url
         {
             LOG_DEBUG("Opening %ls", g_serverStatusRc.textValue);
             INT_PTR ret = OpenUrl(g_serverStatusRc.textValue);
             if (ret <= 32)
                 LOG_ERROR("Failed to open URL (ShellExecuteW): %td", ret);
             return 0;
+        }
+        else if (PtInRect(&g_props[MetricsIndex::Display].labelRc, pt)) // display label
+        {
+            auto current = g_displayManager.Next();
+            if (current.has_value())
+            {
+                SetDisplayLine(current.value(), hwnd);
+                g_currentDisplayIndex = current.value().index;
+            }
         }
 
         SetCapture(hwnd);
@@ -1161,7 +1210,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             POINT pt = {LOWORD(lParam), HIWORD(lParam)};
 
-            if (PtInRect(&g_clickableUrlRect, pt) && g_webServer.IsRunning())
+            if (PtInRect(&g_clickableUrlRect, pt) && g_webServer.IsRunning()) // web server url
+            {
+                SetCursor(LoadCursor(nullptr, IDC_HAND));
+            }
+            else if (PtInRect(&g_props[MetricsIndex::Display].labelRc, pt)) // display label
             {
                 SetCursor(LoadCursor(nullptr, IDC_HAND));
             }
@@ -1180,6 +1233,25 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             g_dragging = false;
             ReleaseCapture();
         }
+        return 0;
+    }
+
+    case WM_DISPLAYCHANGE:
+    {
+        LOG_DEBUG("WM_DISPLAYCHANGE");
+
+        g_displayManager.Clear();
+        g_displayManager.Discover();
+
+        if (g_currentDisplayIndex < g_displayManager.Size())
+            g_displayManager.SetCurrent(g_currentDisplayIndex); // resync for UI persistence
+        else
+            g_currentDisplayIndex = 0;
+
+        auto &display = g_displayManager.Current();
+        if (display.has_value())
+            SetDisplayLine(display.value());
+
         return 0;
     }
 
@@ -1255,8 +1327,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
         LOG_DEBUG("Invalid position from preferences, reseting the position");
         g_dpi = GetDpiForSystem();
         LOG_DEBUG("DPI: %u (%.0f%%)", g_dpi, (g_dpi / 96.0) * 100.0);
-        g_width = MulDiv(APPWIDTH, g_dpi, 96);
-        g_height = MulDiv(APPHEIGHT, g_dpi, 96);
+        g_width = MulDiv(g_width, g_dpi, 96);
+        g_height = MulDiv(g_height, g_dpi, 96);
 
         // Primary screen size
         int screenWidth = GetSystemMetrics(SM_CXSCREEN);
@@ -1281,6 +1353,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 
     g_AdlxGPUTelemetry.Init();
     g_AdlxGPUTelemetry.Discover();
+
+    g_displayManager.Discover();
+
+    const RadeonMon::Hardware::DisplayManager &manager = g_displayManager;
+    const auto &display = manager.Current();
+    if (display.has_value())
+        SetDisplayLine(display.value());
 
     if (g_AdlxGPUTelemetry.isInitialized)
         UpdateToolTipText(hwnd, TOOLID_GPUINFO, g_AdlxGPUTelemetry.GetGpuInfo().GetTooltip(), g_AdlxGPUTelemetry.GetGpuInfo().GetDriverPathTooltipWidth(g_hwndTooltip));

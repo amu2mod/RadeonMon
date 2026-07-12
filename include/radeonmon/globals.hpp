@@ -18,17 +18,21 @@ inline GdiBackBuffer g_backBuffer;
 inline PropertyItem g_props[] =
     {
         {L"GPU Temperature", 0, 0, L"-"},
-        {nullptr, 0, 0, L"", {}, {}, PropertyType::Separator},
+        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
         {L"GPU Hotspot", 0, 0, L"-"},
-        {nullptr, 0, 0, L"", {}, {}, PropertyType::Separator},
+        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
         {L"VRAM Temperature", 0, 0, L"-"},
-        {nullptr, 0, 0, L"", {}, {}, PropertyType::Separator},
+        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
         {L"Fan Speed", -1, 0, L"-"},
-        {nullptr, 0, 0, L"", {}, {}, PropertyType::Separator},
+        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
         {L"Power Consumption", 0, 0, L"-"},
-        {nullptr, 0, 0, L"", {}, {}, PropertyType::Separator},
+        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
         {L"CPU", 0, 0, L"-"},
-        {nullptr, 0, 0, L"", {}, {}, PropertyType::Separator},
+        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
+        {L"Display", 0, 0, L"-"},
+        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
+        {L"FPS", 0, 0, L"-"},
+        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
 };
 
 constexpr int g_propCount = _countof(g_props);
@@ -79,3 +83,6 @@ inline LayoutMetrics g_layoutMetrics;
 
 inline HWND g_hwndTooltip;
 inline RECT g_clickableUrlRect = {0};
+
+inline RadeonMon::Hardware::DisplayManager g_displayManager;
+inline int g_currentDisplayIndex = 0;

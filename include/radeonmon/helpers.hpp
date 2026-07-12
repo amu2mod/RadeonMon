@@ -348,6 +348,82 @@ inline bool FormatCpuMetrics(wchar_t (&buffer)[N], int temp, int power)
     return true;
 }
 
+template <size_t N>
+inline bool FormatFPS(wchar_t (&buffer)[N], int current, int previous)
+{
+    constexpr auto MAXBUFSIZE = _countof(L"9999 (+9999)");
+    static_assert(N >= MAXBUFSIZE, "Buffer too small for FormatFPS");
+
+    constexpr int CONTENT_WIDTH = MAXBUFSIZE - 1;
+
+    wchar_t *p = buffer;
+
+    auto WriteNumber = [&](int value)
+    {
+        if (value >= 1000)
+        {
+            *p++ = static_cast<wchar_t>(L'0' + value / 1000);
+            *p++ = static_cast<wchar_t>(L'0' + (value / 100) % 10);
+            *p++ = static_cast<wchar_t>(L'0' + (value / 10) % 10);
+            *p++ = static_cast<wchar_t>(L'0' + value % 10);
+        }
+        else if (value >= 100)
+        {
+            *p++ = static_cast<wchar_t>(L'0' + value / 100);
+            *p++ = static_cast<wchar_t>(L'0' + (value / 10) % 10);
+            *p++ = static_cast<wchar_t>(L'0' + value % 10);
+        }
+        else if (value >= 10)
+        {
+            *p++ = static_cast<wchar_t>(L'0' + value / 10);
+            *p++ = static_cast<wchar_t>(L'0' + value % 10);
+        }
+        else
+        {
+            *p++ = static_cast<wchar_t>(L'0' + value);
+        }
+    };
+
+    if (current < 0)
+        current = 0;
+    else if (current > 9999)
+        current = 9999;
+
+    WriteNumber(current);
+
+    int delta = current - previous;
+
+    if (delta != 0)
+    {
+        *p++ = L' ';
+        *p++ = L'(';
+
+        if (delta < 0)
+        {
+            *p++ = L'-';
+            delta = -delta;
+        }
+        else
+        {
+            *p++ = L'+';
+        }
+
+        if (delta > 9999)
+            delta = 9999;
+
+        WriteNumber(delta);
+
+        *p++ = L')';
+    }
+
+    while (p - buffer < CONTENT_WIDTH)
+        *p++ = L' ';
+
+    *p = L'\0';
+
+    return true;
+}
+
 inline bool IsAMDVendor(const char *vendorId)
 {
     if (vendorId == nullptr)

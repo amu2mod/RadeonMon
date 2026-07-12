@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <string>
 #include <cmath>
+#include <optional>
 
 #include <ifdef.h>
 #include <iphlpapi.h>
@@ -28,7 +29,7 @@ enum class PropertyType
 
 struct PropertyItem
 {
-    LPCWSTR label;
+    std::wstring label;
     int value;
     int value2;
     WCHAR textValue[32];
@@ -37,7 +38,12 @@ struct PropertyItem
     PropertyType type = PropertyType::Text;
     bool dirty = true;
     bool warning = false;
-    bool initialized = false;
+    bool repaintLabel = true;
+
+    inline void SetLabel(const wchar_t *txt)
+    {
+        label = txt ? txt : L"";
+    }
 
     void SetValue(const char *src)
     {
@@ -367,6 +373,28 @@ namespace RadeonMon::Hardware
         int max = 0;
     };
 
+    struct FPSMetrics
+    {
+        int current = 0;
+        int previous = 0;
+
+        void SetFPS(int fps)
+        {
+            previous = current;
+            current = fps;
+        }
+
+        int GetFPS() const
+        {
+            return current;
+        }
+
+        int Delta() const
+        {
+            return current - previous;
+        }
+    };
+
     enum GPU_CAPS : uint32_t
     {
         // V0
@@ -419,6 +447,9 @@ namespace RadeonMon::Hardware
 
         MetricInt npuFrequency;
         MetricInt npuActivityLevel;
+
+        // FPSMetrics fps;
+        int fps;
 
         int64_t timestampMs = 0;
 
@@ -852,4 +883,124 @@ namespace RadeonMon::Hardware
         }
     };
 
+    struct DisplayInfo
+    {
+        int index = -1;
+        wchar_t name[256] = {};
+        uint16_t width = 0;
+        uint16_t height = 0;
+        uint16_t frequency = 0;
+        bool isPortrait;
+
+        void Log() { LOG_INFO("\t[%d] : %ls, %dx%d @%dHz, portrait=%s", index, name, width, height, frequency, isPortrait ? "yes" : "no"); }
+    };
+
+    class DisplayManager
+    {
+    public:
+        void Add(const DisplayInfo &display)
+        {
+            m_displays.push_back(display);
+        }
+
+        void Discover()
+        {
+            DISPLAY_DEVICE dd = {};
+            dd.cb = sizeof(dd);
+
+            for (DWORD i = 0; EnumDisplayDevices(nullptr, i, &dd, 0); ++i)
+            {
+                // Skip inactive displays if desired
+                if (!(dd.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP))
+                    continue;
+
+                DisplayInfo di;
+
+                DEVMODE dm = {};
+                dm.dmSize = sizeof(dm);
+
+                if (EnumDisplaySettings(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm))
+                {
+                    di.index = i;
+                    wcscpy_s(di.name, dd.DeviceName);
+                    di.width = static_cast<uint16_t>(dm.dmPelsWidth);
+                    di.height = static_cast<uint16_t>(dm.dmPelsHeight);
+                    di.frequency = static_cast<uint16_t>(dm.dmDisplayFrequency);
+                    di.isPortrait = dm.dmPelsHeight >= dm.dmPelsWidth;
+
+                    Add(di);
+                }
+
+                dd.cb = sizeof(dd); // Required before next call
+            }
+
+            LogAll();
+        }
+
+        void Clear()
+        {
+            m_displays.clear();
+            m_current = 0;
+        }
+
+        /**
+         * Move the cursor to the next element of the list then returns the element.
+         *
+         * Usage:
+         * auto display = manager.Next();
+         * if (display.has_value()) { ... }
+         */
+        const std::optional<DisplayInfo> Next()
+        {
+            if (m_displays.empty())
+                return std::nullopt;
+
+            m_current = (m_current + 1) % m_displays.size();
+            DisplayInfo result = m_displays[m_current];
+
+            return result;
+        }
+
+        void SetCurrent(int index)
+        {
+            m_current = index;
+        }
+
+        const std::optional<DisplayInfo> Current() const
+        {
+            if (m_displays.empty())
+                return std::nullopt;
+
+            return m_displays[m_current];
+        }
+
+        size_t Size() const
+        {
+            return m_displays.size();
+        }
+
+        bool Empty() const
+        {
+            return m_displays.empty();
+        }
+
+        void LogAll()
+        {
+            LOG_DEBUG("");
+            LOG_DEBUG("Displays");
+            LOG_DEBUG("---------------");
+
+            for (auto &d : m_displays)
+                d.Log();
+
+            LOG_DEBUG("---------------");
+            LOG_DEBUG("");
+        }
+
+        const RadeonMon::Hardware::DisplayInfo &Get(int index) const { return m_displays.at(index); }
+
+    private:
+        std::vector<DisplayInfo> m_displays;
+        size_t m_current = 0;
+    };
 }

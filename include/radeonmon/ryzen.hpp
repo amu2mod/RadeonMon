@@ -47,7 +47,7 @@ public:
         std::lock_guard<std::mutex> lock(m_metricsMutex);
         return m_metrics.dPower;
     }
-    inline const RyzenMetrics &GetMetrics() const
+    inline RyzenMetrics GetMetrics() const
     {
         std::lock_guard<std::mutex> lock(m_metricsMutex);
         return m_metrics;
@@ -61,7 +61,7 @@ private:
     RyzenMetrics m_metrics{};
     ICPUEx *m_pCpu = nullptr;
     IPlatform *m_pPlatform = nullptr;
-    bool m_isInitialized = false;
+    std::atomic<bool> m_isInitialized{false};
     std::thread m_worker;
     std::atomic<bool> m_running{false};
 };

@@ -59,4 +59,6 @@ private:
 
     // Retrieve all gpu info
     void PopulateGPUInfo(IADLXGPU *gpu);
+
+    int GetFPS();
 };

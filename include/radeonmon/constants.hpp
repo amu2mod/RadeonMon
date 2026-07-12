@@ -1,30 +1,34 @@
 #pragma once
 
-#define rgb(r, g, b) RGB(r, g, b)
-
 constexpr wchar_t APPNAME[] = L"RadeonMon";
 constexpr uint8_t APPNAME_LENGTH = static_cast<uint8_t>(_countof(APPNAME) - 1);
 static_assert(APPNAME_LENGTH <= UINT8_MAX);
+
+// Polling rate
 constexpr int APP_REFRESH_TIMER = 2000;
+
 constexpr int APPWIDTH = 310;
 constexpr int APPHEIGHT = 370;
 
+// Spacing
 constexpr int WINDOW_RESIZE_STEP = 20;
 constexpr int PADDING_LEFT = 14;
 constexpr int PADDING_TOP = 9;
 constexpr int PADDING_BOTTOM = 8;
 constexpr int LABEL_WIDTH = 170;
 constexpr int LINE_HEIGHT = 24;
-constexpr int LINE_GAP = 7;
-constexpr int GAP = 10;
+constexpr int LINE_GAP = 6;
+constexpr int GAP = 9;
 constexpr int BORDER = 1;
 constexpr int TITLE_PADDING = 4;
 constexpr int SEPARATOR_HEIGHT = 1;
-constexpr int SPACER = 40;
+constexpr int SPACER = 10;
 
 // Fonts
 constexpr wchar_t FONT_FAMILY[] = L"Consolas";
 constexpr wchar_t NOTIFICATION_FONT_FAMILY[] = L"Lucida Console";
+constexpr wchar_t MAXLABEL[] = L"1440p @1000Hz";
+constexpr int MAXLABEL_LENGTH = _countof(MAXLABEL) - 1;
 
 constexpr int TITLE_FONTSIZE = 14;
 constexpr int FONTSIZE = 16;
@@ -36,6 +40,7 @@ constexpr UINT FONTSIZE_MAX = 22;
 
 constexpr int TEMPERATURE_THRESHOLD = 95;
 
+#define rgb(r, g, b) RGB(r, g, b) // vscode trick
 constexpr COLORREF BACKGROUNDCOLOR = rgb(30, 30, 30);
 constexpr COLORREF LABELCOLOR = rgb(180, 180, 180);
 constexpr COLORREF VALUECOLOR = rgb(240, 240, 240);

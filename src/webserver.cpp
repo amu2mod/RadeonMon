@@ -26,6 +26,13 @@ WebServer::~WebServer()
 
 bool WebServer::Init(const std::wstring &urlPrefix, const std::wstring &htmlFilePath)
 {
+
+    // required for winsock functions
+    WSADATA wsaData;
+    int r = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (r != 0)
+        LOG_DEBUG("[WebServer] WSAStartup failed: %d", r);
+
     m_urlPrefix = urlPrefix;
     m_htmlFilePath = htmlFilePath;
 
@@ -138,6 +145,8 @@ void WebServer::Stop()
 
     m_boundInterface.reset();
 
+    WSACleanup();
+
     LOG_INFO("[WebServer] Server stopped");
 }
 
@@ -202,7 +211,7 @@ static const char *GetContentTypeFromResourceId(int resourceId)
 
 bool WebServer::SendResourceResponse(HTTP_REQUEST_ID requestId, int resourceId)
 {
-    LOG_DEBUG("[WebServer] SendResourceResponse");
+    // LOG_DEBUG("[WebServer] SendResourceResponse");
 
     HMODULE module = GetModuleHandle(nullptr);
 
@@ -258,6 +267,28 @@ bool WebServer::SendResourceResponse(HTTP_REQUEST_ID requestId, int resourceId)
     ULONG result = HttpSendHttpResponse(m_hReqQueue, requestId, 0, &response, nullptr, &bytesSent, nullptr, 0, nullptr, nullptr);
 
     return result == NO_ERROR;
+}
+
+static std::string GetPeerIp(HTTP_REQUEST *pRequest)
+{
+    char ip[INET6_ADDRSTRLEN] = "unknown";
+
+    if (pRequest->Address.pRemoteAddress)
+    {
+        int addrLen = (pRequest->Address.pRemoteAddress->sa_family == AF_INET) ? sizeof(SOCKADDR_IN) : sizeof(SOCKADDR_IN6);
+        int rc = getnameinfo(pRequest->Address.pRemoteAddress, addrLen, ip, sizeof(ip), nullptr, 0, NI_NUMERICHOST);
+        if (rc != 0)
+        {
+            LOG_DEBUG("[WebServer] getnameinfo failed: %d (WSAGetLastError=%d)", rc, WSAGetLastError());
+            return "unknown";
+        }
+    }
+    else
+    {
+        LOG_DEBUG("[WebServer] pRemoteAddress is null");
+    }
+
+    return ip;
 }
 
 void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
@@ -330,6 +361,7 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
     }
     if (route == L"/")
     {
+        LOG_DEBUG("[WebServer] [%s] GET %ls", GetPeerIp(pRequest).c_str(), route.c_str());
         if (!SendResourceResponse(pRequest->RequestId, IDR_INDEX_HTML))
             SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
         return;
