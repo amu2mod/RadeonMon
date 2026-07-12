@@ -1,8 +1,10 @@
 # RadeonMon
 
-A very lightweight Windows monitoring application for AMD Radeon RDNA4 graphics cards on Windows.
+A lightweight Windows monitoring application for AMD Radeon GPUs, built using the native Win32 API and AMD Display Library (ADLX).
 
-This is a personal project developed independently, with no affiliation with AMD Corporation.
+Monitor GPU metrics such as temperatures, VRAM temp and power consumption. RadeonMon is read-only and does not modify GPU settings or apply configuration changes.
+
+This is an independent personal project and is not affiliated with AMD Corporation.
 
 ---
 
