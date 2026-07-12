@@ -269,6 +269,7 @@ bool WebServer::SendResourceResponse(HTTP_REQUEST_ID requestId, int resourceId)
     return result == NO_ERROR;
 }
 
+#ifdef _DEBUG
 static std::string GetPeerIp(HTTP_REQUEST *pRequest)
 {
     char ip[INET6_ADDRSTRLEN] = "unknown";
@@ -290,6 +291,7 @@ static std::string GetPeerIp(HTTP_REQUEST *pRequest)
 
     return ip;
 }
+#endif
 
 void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
 {

@@ -10,6 +10,7 @@
 #include <string>
 #include <cmath>
 #include <optional>
+#include <vector>
 
 #include <ifdef.h>
 #include <iphlpapi.h>
@@ -905,11 +906,14 @@ namespace RadeonMon::Hardware
 
         void Discover()
         {
-            DISPLAY_DEVICE dd = {};
-            dd.cb = sizeof(dd);
-
-            for (DWORD i = 0; EnumDisplayDevices(nullptr, i, &dd, 0); ++i)
+            for (DWORD i = 0;; ++i)
             {
+                DISPLAY_DEVICE dd = {};
+                dd.cb = sizeof(dd);
+
+                if (!EnumDisplayDevices(nullptr, i, &dd, 0))
+                    break;
+
                 // Skip inactive displays if desired
                 if (!(dd.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP))
                     continue;
