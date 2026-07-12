@@ -61,13 +61,13 @@ New-NetFirewallRule -DisplayName "RadeonMon Web Server" -Direction Inbound -Prot
 
 ## Requirements
 
-- Windows 10 / 11 64-bit
-- AMD Radeon GPU (RDNA4 targeted)
-- Recent AMD drivers
-- AMD Ryzen™ Master Monitoring SDK (for CPU metrics) installed. Get installer [here](https://www.amd.com/en/developer/ryzen-master-monitoring-sdk.html)
-- Administrator privileges are required for CPU metrics and the local web server
+- Windows 10/11 64-bit
+- AMD GPU supported by ADLX
+- Recent AMD graphics drivers
+- [AMD Ryzen™ Master Monitoring SDK](https://www.amd.com/en/developer/ryzen-master-monitoring-sdk.html) installed (required only for CPU metrics). 
+- Administrator privileges (required for CPU metrics and the local web server)
 
-Tested with a RX 9070 XT on Windows 10.
+Tested with an RX 9070 XT running Windows 10.
 
 ## How to Build
 
