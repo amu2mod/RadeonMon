@@ -30,6 +30,33 @@ using namespace RadeonMon::Hardware;
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "comctl32.lib")
 
+void DeleteFonts()
+{
+
+    if (g_titleFont)
+    {
+        DeleteObject(g_titleFont);
+        g_titleFont = nullptr;
+    }
+    if (g_font)
+    {
+        DeleteObject(g_font);
+        g_font = nullptr;
+    }
+
+    if (g_notificationFont)
+    {
+        DeleteObject(g_notificationFont);
+        g_notificationFont = nullptr;
+    }
+
+    if (g_cardFont)
+    {
+        DeleteObject(g_cardFont);
+        g_cardFont = nullptr;
+    }
+}
+
 void UpdateToolTipText(HWND hwnd, UINT_PTR toolId, const std::wstring &text, int maxWidth)
 {
     static std::wstring tooltipText;
@@ -607,6 +634,15 @@ void UpdateCurrentPosition(HWND hwnd)
     g_yPos = rc.top;
 }
 
+void Cleanup(HWND hwnd)
+{
+    g_backBuffer.Destroy();
+    DeleteFonts();
+    UpdateCurrentPosition(hwnd);
+    SavePreferences();
+    g_networkManager.Shutdown();
+}
+
 // ── window procedure ─────────────────────────────────────────────────────────
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -1147,19 +1183,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
     }
 
+    case WM_QUERYENDSESSION:
+        // Windows is asking if your app can close.
+        // Save critical state here.
+        return TRUE;
+
+    case WM_ENDSESSION:
+    {
+        if (wParam) // Session is actually ending.
+            Cleanup(hwnd);
+
+        return 0;
+    }
+
     case WM_DESTROY:
     {
-        g_backBuffer.Destroy();
-
-        if (g_font)
-        {
-            DeleteObject(g_font);
-            g_font = nullptr;
-        }
-
-        UpdateCurrentPosition(hwnd);
-        SavePreferences();
-        g_networkManager.Shutdown();
+        Cleanup(hwnd);
 
         PostQuitMessage(0);
         return 0;
