@@ -45,7 +45,10 @@ Right-click the application to open the context menu, navigate to the Web Server
 
 The application must be run with administrator privileges in order to start the local Web Server.
 
-The URL will be displayed in the application in green.
+The URL will be displayed once enabled.
+
+<img width="466" alt="Web Server" src="https://github.com/user-attachments/assets/4ed7b779-a5d6-4b29-8bd1-96faa22fe1e4" />
+
 
 To access the web interface from another device on the network (for example, a smartphone), you need to add a Windows Firewall rule.
 
