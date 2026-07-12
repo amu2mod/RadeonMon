@@ -4,7 +4,9 @@ A lightweight Windows monitoring application for AMD Radeon GPUs, built using th
 
 Designed for low-overhead real-time monitoring with minimal CPU and GPU resource usage, keeping performance impact as low as possible.
 
-Monitor GPU metrics such as temperatures, VRAM temp and power consumption. RadeonMon is read-only and does not modify GPU settings or apply configuration changes.
+Monitor GPU metrics such as temperatures, VRAM temp and power consumption. RadeonMon is read-only and does not modify GPU settings or apply configuration changes. 
+
+Includes a lightweight local web interface for remote monitoring from a phone or a tablet on your local network.
 
 This is an independent personal project and is not affiliated with AMD Corporation.
 
