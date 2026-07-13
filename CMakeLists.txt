@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(radeonmon LANGUAGES CXX)
+###
+# Autogen git tag version
 
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     ${CMAKE_SOURCE_DIR}/.git/HEAD
@@ -38,6 +39,15 @@ set(APP_VERSION_STR
 set(APP_VERSION_RC
     "${VERSION_MAJOR},${VERSION_MINOR},${VERSION_PATCH},0"
 )
+
+project(radeonmon
+    VERSION ${APP_VERSION_STR}
+    LANGUAGES CXX
+)
+
+# CPack version
+# set(CPACK_PACKAGE_VERSION "${APP_VERSION_STR}")
+# include(CPack)
 
 message(STATUS "Version string: ${APP_VERSION_STR}")
 message(STATUS "Version resource: ${APP_VERSION_RC}")
@@ -129,3 +139,23 @@ endif()
 target_link_libraries(radeonmon PRIVATE
     user32
 )
+
+# CPack config
+set(CPACK_GENERATOR "ZIP")
+
+# Set custom name for each zip
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-win64-debug")
+else()
+    set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-win64")
+endif()
+
+# Disable subfolder
+set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+
+# Files to include
+install(TARGETS ${PROJECT_NAME}
+    RUNTIME DESTINATION .
+)
+
+include(CPack)
