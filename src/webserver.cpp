@@ -330,7 +330,7 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
 
         return;
     }
-
+#ifdef LOCALFILES
     if (route == L"/styles.css")
     {
         SendFileResponse(pRequest->RequestId, L"styles.css");
@@ -348,27 +348,28 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
         SendFileResponse(pRequest->RequestId);
         return;
     }
+#else
+    if (route == L"/styles.css")
+    {
+        if (!SendResourceResponse(pRequest->RequestId, IDR_STYLES_CSS))
+            SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
+        return;
+    }
 
-    // if (route == L"/styles.css")
-    // {
-    //     if (!SendResourceResponse(pRequest->RequestId, IDR_STYLES_CSS))
-    //         SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
-    //     return;
-    // }
-
-    // if (route == L"/script.js")
-    // {
-    //     if (!SendResourceResponse(pRequest->RequestId, IDR_SCRIPT_JS))
-    //         SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
-    //     return;
-    // }
-    // if (route == L"/")
-    // {
-    //     LOG_DEBUG("[WebServer] [%s] GET %ls", GetPeerIp(pRequest).c_str(), route.c_str());
-    //     if (!SendResourceResponse(pRequest->RequestId, IDR_INDEX_HTML))
-    //         SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
-    //     return;
-    // }
+    if (route == L"/script.js")
+    {
+        if (!SendResourceResponse(pRequest->RequestId, IDR_SCRIPT_JS))
+            SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
+        return;
+    }
+    if (route == L"/")
+    {
+        LOG_DEBUG("[WebServer] [%s] GET %ls", GetPeerIp(pRequest).c_str(), route.c_str());
+        if (!SendResourceResponse(pRequest->RequestId, IDR_INDEX_HTML))
+            SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
+        return;
+    }
+#endif
 
     SendErrorResponse(pRequest->RequestId, 404, "Not Found");
 }
