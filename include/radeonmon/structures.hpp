@@ -87,11 +87,37 @@ struct PropertyItem
         SelectObject(hdc, oldFont);
     }
 
-    void ClearRC(HDC hdc, COLORREF color)
+    void ClearLabelRC(HDC hdc, COLORREF color)
     {
         HBRUSH brush = CreateSolidBrush(color);
         FillRect(hdc, &valueRc, brush);
         DeleteObject(brush);
+    }
+
+    void ClearValueRC(HDC hdc, COLORREF color)
+    {
+        HBRUSH brush = CreateSolidBrush(color);
+        FillRect(hdc, &valueRc, brush);
+        DeleteObject(brush);
+    }
+
+    void ClearRC(HDC hdc, COLORREF color)
+    {
+        HBRUSH brush = CreateSolidBrush(color);
+
+        RECT rc = valueRc;
+        UnionRect(&rc, &rc, &labelRc); // merges into 1 rect including the gap
+
+        FillRect(hdc, &rc, brush);
+
+        DeleteObject(brush);
+    }
+
+    RECT GetUnionRC() const
+    {
+        RECT result;
+        UnionRect(&result, &labelRc, &valueRc);
+        return result;
     }
 };
 
@@ -179,10 +205,49 @@ enum class RyzenMetricState
     Error = 0,
 };
 
-struct RyzenMetrics
+struct RyzenCoreMetrics
 {
     double dTemperature = 0.0;
+    double dUsage = 0.0;
+    double dEffectiveFreq = 0.0;
+    double dCurrentFreq = 0.0;
+
+    void Log(size_t index) const
+    {
+        LOG_DEBUG("[%zu] %.2f C, %.2f%%, %.2f MHz / %.2f MHz",
+                  index,
+                  dTemperature,
+                  dUsage,
+                  dEffectiveFreq,
+                  dCurrentFreq);
+    }
+};
+
+struct RyzenMetrics
+{
+    std::vector<RyzenCoreMetrics> cores;
+    char name[256] = "";
+    double dTemperature = 0.0;
     double dPower = 0.0;
+
+    void Log() const
+    {
+        LOG_DEBUG("");
+        LOG_DEBUG("----------------------------");
+        LOG_DEBUG("-- Ryzen Metrics");
+        LOG_DEBUG("Ryzen Metrics: Temp=%.2f C, Power=%.2f W, Cores=%zu",
+                  dTemperature,
+                  dPower,
+                  cores.size());
+
+        for (size_t i = 0; i < cores.size(); ++i)
+        {
+            cores[i].Log(i);
+        }
+
+        LOG_DEBUG("----------------------------");
+        LOG_DEBUG("");
+    }
 
     int BuildJson(char *buffer, int bufferSize) const
     {
@@ -198,7 +263,58 @@ struct RyzenMetrics
                 *p++ = *s++;
         };
 
-        // Fast double to string with 1 decimal place
+        auto writeJsonString = [&](const char *s)
+        {
+            if (p >= end)
+                return;
+
+            *p++ = '"';
+
+            while (*s && p < end)
+            {
+                switch (*s)
+                {
+                case '"':
+                case '\\':
+                    if (p + 2 >= end)
+                        break;
+                    *p++ = '\\';
+                    *p++ = *s;
+                    break;
+
+                case '\n':
+                    if (p + 2 >= end)
+                        break;
+                    *p++ = '\\';
+                    *p++ = 'n';
+                    break;
+
+                case '\r':
+                    if (p + 2 >= end)
+                        break;
+                    *p++ = '\\';
+                    *p++ = 'r';
+                    break;
+
+                case '\t':
+                    if (p + 2 >= end)
+                        break;
+                    *p++ = '\\';
+                    *p++ = 't';
+                    break;
+
+                default:
+                    *p++ = *s;
+                    break;
+                }
+
+                ++s;
+            }
+
+            if (p < end)
+                *p++ = '"';
+        };
+
         auto writeDouble = [&](double value)
         {
             if (p >= end)
@@ -208,21 +324,24 @@ struct RyzenMetrics
             char *t = tmp + sizeof(tmp) - 1;
             *t = '\0';
 
-            // Simple handling for negative
             bool negative = value < 0;
             if (negative)
                 value = -value;
 
-            // Integer part
             long long integer = (long long)value;
             double frac = value - integer;
 
-            // Fractional part (1 decimal)
-            int decimal = (int)(frac * 10.0 + 0.5); // round to 1 decimal
+            int decimal = (int)(frac * 10.0 + 0.5);
 
-            // Build from the end
-            *--t = '0' + (decimal % 10);
+            if (decimal == 10)
+            {
+                decimal = 0;
+                ++integer;
+            }
+
+            *--t = '0' + static_cast<char>(decimal);
             *--t = '.';
+
             do
             {
                 *--t = '0' + (integer % 10);
@@ -235,13 +354,39 @@ struct RyzenMetrics
             write(t);
         };
 
-        write("{\"temperature\":");
+        write("{\"name\":");
+        writeJsonString(name);
+
+        write(",\"temperature\":");
         writeDouble(dTemperature);
 
         write(",\"power\":");
         writeDouble(dPower);
 
-        *p++ = '}';
+        write(",\"cores\":[");
+
+        for (size_t i = 0; i < cores.size(); ++i)
+        {
+            if (i > 0)
+                write(",");
+
+            write("{\"t\":");
+            writeDouble(cores[i].dTemperature);
+
+            write(",\"u\":");
+            writeDouble(cores[i].dUsage);
+
+            write(",\"e\":");
+            writeDouble(cores[i].dEffectiveFreq);
+
+            write(",\"c\":");
+            writeDouble(cores[i].dCurrentFreq);
+
+            write("}");
+        }
+
+        write("]}");
+
         *p = '\0';
 
         return static_cast<int>(p - buffer);
@@ -455,7 +600,7 @@ namespace RadeonMon::Hardware
         int64_t timestampMs = 0;
 
         // Fast zero-allocation, snprintf-free JSON builder
-        int BuildJson(char *buffer, int bufferSize) const
+        int BuildJson(char *buffer, int bufferSize, const char *name) const
         {
             if (buffer == nullptr || bufferSize <= 1)
             {
@@ -483,6 +628,58 @@ namespace RadeonMon::Hardware
                     return false;
                 *p++ = c;
                 return true;
+            };
+
+            auto writeJsonString = [&](const char *s)
+            {
+                if (p >= end)
+                    return;
+
+                *p++ = '"';
+
+                while (*s && p < end)
+                {
+                    switch (*s)
+                    {
+                    case '"':
+                    case '\\':
+                        if (p + 2 >= end)
+                            break;
+                        *p++ = '\\';
+                        *p++ = *s;
+                        break;
+
+                    case '\n':
+                        if (p + 2 >= end)
+                            break;
+                        *p++ = '\\';
+                        *p++ = 'n';
+                        break;
+
+                    case '\r':
+                        if (p + 2 >= end)
+                            break;
+                        *p++ = '\\';
+                        *p++ = 'r';
+                        break;
+
+                    case '\t':
+                        if (p + 2 >= end)
+                            break;
+                        *p++ = '\\';
+                        *p++ = 't';
+                        break;
+
+                    default:
+                        *p++ = *s;
+                        break;
+                    }
+
+                    ++s;
+                }
+
+                if (p < end)
+                    *p++ = '"';
             };
 
             auto writeInt = [&](int64_t value) -> bool
@@ -595,6 +792,10 @@ namespace RadeonMon::Hardware
             if (!write(valid ? "true" : "false"))
                 goto overflow;
 
+            if (!write(",\"name\":"))
+                goto overflow;
+            writeJsonString(name);
+
             if (!writeMetric("usage", usage))
                 goto overflow;
             if (!writeMetric("clock_speed", clockSpeed))
@@ -668,6 +869,7 @@ namespace RadeonMon::Hardware
 
         // Descriptive information
         std::wstring name;
+        std::string strName;
         std::wstring driverPath;
         std::wstring pnpString;
 
@@ -731,6 +933,7 @@ namespace RadeonMon::Hardware
         void SetName(const char *value)
         {
             name = CharToWide(value);
+            strName = value;
         }
 
         void SetDriverPath(const char *value)

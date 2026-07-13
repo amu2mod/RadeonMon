@@ -61,9 +61,10 @@ constexpr int IDM_AUTOSTART = 1003;
 constexpr int IDM_WEBSERVER_BASE = 1004;
 constexpr int IDM_WEBSERVER_MAX = 1104;
 constexpr int IDM_WEBSERVER_STOP = 1105;
-constexpr int IDM_CHECK_VERSION = 1106;
-constexpr int IDM_ABOUT = 1107;
-constexpr int IDM_EXIT = 1108;
+constexpr int IDM_ENABLEFPS_BASE = 1106; // on/off
+constexpr int IDM_CHECK_VERSION = 1108;
+constexpr int IDM_ABOUT = 1109;
+constexpr int IDM_EXIT = 1110;
 
 constexpr wchar_t REPOURL[] = L"https://api.github.com/repos/amu2mod/RadeonMon/releases/latest";
 constexpr wchar_t LATESTURL[] = L"https://github.com/amu2mod/RadeonMon/releases/latest";

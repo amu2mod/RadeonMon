@@ -65,6 +65,8 @@ add_executable(radeonmon WIN32
     ${CMAKE_BINARY_DIR}/generated/version.rc
 )
 
+target_compile_definitions(radeonmon PRIVATE TEST)
+
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/radeonmon/version.hpp.in
     ${CMAKE_CURRENT_BINARY_DIR}/generated/include/version.hpp

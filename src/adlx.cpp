@@ -1,5 +1,8 @@
 #include <cmath>
 #include <map>
+#ifdef TEST
+#include <random>
+#endif
 
 #include "radeonmon/adlx.hpp"
 #include "AMD/ADLX-1.5/SDK/Include/ADLX.h"
@@ -433,8 +436,68 @@ int ADLXGpuTelemetry::GetFPS()
 
 GpuMetricsSnapshot ADLXGpuTelemetry::Query()
 {
+    GpuMetricsSnapshot snapshot;
+
+#ifdef TEST
+    static std::mt19937 rng(std::random_device{}());
+
+    auto randDouble = [&](double min, double max)
+    {
+        return std::uniform_real_distribution<double>(min, max)(rng);
+    };
+
+    auto randInt = [&](int min, int max)
+    {
+        return std::uniform_int_distribution<int>(min, max)(rng);
+    };
+
+    snapshot.valid = true;
+
+    auto setDouble = [](MetricDouble &m, double value, int min, int max)
+    {
+        m.isSupported = true;
+        m.value = value;
+        m.min = min;
+        m.max = max;
+    };
+
+    auto setInt = [](MetricInt &m, int value, int min, int max)
+    {
+        m.isSupported = true;
+        m.value = value;
+        m.min = min;
+        m.max = max;
+    };
+
+    setDouble(snapshot.usage, randDouble(92.0, 100.0), 0, 100);
+
+    setInt(snapshot.clockSpeed, randInt(2400, 3000), 0, 3500);
+    setInt(snapshot.vramClockSpeed, randInt(2200, 2600), 0, 3000);
+
+    setDouble(snapshot.temperature, randDouble(55.0, 90.0), 0, 110);
+    setDouble(snapshot.hotspot, randDouble(90.0, 105.0), 0, 120);
+    setDouble(snapshot.memoryTemperature, randDouble(80.0, 98.0), 0, 110);
+    setDouble(snapshot.intakeTemperature, randDouble(35.0, 45.0), 0, 60);
+
+    setDouble(snapshot.power, randDouble(250.0, 340.0), 0, 400);
+    setDouble(snapshot.totalBoardPower, randDouble(270.0, 360.0), 0, 400);
+    setInt(snapshot.voltage, randInt(950, 1150), 800, 1300);
+
+    setInt(snapshot.fanSpeed, randInt(0, 1000), 0, 3000);
+    setInt(snapshot.fanDuty, randInt(45, 90), 0, 100);
+
+    setInt(snapshot.vram, randInt(8000, 15800), 0, 16384);
+    setInt(snapshot.sharedMemory, randInt(1000, 6000), 0, 16384);
+
+    setInt(snapshot.npuFrequency, randInt(900, 1500), 0, 2000);
+    setInt(snapshot.npuActivityLevel, randInt(0, 100), 0, 100);
+
+    snapshot.fps = isFpsEnabled ? randInt(100, 180) : -1;
+
+    return snapshot;
+#endif
     // START_CHRONO(query);
-    GpuMetricsSnapshot snapshot = m_snapshot;
+    snapshot = m_snapshot;
 
     if (perfMonitoringService == nullptr)
     {
@@ -597,7 +660,8 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
 
         // FPS
         // START_CHRONO(fps);
-        snapshot.fps = GetFPS();
+        snapshot.fps = isFpsEnabled ? GetFPS() : -1;
+
         // END_CHRONO(fps, "get fps");
 
         snapshot.valid = anyMetricRead;

@@ -4,9 +4,12 @@
     --card-border: rgb(45, 45, 45);
     --text-main: #f1f1f3;
     --text-muted: #8e8e9e;
+    --amd-red: rgba(237, 28, 35, 0.897);
+    --amd-red-glow: rgba(237, 28, 35, 0.11);
+    --ryzen-orange: rgba(255, 81, 0, 0.918);
+    --ryzen-orange-glow: rgba(255, 81, 0, 0.11);
     --accent-red: rgb(200, 35, 35);
-    --accent-gpu: #f87171;
-    --accent-cpu: #fca5a5;
+    --accent-cpu: #fb923c;
     --status-ok: #22c55e;
     --status-warn: #eab308;
     --status-off: #45454e;
@@ -135,35 +138,72 @@ body {
     border-bottom: 1px solid var(--card-border);
 }
 
-.card-header.gpu h2 {
-    color: var(--accent-gpu);
+.card-header h2 {
     font-size: 1.1rem;
-}
-
-.card-header.cpu h2 {
-    color: var(--accent-cpu);
-    font-size: 1.1rem;
-}
-
-.tag {
-    font-size: 0.7rem;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    text-transform: uppercase;
     font-weight: 700;
-    letter-spacing: 0.05em;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Truncates super long CPU names cleanly with '...' */
+    max-width: 80%;
 }
 
+/* --- GPU Header Styling (AMD / Radeon Red) --- */
+.card-header.gpu h2 {
+    color: var(--amd-red);
+    text-shadow: 0 0 12px var(--amd-red-glow);
+}
+
+/* --- CPU Header Styling (Ryzen Ember Orange) --- */
+.card-header.cpu h2 {
+    color: var(--ryzen-orange);
+    text-shadow: 0 0 12px var(--ryzen-orange-glow);
+}
+
+/* Unified AMD Brand Red for all card titles */
+/* .card-header h2 {
+    color: var(--amd-red);
+    text-shadow: 0 0 10px var(--amd-red-glow);
+} */
+
+/* Minimalist Status Indicator Dot */
+.tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.tag::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+/* Active State Dot (Green Glow) */
 .tag.active {
-    background: rgba(34, 197, 94, 0.15);
-    color: var(--status-ok);
-    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: var(--text-main);
 }
 
+.tag.active::before {
+    background-color: var(--status-ok);
+    box-shadow: 0 0 8px var(--status-ok);
+}
+
+/* Offline State Dot (Gray Muted) */
 .tag.inactive {
-    background: rgba(114, 114, 126, 0.15);
-    color: var(--status-off);
-    border: 1px solid var(--card-border);
+    color: var(--text-muted);
+}
+
+.tag.inactive::before {
+    background-color: var(--status-off);
+    box-shadow: none;
 }
 
 .metrics {
@@ -243,8 +283,10 @@ body {
 
 .progress-ring {
     transform: rotate(-90deg);
+    transform-origin: center;
     width: 50px;
     height: 50px;
+    overflow: visible;
 }
 
 .ring-track {
@@ -325,6 +367,7 @@ body {
     text-transform: uppercase;
 }
 
+/* Base Metric Selector Styling */
 .metric-selector {
     display: flex;
     gap: 4px;
@@ -350,19 +393,148 @@ body {
     transition: all 0.15s ease;
 }
 
-.metric-selector input[type="radio"]:checked+label {
+/* GPU Card Radio Buttons -> Uses Red Accent */
+#gpu-card .metric-selector input[type="radio"]:checked+label {
     background: var(--accent-red);
     color: #ffffff;
 }
 
+/* CPU Card Radio Buttons -> Uses CPU Accent (Orange) */
+#cpu-card .metric-selector input[type="radio"]:checked+label {
+    background: var(--accent-cpu);
+    color: #111115;
+    /* Dark text for high contrast on orange */
+}
+
+/* .metric-selector input[type="radio"]:checked+label {
+    background: var(--accent-red);
+    color: #ffffff;
+} */
+
 canvas {
-    width: 100%;
-    height: 90px;
+    width: 100% !important;
+    height: 90px !important;
+    max-height: 90px;
     border-radius: 6px;
     display: block;
     background: rgb(15, 15, 15);
     border: 1px solid var(--card-border);
 }
+
+/* Core Grid Header & Container */
+.core-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.core-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
+    gap: 0.5rem;
+}
+
+/* Individual Core Box */
+.core-item {
+    background: #141418;
+    border: 1px solid #24242c;
+    border-radius: 6px;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    position: relative;
+    overflow: hidden;
+}
+
+.core-label {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.core-value {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-top: 2px;
+}
+
+.core-unit {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+/* Core Visual Bar Indicator */
+.core-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background-color: var(--accent-cpu);
+    transition: width 0.3s ease;
+}
+
+/***
+* V2
+*/
+/* Warning State (Subtle Amber Tint Fill) */
+.metric-box.warning,
+.core-item.warning {
+    background-color: rgba(234, 179, 8, 0.12) !important;
+    border-color: rgba(234, 179, 8, 0.4) !important;
+}
+
+/* Critical State (Subtle Red Tint Fill) */
+.metric-box.critical,
+.core-item.critical {
+    background-color: rgba(239, 68, 68, 0.18) !important;
+    border-color: rgba(168, 52, 52, 0.623) !important;
+}
+
+/* Optional Pulse Effect for Critical Alerts */
+.metric-box.critical,
+.core-item.critical {
+    animation: alert-pulse 2s infinite ease-in-out;
+}
+
+@keyframes alert-pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
+
+    50% {
+        box-shadow: 0 0 8px 1px rgba(239, 68, 68, 0.25);
+    }
+}
+
+.delta-tag {
+    font-size: 0.65rem;
+    font-weight: 700;
+    margin-left: 4px;
+    text-transform: none;
+    letter-spacing: normal;
+    color: #ffffff;
+    /* Default: < 25°C */
+    transition: color 0.2s ease;
+}
+
+/* Delta Threshold Colors */
+.delta-tag.delta-warn {
+    color: var(--status-warn);
+    /* < 30°C (Orange / Yellow) */
+}
+
+.delta-tag.delta-crit {
+    color: #ef4444;
+    /* >= 30°C (Bright Red) */
+}
+
 
 /* Responsive Smartphone Layout */
 @media (max-width: 600px) {

@@ -456,9 +456,17 @@ void PaintProperties(HDC hdc)
     static HPEN pen = CreatePen(PS_SOLID, 1, SEPARATORCOLOR);
     HGDIOBJ oldPen = SelectObject(hdc, pen);
 
+    UINT index = 0;
+
     // Paint regular properties
     for (auto &p : g_props)
     {
+        if (!g_isFpsEnabled) // skip if FPS is off
+            if (index == MetricsIndex::Fps || index == MetricsIndex::Fps + 1)
+                continue;
+
+        index++;
+
         if (p.type == PropertyType::Separator && p.dirty)
         {
             MoveToEx(hdc, p.labelRc.left, p.labelRc.top, nullptr);
@@ -898,7 +906,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     dirty = true;
                     wchar_t cpuBuffer[20];
                     FormatCpuMetrics(cpuBuffer, cpuIntegerTemp, cpuIntegerPower);
-                    SetPropertyValueAtIndex(MetricsIndex::Cpu, cpuIntegerTemp, cpuBuffer, 16);
+                    SetPropertyValueAtIndex(MetricsIndex::Cpu, cpuIntegerTemp, cpuBuffer, 16, cpuIntegerTemp >= TEMPERATURE_THRESHOLD);
                     SetPropertyValue2OnlyAtIndex(MetricsIndex::Cpu, cpuIntegerPower);
                 }
             }
@@ -908,7 +916,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             int current = snapshot.fps;
             if (current == -1 && old != -2)
             {
-                g_props[MetricsIndex::Fps].ClearRC(g_backBuffer.memDC, BACKGROUNDCOLOR);
+                g_props[MetricsIndex::Fps].ClearValueRC(g_backBuffer.memDC, BACKGROUNDCOLOR);
                 SetPropertyValueAtIndex(MetricsIndex::Fps, -2, L"-", 2);
                 // LOG_DEBUG("clear");
             }
@@ -970,6 +978,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hWebServerMenu), L"Web Server");
         AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
         ////////////////////////////////////////////////////////
+
+        /////////////////////////////////
+        // FPS submenu
+        HMENU hFPSMenu = CreatePopupMenu();
+
+        AppendMenuW(hFPSMenu, MF_STRING | g_isFpsEnabled ? MF_CHECKED : MF_UNCHECKED, IDM_ENABLEFPS_BASE, L"On");
+        AppendMenuW(hFPSMenu, MF_STRING | g_isFpsEnabled ? MF_UNCHECKED : MF_CHECKED, IDM_ENABLEFPS_BASE + 1, L"Off");
+
+        AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hFPSMenu), L"FPS");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+        /////////////////////////////////
 
         AppendMenu(hMenu, MF_STRING, IDM_CHECK_VERSION, L"Check update");
         AppendMenu(hMenu, MF_STRING, IDM_ABOUT, L"About");
@@ -1108,7 +1127,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             g_webServer.Stop();
             g_serverStatusRc.SetValue(L"");
-            g_serverStatusRc.ClearRC(g_backBuffer.memDC, BACKGROUNDCOLOR);
+            g_serverStatusRc.ClearValueRC(g_backBuffer.memDC, BACKGROUNDCOLOR);
             InvalidateRect(hwnd, &g_serverStatusRc.valueRc, FALSE);
             UpdateWindow(hwnd);
         }
@@ -1133,6 +1152,43 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 g_serverStatusRc.DrawTextValue(g_backBuffer.memDC, SERVERSTATUSCOLOR, g_notificationFont);
                 InvalidateRect(hwnd, &g_serverStatusRc.valueRc, FALSE);
                 UpdateWindow(hwnd);
+            }
+
+            // FPS On/Off
+            else if (LOWORD(wParam) == IDM_ENABLEFPS_BASE || LOWORD(wParam) == (IDM_ENABLEFPS_BASE + 1))
+            {
+                // Update state
+                g_isFpsEnabled = (LOWORD(wParam) - IDM_ENABLEFPS_BASE) == 0 ? true : false;
+
+                // Update UI
+                auto &fpsProp = g_props[MetricsIndex::Fps];
+                const int separatorIndex = MetricsIndex::Fps + 1;
+                static_assert(separatorIndex < g_propCount);
+                auto &sepProp = g_props[separatorIndex];
+                const RECT rc1 = fpsProp.GetUnionRC();
+                const RECT rc2 = sepProp.labelRc;
+
+                RECT result;
+                UnionRect(&result, &rc1, &rc2); // merges the fps line with the next separator
+
+                if (g_isFpsEnabled)
+                {
+                    fpsProp.repaintLabel = true;
+                    fpsProp.dirty = true;
+                    fpsProp.repaintLabel = true;
+                    sepProp.dirty = true;
+                }
+                else
+                {
+                    HBRUSH brush = CreateSolidBrush(BACKGROUNDCOLOR);
+                    FillRect(g_backBuffer.memDC, &result, brush);
+                    DeleteObject(brush);
+                }
+
+                InvalidateRect(hwnd, &result, FALSE);
+                UpdateWindow(hwnd);
+
+                LOG_DEBUG("FPS %s", g_isFpsEnabled ? "On" : "Off");
             }
         }
         }

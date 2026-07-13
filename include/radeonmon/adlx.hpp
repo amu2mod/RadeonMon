@@ -13,6 +13,8 @@ public:
     bool isInitialized = false;
     RadeonMon::Hardware::GPUInfo gpuInfo;
 
+    inline explicit ADLXGpuTelemetry(const bool &fpsEnabled) : isFpsEnabled(fpsEnabled) {}
+
     void Init();
     void Discover(); // Discover all supported metrics functions
     void Destroy();
@@ -42,6 +44,8 @@ private:
     uint32_t gpuCaps = 0;
 
     GpuMetricsSnapshot m_snapshot;
+
+    const bool &isFpsEnabled;
 
     // Generic template to read ADLX metrics
     template <typename T, typename MetricFn>

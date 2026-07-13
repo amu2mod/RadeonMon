@@ -30,7 +30,7 @@
         <div class="grid">
             <div class="card" id="gpu-card">
                 <div class="card-header gpu">
-                    <h2>GPU</h2>
+                    <h2 id="gpu-title">GPU Metrics</h2>
                     <span class="tag inactive" id="gpu-tag">Offline</span>
                 </div>
                 
@@ -44,25 +44,27 @@
                         </div>
                         
                         <div class="ring-container">
-                            <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                <circle class="ring-fill" id="gpu-temp-ring" cx="30" cy="30" r="24" stroke-width="5" />
+                            <svg class="progress-ring">
+                                <circle class="ring-track" cx="25" cy="25" r="24" stroke-width="3"></circle>
+                                <circle class="ring-fill" id="gpu-temp-ring" cx="25" cy="25" r="24" stroke-width="3"></circle>
                             </svg>
                         </div>
                     </div>
 
                     <div class="metric-box" id="box-gpu-hotspot">
                         <div class="metric-info">
-                            <div class="metric-label">Hotspot</div>
+                            <span class="metric-label">
+                                Hotspot 
+                                <span id="gpu-hotspot-delta" class="delta-tag"></span>
+                            </span>
                             <div class="metric-value-container">
                                 <span id="gpu-hotspot">--</span><span class="unit">°C</span>
                             </div>
                         </div>
-                        
                         <div class="ring-container">
-                            <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                <circle class="ring-fill" id="gpu-hotspot-ring" cx="30" cy="30" r="24" stroke-width="5" />
+                            <svg class="progress-ring" viewBox="0 0 50 50">
+                                <circle class="ring-track" cx="25" cy="25" r="20" stroke-width="4"></circle>
+                                <circle class="ring-fill" id="gpu-hotspot-ring" cx="25" cy="25" r="20" stroke-width="4"></circle>
                             </svg>
                         </div>
                     </div>
@@ -76,8 +78,8 @@
                         </div>
                         <div class="ring-container">
                             <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                <circle class="ring-fill" id="gpu-vram-temp-ring" cx="30" cy="30" r="24" stroke-width="5" />
+                                <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="3" />
+                                <circle class="ring-fill" id="gpu-vram-temp-ring" cx="30" cy="30" r="24" stroke-width="3" />
                             </svg>
                         </div>
                     </div>
@@ -91,8 +93,8 @@
                         </div>
                         <div class="ring-container">
                             <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                <circle class="ring-fill" id="gpu-power-ring" cx="30" cy="30" r="24" stroke-width="5" />
+                                <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="3" />
+                                <circle class="ring-fill" id="gpu-power-ring" cx="30" cy="30" r="24" stroke-width="3" />
                             </svg>
                         </div>
                     </div>
@@ -106,11 +108,12 @@
                         </div>
                         <div class="ring-container">
                             <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                <circle class="ring-fill" id="gpu-fan-ring" cx="30" cy="30" r="24" stroke-width="5" />
+                                <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="3" />
+                                <circle class="ring-fill" id="gpu-fan-ring" cx="30" cy="30" r="24" stroke-width="3" />
                             </svg>
                         </div>
                     </div>
+                </div>
 
                 <div class="expert-section">
                     <div class="expert-title">Expert Telemetry</div>
@@ -124,8 +127,8 @@
                             </div>
                             <div class="ring-container">
                                 <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                    <circle class="ring-fill" id="gpu-clock-ring" cx="30" cy="30" r="24" stroke-width="5" />
+                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="3" />
+                                    <circle class="ring-fill" id="gpu-clock-ring" cx="30" cy="30" r="24" stroke-width="3" />
                                 </svg>
                             </div>
                         </div>
@@ -139,8 +142,8 @@
                             </div>
                             <div class="ring-container">
                                 <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                    <circle class="ring-fill" id="gpu-vram-clock-ring" cx="30" cy="30" r="24" stroke-width="5" />
+                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="3" />
+                                    <circle class="ring-fill" id="gpu-vram-clock-ring" cx="30" cy="30" r="24" stroke-width="3" />
                                 </svg>
                             </div>
                         </div>
@@ -154,8 +157,8 @@
                             </div>
                             <div class="ring-container">
                                 <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                    <circle class="ring-fill" id="gpu-tbp-ring" cx="30" cy="30" r="24" stroke-width="5" />
+                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="3" />
+                                    <circle class="ring-fill" id="gpu-tbp-ring" cx="30" cy="30" r="24" stroke-width="3" />
                                 </svg>
                             </div>
                         </div>
@@ -169,8 +172,8 @@
                             </div>
                             <div class="ring-container">
                                 <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                    <circle class="ring-fill" id="gpu-voltage-ring" cx="30" cy="30" r="24" stroke-width="5" />
+                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="3" />
+                                    <circle class="ring-fill" id="gpu-voltage-ring" cx="30" cy="30" r="24" stroke-width="3" />
                                 </svg>
                             </div>
                         </div>
@@ -184,8 +187,8 @@
                             </div>
                             <div class="ring-container">
                                 <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                    <circle class="ring-fill" id="gpu-fan-duty-ring" cx="30" cy="30" r="24" stroke-width="5" />
+                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="3" />
+                                    <circle class="ring-fill" id="gpu-fan-duty-ring" cx="30" cy="30" r="24" stroke-width="3" />
                                 </svg>
                             </div>
                         </div>
@@ -199,8 +202,8 @@
                             </div>
                             <div class="ring-container">
                                 <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                    <circle class="ring-fill" id="gpu-usage-ring" cx="30" cy="30" r="24" stroke-width="5" />
+                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="3" />
+                                    <circle class="ring-fill" id="gpu-usage-ring" cx="30" cy="30" r="24" stroke-width="3" />
                                 </svg>
                             </div>
                         </div>
@@ -214,8 +217,8 @@
                             </div>
                             <div class="ring-container">
                                 <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                    <circle class="ring-fill" id="gpu-vram-usage-ring" cx="30" cy="30" r="24" stroke-width="5" />
+                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="3" />
+                                    <circle class="ring-fill" id="gpu-vram-usage-ring" cx="30" cy="30" r="24" stroke-width="3" />
                                 </svg>
                             </div>
                         </div>
@@ -229,8 +232,8 @@
                             </div>
                             <div class="ring-container">
                                 <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                    <circle class="ring-fill" id="gpu-shared-mem-ring" cx="30" cy="30" r="24" stroke-width="5" />
+                                    <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="3" />
+                                    <circle class="ring-fill" id="gpu-shared-mem-ring" cx="30" cy="30" r="24" stroke-width="3" />
                                 </svg>
                             </div>
                         </div>
@@ -266,60 +269,94 @@
                     <canvas id="gpu-chart"></canvas>
                 </div>
             </div>
+
+<div class="card" id="cpu-card">
+    <div class="card-header cpu">
+        <h2 id="cpu-title">CPU Metrics</h2>
+        <span class="tag inactive" id="cpu-tag">Offline</span>
+    </div>
+
+    <div class="metrics">
+        <div class="metric-box" id="box-cpu-temp">
+            <div class="metric-info">
+                <span class="metric-label">Package Temp</span>
+                <div class="metric-value-container">
+                    <span id="cpu-temp">--</span><span class="unit">°C</span>
+                </div>
+            </div>
+            <div class="ring-container">
+                <svg class="progress-ring">
+                    <circle class="ring-track" cx="25" cy="25" r="24" stroke-width="3"></circle>
+                    <circle class="ring-fill2" id="cpu-temp-ring" cx="25" cy="25" r="24" stroke-width="3"></circle>
+                </svg>
+            </div>
         </div>
 
-            <div class="card" id="cpu-card">
-                <div class="card-header cpu">
-                    <h2>CPU</h2>
-                    <span class="tag inactive" id="cpu-tag">Offline</span>
+        <div class="metric-box" id="box-cpu-power">
+            <div class="metric-info">
+                <span class="metric-label">Power</span>
+                <div class="metric-value-container">
+                    <span id="cpu-power">--</span><span class="unit">W</span>
                 </div>
-                <div class="metrics">
-                    <div class="metric-box" id="box-cpu-temp">
-                        <div class="metric-info">
-                            <div class="metric-label">Temperature</div>
-                            <div class="metric-value-container">
-                                <span id="cpu-temp">--</span><span class="unit">°C</span>
-                            </div>
-                        </div>
-                        <div class="ring-container">
-                            <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                <circle class="ring-fill2" id="cpu-temp-ring" cx="30" cy="30" r="24" stroke-width="5" />
-                            </svg>
-                        </div>
-                    </div>
+            </div>
+            <div class="ring-container">
+                <svg class="progress-ring">
+                    <circle class="ring-track" cx="25" cy="25" r="24" stroke-width="3"></circle>
+                    <circle class="ring-fill2" id="cpu-power-ring" cx="25" cy="25" r="24" stroke-width="3"></circle>
+                </svg>
+            </div>
+        </div>
 
-                    <div class="metric-box" id="box-cpu-power">
-                        <div class="metric-info">
-                            <div class="metric-label">Power</div>
-                            <div class="metric-value-container">
-                                <span id="cpu-power">--</span><span class="unit">W</span>
-                            </div>
-                        </div>
-                        <div class="ring-container">
-                            <svg class="progress-ring" width="50" height="50" viewBox="0 0 60 60">
-                                <circle class="ring-track" cx="30" cy="30" r="24" stroke-width="5" />
-                                <circle class="ring-fill2" id="cpu-power-ring" cx="30" cy="30" r="24" stroke-width="5" />
-                            </svg>
-                        </div>
-                    </div>
+        <div class="metric-box" id="box-cpu-usage">
+            <div class="metric-info">
+                <span class="metric-label">CPU Load</span>
+                <div class="metric-value-container">
+                    <span id="cpu-usage">--</span><span class="unit">%</span>
                 </div>
-
-                <div class="chart-container">
-                    <div class="chart-header">
-                        <div class="chart-title">CPU Telemetry</div>
-                        <div class="metric-selector">
-                            <input type="radio" id="cpu-m-temp" name="cpu-metric" value="temperature" checked onchange="renderCharts()">
-                            <label for="cpu-m-temp">Temp</label>
-
-                            <input type="radio" id="cpu-m-power" name="cpu-metric" value="power" onchange="renderCharts()">
-                            <label for="cpu-m-power">PWR</label>
-                        </div>
-                    </div>
-                    <canvas id="cpu-chart"></canvas>
-                </div>
+            </div>
+            <div class="ring-container">
+                <svg class="progress-ring" viewBox="0 0 50 50">
+                    <circle class="ring-track" cx="25" cy="25" r="24" stroke-width="4"></circle>
+                    <circle class="ring-fill2" id="cpu-usage-ring" cx="25" cy="25" r="24" stroke-width="4"></circle>
+                </svg>
             </div>
         </div>
     </div>
-</body>
+
+    <div class="expert-section">
+        <div class="core-header">
+            <span class="expert-title">Per-Core Metrics</span>
+            <div class="metric-selector" id="cpu-core-selector">
+                <input type="radio" id="core-m-temp" name="core-metric" value="t" checked onchange="updateCoreDisplays()">
+                <label for="core-m-temp">Temp</label>
+
+                <input type="radio" id="core-m-load" name="core-metric" value="u" onchange="updateCoreDisplays()">
+                <label for="core-m-load">Load</label>
+
+                <input type="radio" id="core-m-clock" name="core-metric" value="c" onchange="updateCoreDisplays()">
+                <label for="core-m-clock">Clock</label>
+            </div>
+        </div>
+
+        <div class="core-grid" id="cpu-cores-container"></div>
+    </div>
+
+    <div class="chart-container">
+        <div class="chart-header">
+            <span class="chart-title">CPU History</span>
+            <div class="metric-selector">
+                <input type="radio" id="cpu-m-usage" name="cpu-metric" value="usage" checked onchange="renderCharts()">
+                <label for="cpu-m-usage">Load</label>
+
+                <input type="radio" id="cpu-m-temp" name="cpu-metric" value="temperature" onchange="renderCharts()">
+                <label for="cpu-m-temp">Temp</label>
+
+                <input type="radio" id="cpu-m-power" name="cpu-metric" value="power" onchange="renderCharts()">
+                <label for="cpu-m-power">Power</label>
+            </div>
+        </div>
+        <canvas id="cpu-chart"></canvas>
+    </div>
+</div>
+        </div> </div> </body>
 </html>

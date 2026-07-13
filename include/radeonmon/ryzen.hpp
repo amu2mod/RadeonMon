@@ -58,6 +58,7 @@ private:
     void Shutdown();
 
     mutable std::mutex m_metricsMutex;
+    CPUParameters m_data;
     RyzenMetrics m_metrics{};
     ICPUEx *m_pCpu = nullptr;
     IPlatform *m_pPlatform = nullptr;

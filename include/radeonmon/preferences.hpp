@@ -32,6 +32,9 @@ inline void SavePreferences()
 
     swprintf_s(buffer, L"%u", g_fontSize);
     WritePrivateProfileStringW(L"Window", L"FontSize", buffer, path);
+
+    swprintf_s(buffer, L"%d", g_isFpsEnabled ? 1 : 0);
+    WritePrivateProfileStringW(L"Window", L"FpsEnabled", buffer, path);
 }
 
 inline void LoadPreferences()
@@ -50,8 +53,7 @@ inline void LoadPreferences()
 
     g_alwaysOnTop = GetPrivateProfileIntW(L"Window", L"AlwaysOnTop", 0, path) != 0;
 
-    g_fontSize = std::clamp(
-        static_cast<UINT>(GetPrivateProfileIntW(L"Window", L"FontSize", FONTSIZE, path)),
-        FONTSIZE_MIN,
-        FONTSIZE_MAX);
+    g_fontSize = std::clamp(static_cast<UINT>(GetPrivateProfileIntW(L"Window", L"FontSize", FONTSIZE, path)), FONTSIZE_MIN, FONTSIZE_MAX);
+
+    g_isFpsEnabled = GetPrivateProfileIntW(L"Window", L"FpsEnabled", 0, path) != 0;
 }

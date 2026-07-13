@@ -39,7 +39,8 @@ constexpr int g_propCount = _countof(g_props);
 constexpr int g_lineCount = g_propCount / 2;
 inline PropertyItem g_cardName = {L"", 0, 0, L"no card detected"};
 
-inline ADLXGpuTelemetry g_AdlxGPUTelemetry;
+inline bool g_isFpsEnabled = false;
+inline ADLXGpuTelemetry g_AdlxGPUTelemetry(g_isFpsEnabled);
 inline RyzenCpu g_cpu;
 
 inline bool g_alwaysOnTop = false;

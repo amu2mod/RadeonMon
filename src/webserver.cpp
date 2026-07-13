@@ -270,6 +270,7 @@ bool WebServer::SendResourceResponse(HTTP_REQUEST_ID requestId, int resourceId)
 }
 
 #ifdef _DEBUG
+[[maybe_unused]]
 static std::string GetPeerIp(HTTP_REQUEST *pRequest)
 {
     char ip[INET6_ADDRSTRLEN] = "unknown";
@@ -330,44 +331,44 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
         return;
     }
 
-    // if (route == L"/styles.css")
-    // {
-    //     SendFileResponse(pRequest->RequestId, L"styles.css");
-    //     return;
-    // }
-
-    // if (route == L"/script.js")
-    // {
-    //     SendFileResponse(pRequest->RequestId, L"script.js");
-    //     return;
-    // }
-
-    // if (route == L"/")
-    // {
-    //     SendFileResponse(pRequest->RequestId);
-    //     return;
-    // }
-
     if (route == L"/styles.css")
     {
-        if (!SendResourceResponse(pRequest->RequestId, IDR_STYLES_CSS))
-            SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
+        SendFileResponse(pRequest->RequestId, L"styles.css");
         return;
     }
 
     if (route == L"/script.js")
     {
-        if (!SendResourceResponse(pRequest->RequestId, IDR_SCRIPT_JS))
-            SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
+        SendFileResponse(pRequest->RequestId, L"script.js");
         return;
     }
+
     if (route == L"/")
     {
-        LOG_DEBUG("[WebServer] [%s] GET %ls", GetPeerIp(pRequest).c_str(), route.c_str());
-        if (!SendResourceResponse(pRequest->RequestId, IDR_INDEX_HTML))
-            SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
+        SendFileResponse(pRequest->RequestId);
         return;
     }
+
+    // if (route == L"/styles.css")
+    // {
+    //     if (!SendResourceResponse(pRequest->RequestId, IDR_STYLES_CSS))
+    //         SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
+    //     return;
+    // }
+
+    // if (route == L"/script.js")
+    // {
+    //     if (!SendResourceResponse(pRequest->RequestId, IDR_SCRIPT_JS))
+    //         SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
+    //     return;
+    // }
+    // if (route == L"/")
+    // {
+    //     LOG_DEBUG("[WebServer] [%s] GET %ls", GetPeerIp(pRequest).c_str(), route.c_str());
+    //     if (!SendResourceResponse(pRequest->RequestId, IDR_INDEX_HTML))
+    //         SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
+    //     return;
+    // }
 
     SendErrorResponse(pRequest->RequestId, 404, "Not Found");
 }
