@@ -16,7 +16,7 @@ This is an independent personal project and is not affiliated with AMD Corporati
 <table align="center">
   <tr>
     <td align="center">
-      <img width="453" alt="image" src="https://github.com/user-attachments/assets/0ecdefb5-eed7-4b38-a024-942b534c633f" />
+      <img width="464" alt="image" src="https://github.com/user-attachments/assets/0472c278-be76-4e85-9a74-a13e8f51aa77" />
       <br />
       <sub><b>Desktop App</b> — Main Application Window</sub>
     </td>
