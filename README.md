@@ -16,12 +16,12 @@ This is an independent personal project and is not affiliated with AMD Corporati
 <table align="center">
   <tr>
     <td align="center">
-      <img width="464" alt="image" src="https://github.com/user-attachments/assets/0472c278-be76-4e85-9a74-a13e8f51aa77" />
+      <img width="321" alt="1" src="https://github.com/user-attachments/assets/63c701ee-5937-419f-b9f0-b5e9bdb33209" />
       <br />
       <sub><b>Desktop App</b> — Main Application Window</sub>
     </td>
     <td align="center">
-     <img width="450"  alt="image" src="https://github.com/user-attachments/assets/bc160339-45b8-4e67-91fb-56cca84e7900" />
+     <img width="935" alt="image" src="https://github.com/user-attachments/assets/51f5bfb0-3d6f-42f0-9a4f-c1d340ac6e2c" />
       <br />
       <sub><b>Web Interface</b> — HTML Dashboard</sub>
     </td>
@@ -37,7 +37,8 @@ This is an independent personal project and is not affiliated with AMD Corporati
 - Total Power usage
 - CPU metrics (Ryzen support only for now)
 - Highlights high temperatures with a warm color
-- Local Web Server on port 9090
+- Built-in local web server running on port `9090`
+- Additional metrics available through the web interface
 
 ## How to use the local Web Server
 
