@@ -36,6 +36,8 @@ This is an independent personal project and is not affiliated with AMD Corporati
 - Fan Speed
 - Total Power usage
 - CPU metrics (Ryzen support only for now)
+- Display information, current resolution and refresh rate
+- Low overhread FPS meter (metrics provided by AMD ADLX)
 - Highlights high temperatures with a warm color
 - Built-in local web server running on port `9090`
 - Additional metrics available through the web interface
