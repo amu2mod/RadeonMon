@@ -212,6 +212,7 @@ struct RyzenCoreMetrics
     double dEffectiveFreq = 0.0;
     double dCurrentFreq = 0.0;
 
+#ifdef _DEBUG
     void Log(size_t index) const
     {
         LOG_DEBUG("[%zu] %.2f C, %.2f%%, %.2f MHz / %.2f MHz",
@@ -221,6 +222,7 @@ struct RyzenCoreMetrics
                   dEffectiveFreq,
                   dCurrentFreq);
     }
+#endif
 };
 
 struct RyzenMetrics
@@ -230,6 +232,7 @@ struct RyzenMetrics
     double dTemperature = 0.0;
     double dPower = 0.0;
 
+#ifdef _DEBUG
     void Log() const
     {
         LOG_DEBUG("");
@@ -248,6 +251,7 @@ struct RyzenMetrics
         LOG_DEBUG("----------------------------");
         LOG_DEBUG("");
     }
+#endif
 
     int BuildJson(char *buffer, int bufferSize) const
     {

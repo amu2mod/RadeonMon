@@ -203,7 +203,9 @@ bool RyzenCpu::Init()
     // m_metrics.BuildJson(buffer, GPU_JSON_BUFFER_SIZE);
     // LOG_DEBUG("[Ryzen] Json=\n%s", buffer);
 
+#ifdef _DEBUG
     m_metrics.Log();
+#endif
 
     m_isInitialized = true;
     return true;
