@@ -21,9 +21,14 @@ This is an independent personal project and is not affiliated with AMD Corporati
       <sub><b>Desktop App</b> — Main Application Window</sub>
     </td>
     <td align="center">
-     <img width="500" alt="image" src="https://github.com/user-attachments/assets/51f5bfb0-3d6f-42f0-9a4f-c1d340ac6e2c" />
+      <img height="400" alt="Mobile Web Interface" src="https://github.com/user-attachments/assets/2c376468-a5b2-4e0a-adff-104ed4530304" />
       <br />
-      <sub><b>Web Interface</b> — HTML Dashboard</sub>
+      <sub><b>Web Interface</b> — Ultra-lightweight template optimized for mobile devices</sub>
+    </td>
+    <td align="center">
+     <img width="500" alt="Dashboard Web Interface" src="https://github.com/user-attachments/assets/51f5bfb0-3d6f-42f0-9a4f-c1d340ac6e2c" />
+      <br />
+      <sub><b>Web Interface</b> — Full-featured HTML dashboard with advanced CSS styling</sub>
     </td>
   </tr>
 </table>
