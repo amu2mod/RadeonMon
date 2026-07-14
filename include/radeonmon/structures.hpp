@@ -11,6 +11,8 @@
 #include <cmath>
 #include <optional>
 #include <vector>
+#include <regex>
+#include <cstring>
 
 #include <ifdef.h>
 #include <iphlpapi.h>
@@ -229,8 +231,63 @@ struct RyzenMetrics
 {
     std::vector<RyzenCoreMetrics> cores;
     char name[256] = "";
+    char shortName[32] = "";
     double dTemperature = 0.0;
     double dPower = 0.0;
+
+    int GetCoreCount()
+    {
+        return static_cast<int>(cores.size());
+    }
+
+    void SetShortName(const char *value, int coreCount)
+    {
+        if (!value)
+        {
+            shortName[0] = '\0';
+            return;
+        }
+
+        std::string result(value);
+
+        // Remove AMD prefix
+        result = std::regex_replace(
+            result,
+            std::regex(R"(^\s*AMD\s+)", std::regex::icase),
+            "");
+
+        // Remove "N-Core Processor" if present
+        result = std::regex_replace(
+            result,
+            std::regex(R"(\s+\d+-Core\s+Processor$)", std::regex::icase),
+            "");
+
+        // Remove Radeon / graphics suffix
+        result = std::regex_replace(
+            result,
+            std::regex(R"(\s+w\/.*$)", std::regex::icase),
+            "");
+
+        // Append core count
+        if (coreCount > 0)
+            result += " (" + std::to_string(coreCount) + "C)";
+
+        // Normalize whitespace
+        result = std::regex_replace(
+            result,
+            std::regex(R"(\s+)"),
+            " ");
+
+        // Trim
+        if (!result.empty() && result.front() == ' ')
+            result.erase(0, 1);
+
+        if (!result.empty() && result.back() == ' ')
+            result.pop_back();
+
+        // Copy safely
+        strncpy_s(shortName, sizeof(shortName), result.c_str(), _TRUNCATE);
+    }
 
 #ifdef _DEBUG
     void Log() const
@@ -359,7 +416,7 @@ struct RyzenMetrics
         };
 
         write("{\"name\":");
-        writeJsonString(name);
+        writeJsonString(shortName);
 
         write(",\"temperature\":");
         writeDouble(dTemperature);
@@ -877,6 +934,9 @@ namespace RadeonMon::Hardware
         std::wstring driverPath;
         std::wstring pnpString;
 
+        // Precomputed for json
+        char shortName[32] = "";
+
         // Memory
         adlx_uint totalVRAMMB = 0;
         std::wstring vramType;
@@ -934,10 +994,45 @@ namespace RadeonMon::Hardware
             subSystemVendorId = CharToWide(value);
         }
 
+        void SetShortName(const char *value)
+        {
+            if (!value)
+            {
+                shortName[0] = '\0';
+                return;
+            }
+
+            std::string result(value);
+
+            // Remove common vendor prefixes
+            result = std::regex_replace(result, std::regex(R"(^\s*(AMD|NVIDIA|Intel)\s+)", std::regex::icase), "");
+
+            // Remove trademark / registration markers
+            result = std::regex_replace(result, std::regex(R"(\s*\((TM|R)\))", std::regex::icase), "");
+
+            // Remove generic suffixes
+            result = std::regex_replace(result, std::regex(R"(\s+(Graphics|GPU|Adapter)\s*$)", std::regex::icase), "");
+
+            // Normalize whitespace
+            result = std::regex_replace(result, std::regex(R"(\s+)"), " ");
+
+            // Trim
+            if (!result.empty() && result.front() == ' ')
+                result.erase(0, 1);
+
+            if (!result.empty() && result.back() == ' ')
+                result.pop_back();
+
+            // Store in fixed-size buffer
+            strncpy_s(shortName, sizeof(shortName), result.c_str(), _TRUNCATE);
+            shortName[sizeof(shortName) - 1] = '\0';
+        }
+
         void SetName(const char *value)
         {
             name = CharToWide(value);
             strName = value;
+            SetShortName(value);
         }
 
         void SetDriverPath(const char *value)
@@ -1028,6 +1123,7 @@ namespace RadeonMon::Hardware
             LOG_INFO("");
             LOG_INFO("=== GPU Information ===");
             LOG_INFO("Name:%ls", name.c_str());
+            LOG_INFO("ShortName:%s", shortName);
             LOG_INFO("Vendor ID:%ls", vendorId.c_str());
             LOG_INFO("Device ID:%ls", deviceId.c_str());
             LOG_INFO("Revision ID:%ls", revisionId.c_str());

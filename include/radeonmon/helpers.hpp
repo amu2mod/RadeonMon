@@ -536,7 +536,7 @@ inline int BuildCombinedJson(char *buffer, int bufferSize)
     if (g_AdlxGPUTelemetry.isInitialized)
     {
         // START_CHRONO(gpu);
-        int len = g_AdlxGPUTelemetry.Get().BuildJson(p, static_cast<int>(end - p + 1), g_AdlxGPUTelemetry.GetGpuInfo().strName.c_str());
+        int len = g_AdlxGPUTelemetry.Get().BuildJson(p, static_cast<int>(end - p + 1), g_AdlxGPUTelemetry.GetGpuInfo().shortName);
         // END_CHRONO(gpu, "gpu json");
 
         if (len > 0)

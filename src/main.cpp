@@ -957,23 +957,31 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         ////////////////////////////////////////////////////////
         // Web Server submenu
         HMENU hWebServerMenu = CreatePopupMenu();
+        HMENU hStartStopMenu = CreatePopupMenu();
+        HMENU hTemplateMenu = CreatePopupMenu();
         const auto &list = g_networkManager.GetAddresses();
         const UINT flags = MF_STRING | (g_webServer.IsRunning() || !g_isAdmin) ? MF_DISABLED : 0;
 
         if (g_webServer.IsRunning())
         {
-            AppendMenu(hWebServerMenu, MF_STRING, IDM_WEBSERVER_STOP, L"Stop server");
-            AppendMenu(hWebServerMenu, MF_SEPARATOR, 0, nullptr);
+            AppendMenu(hStartStopMenu, MF_STRING, IDM_WEBSERVER_STOP, L"Stop server");
+            AppendMenu(hStartStopMenu, MF_SEPARATOR, 0, nullptr);
         }
 
         if (!g_isAdmin)
         {
-            AppendMenu(hWebServerMenu, MF_STRING, 0, L"Admin rights required");
-            AppendMenu(hWebServerMenu, MF_SEPARATOR, 0, nullptr);
+            AppendMenu(hStartStopMenu, MF_STRING, 0, L"Admin rights required");
+            AppendMenu(hStartStopMenu, MF_SEPARATOR, 0, nullptr);
         }
 
         for (size_t i = 0; i < list.size(); ++i)
-            AppendMenuW(hWebServerMenu, flags | (g_webServer.isBoundTo(list[i]) ? MF_CHECKED : MF_UNCHECKED), IDM_WEBSERVER_BASE + static_cast<UINT>(i), list[i].display().c_str());
+            AppendMenuW(hStartStopMenu, flags | (g_webServer.isBoundTo(list[i]) ? MF_CHECKED : MF_UNCHECKED), IDM_WEBSERVER_BASE + static_cast<UINT>(i), list[i].display().c_str());
+
+        AppendMenu(hTemplateMenu, MF_STRING | (g_currentWebTemplate == IDM_WEBSERVER_TEMPLATE_LIGHT ? MF_CHECKED : MF_UNCHECKED), IDM_WEBSERVER_TEMPLATE_LIGHT, L"Mobile (light text)");
+        AppendMenu(hTemplateMenu, MF_STRING | (g_currentWebTemplate == IDM_WEBSERVER_TEMPLATE_HEAVY ? MF_CHECKED : MF_UNCHECKED), IDM_WEBSERVER_TEMPLATE_HEAVY, L"PC (heavy CSS)");
+
+        AppendMenuW(hWebServerMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hStartStopMenu), L"Start/Stop");
+        AppendMenuW(hWebServerMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hTemplateMenu), L"Template");
 
         AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hWebServerMenu), L"Web Server");
         AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
@@ -1130,6 +1138,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             g_serverStatusRc.ClearValueRC(g_backBuffer.memDC, BACKGROUNDCOLOR);
             InvalidateRect(hwnd, &g_serverStatusRc.valueRc, FALSE);
             UpdateWindow(hwnd);
+            break;
+        }
+
+        case IDM_WEBSERVER_TEMPLATE_LIGHT:
+        {
+            g_currentWebTemplate = IDM_WEBSERVER_TEMPLATE_LIGHT;
+            break;
+        }
+
+        case IDM_WEBSERVER_TEMPLATE_HEAVY:
+        {
+            g_currentWebTemplate = IDM_WEBSERVER_TEMPLATE_HEAVY;
+            break;
         }
 
         default:

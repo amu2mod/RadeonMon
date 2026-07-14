@@ -1,0 +1,227 @@
+<!doctype html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      .temp-hot   { color: #ff5555; }
+      .temp-warm  { color: #ffb86c; }
+      .dim        { color: #888888; }
+
+      body, html {
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      html {
+        background-color: rgb(30, 30, 30);
+        color: rgb(240, 240, 240);
+        font-family: Consolas, "SFMono-Regular", "Liberation Mono", Menlo, Monaco, monospace;
+        padding: 0.6rem 0.5rem;
+      }
+
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: monospace;
+        font-size: clamp(0.85rem, 4.5vw, 2rem);
+      }
+
+      #gpu {
+        margin-top: 0;
+        padding-bottom: 1.1rem;
+        margin-bottom: 1.1rem;
+        border-bottom: 1px solid #ffffff;
+      }
+
+      #cpu {
+        margin-bottom: 0;
+      }
+
+      /* Colored Text Badges with Tight Border & Box Glow */
+      .badge {
+        display: inline-block;
+        padding: 0.05em 0.3em;
+        font-weight: bold;
+        border-radius: 3px;
+        letter-spacing: 0.5px;
+      }
+
+      .badge-gpu {
+        color: #E60012; /* AMD Radeon Red Font */
+        border: 1px solid #E60012;
+        box-shadow: 0 0 8px rgba(230, 0, 19, 0.322); /* Red Box Glow */
+      }
+
+      .badge-cpu {
+        color: #ED5C2B; /* AMD Ryzen Orange Font */
+        border: 1px solid #ED5C2B;
+        box-shadow: 0 0 8px rgba(237, 91, 43, 0.308); /* Orange Box Glow */
+      }
+
+      .bar {
+        display: inline-block;
+        font-size: 0.6em;
+        line-height: 1;
+        vertical-align: middle;
+      }
+    </style>
+  </head>
+<body>
+
+<pre id="gpu"></pre>
+<pre id="cpu"></pre>
+
+<script>
+const NA = "--";
+
+const val = (v, fallback = NA) => v ?? fallback;
+const metric = (obj, fallback = NA) => obj?.value ?? fallback;
+const fixed = (v, digits = 1, fallback = NA) =>
+  typeof v === "number" ? v.toFixed(digits) : fallback;
+
+const dim = (text) => `<span class="dim">${text}</span>`;
+const badgeGpu = (text) => `<span class="badge badge-gpu">${text}</span>`;
+const badgeCpu = (text) => `<span class="badge badge-cpu">${text}</span>`;
+
+function formatHotspotDelta(gpuTemp, hotspotTemp) {
+  if (typeof gpuTemp !== "number" || typeof hotspotTemp !== "number") return "";
+
+  const delta = Math.round(hotspotTemp - gpuTemp);
+
+  // If delta is 0 or negative, display nothing
+  if (delta <= 0) return "";
+
+  const text = ` (+${delta})`;
+
+  // Threshold 2: Critical (Above 40°C delta)
+  if (delta > 40) {
+    return `<span class="temp-hot">${text}</span>`;
+  }
+
+  // Threshold 1: Warning (Above 25°C delta)
+  if (delta > 25) {
+    return `<span class="temp-warm">${text}</span>`;
+  }
+
+  // Standard output (dimmed to keep focus on primary reading)
+  return `<span class="dim">${text}</span>`;
+}
+
+function colorTemp(temp) {
+  if (typeof temp !== "number") return `<span>${NA}</span>`;
+
+  const formatted = temp.toFixed(1);
+
+  if (temp >= 100) return `<span class="temp-hot">${formatted}</span>`;
+  if (temp >= 95)  return `<span class="temp-warm">${formatted}</span>`;
+
+  return `<span>${formatted}</span>`;
+}
+
+function colorFan(fanSpeed, hotspot) {
+  if (typeof fanSpeed !== "number") return `<span>${NA}</span>`;
+
+  if (fanSpeed < 500 && typeof hotspot === "number" && hotspot > 90) {
+    return `<span class="temp-hot">${fanSpeed}</span>`;
+  }
+
+  if (fanSpeed <= 300 && typeof hotspot === "number" && hotspot > 80) {
+    return `<span class="temp-warm">${fanSpeed}</span>`;
+  }
+
+  return `<span>${fanSpeed}</span>`;
+}
+
+async function update() {
+  const r = await fetch(location.pathname.replace(/\/$/, "") + "/api");
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+  const data = await r.json();
+
+  const gpuData = data?.gpu ?? {};
+  const cpuData = data?.cpu ?? {};
+  const cores = Array.isArray(cpuData.cores) ? cpuData.cores : [];
+
+  const gpuName = val(gpuData.name);
+  const cpuName = val(cpuData.name);
+
+  const totalUsage = cores.reduce((sum, c) => sum + (typeof c?.u === "number" ? c.u : 0), 0);
+  const avgLoad = cores.length > 0 ? totalUsage / cores.length : null;
+
+  const fanVal = metric(gpuData.fan_speed);
+  const hotspotVal = metric(gpuData.hotspot);
+
+  const gpuTempMetric = metric(gpuData.temperature);
+  const hotspotMetric = metric(gpuData.hotspot);
+
+  const deltaTag = formatHotspotDelta(gpuTempMetric, hotspotMetric);
+
+  gpu.innerHTML =
+  `${dim("GPU:")} ${gpuName !== NA ? badgeGpu(gpuName) : NA}
+
+  ${dim("Temp:")}       ${colorTemp(gpuTempMetric)} ${dim("°C")}
+  ${dim("Hotspot:")}    ${colorTemp(hotspotMetric)} ${dim("°C")}${deltaTag}
+  ${dim("Mem Temp:")}   ${colorTemp(metric(gpuData.memory_temperature))} ${dim("°C")}
+  ${dim("Fan Speed:")}  ${colorFan(fanVal, hotspotMetric)} ${dim("RPM")}
+  ${dim("Power:")}      ${metric(gpuData.total_board_power)} ${dim("W")}
+  ${dim("VRAM:")}       ${metric(gpuData.vram)} ${dim("MB")}`;
+
+  let cpuText =
+`${dim("CPU:")} ${cpuName !== NA ? badgeCpu(cpuName) : NA}
+
+${colorTemp(cpuData.temperature)} ${dim("°C")},  ${val(cpuData.power)} ${dim("W")},  ${fixed(avgLoad)} ${dim("%")}
+
+`;
+
+  cores.forEach((c, i) => {
+    const usage = typeof c?.u === "number" ? c.u : 0;
+    const tempVal = typeof c?.t === "number" ? c.t : null;
+    const clockVal = typeof c?.c === "number" ? c.c : null;
+
+    const barLength = 30;
+    const filled = Math.round((usage / 100) * barLength);
+    const bar = `<span class="bar">` + "█".repeat(filled) + dim(".".repeat(barLength - filled)) + `</span>`;
+
+    const coreLabel = dim(`${String(i).padStart(2)}:`);
+    const unitDeg = dim("°C");
+    const unitMhz = dim("MHz");
+    const unitPercent = dim("%");
+
+    cpuText +=
+`${coreLabel} ${colorTemp(tempVal)} ${unitDeg} ${fixed(clockVal, 0).padStart(6)} ${unitMhz} ${fixed(c?.u).padStart(5)}${unitPercent}\n   [${bar}]\n`;
+  });
+
+  cpu.innerHTML = cpuText;
+}
+
+let failedAttempts = 0;
+const MAX_FAILURES = 3;
+
+async function loop() {
+  try {
+    await update();
+    failedAttempts = 0; // Reset counter on successful update
+  } catch (e) {
+    failedAttempts++;
+
+    if (failedAttempts >= MAX_FAILURES) {
+      gpu.textContent = "";
+      cpu.textContent = "connection lost, restart the webserver and refresh this page";
+      return; // Stop scheduling further updates
+    }
+  }
+
+  setTimeout(loop, 2000);
+}
+
+loop();
+</script>
+
+</body>
+</html>

@@ -1,5 +1,6 @@
 {
     "cmake.generator": "Ninja",
     "cmake.configureOnOpen": true,
+    // "cmake.cmakePath": "C:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe",
     "cmake.cmakePath": "C:/Programs/Visual Studio/Visual Studio Community 2022/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe",
 }

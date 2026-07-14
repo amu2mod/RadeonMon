@@ -87,3 +87,5 @@ inline RECT g_clickableUrlRect = {0};
 
 inline RadeonMon::Hardware::DisplayManager g_displayManager;
 inline int g_currentDisplayIndex = 0;
+
+inline int g_currentWebTemplate = IDM_WEBSERVER_TEMPLATE_LIGHT;

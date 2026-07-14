@@ -3,3 +3,5 @@
 IDR_INDEX_HTML RCDATA "..\\web\\index.html"
 IDR_STYLES_CSS RCDATA "..\\web\\styles.css"
 IDR_SCRIPT_JS RCDATA "..\\web\\script.js"
+
+IDR_INDEX2_HTML RCDATA "..\\web\\index_light.html"

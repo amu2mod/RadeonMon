@@ -314,6 +314,7 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
 
     if (route == L"/api")
     {
+        // LOG_DEBUG("API call");
         if (!m_apiHandler)
         {
             SendErrorResponse(pRequest->RequestId, 500, "No API handler registered");
@@ -345,7 +346,14 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
 
     if (route == L"/")
     {
-        SendFileResponse(pRequest->RequestId);
+        if (g_currentWebTemplate == IDM_WEBSERVER_TEMPLATE_LIGHT)
+        {
+            SendFileResponse(pRequest->RequestId, L"index_light.html");
+        }
+        else
+        {
+            SendFileResponse(pRequest->RequestId, L"index.html");
+        }
         return;
     }
 #else
@@ -365,7 +373,7 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
     if (route == L"/")
     {
         LOG_DEBUG("[WebServer] [%s] GET %ls", GetPeerIp(pRequest).c_str(), route.c_str());
-        if (!SendResourceResponse(pRequest->RequestId, IDR_INDEX_HTML))
+        if (!SendResourceResponse(pRequest->RequestId, g_currentWebTemplate == IDM_WEBSERVER_TEMPLATE_LIGHT ? IDR_INDEX2_HTML : IDR_INDEX_HTML))
             SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
         return;
     }
@@ -391,6 +399,8 @@ static const char *GetContentType(const std::wstring &filename)
 bool WebServer::SendFileResponse(HTTP_REQUEST_ID requestId, std::wstring filename)
 {
     std::ifstream file;
+
+    LOG_DEBUG("filename=%ls", filename.c_str());
 
     if (filename.empty())
         file = std::ifstream(m_htmlFilePath, std::ios::binary);

@@ -233,6 +233,7 @@ bool RyzenCpu::Update()
 
     std::string str = wcharToUtf8(L"AMD Ryzen 9 9950X3D 16-Core Processor");
     strcpy_s(m_metrics.name, str.c_str());
+    m_metrics.SetShortName(str.c_str(), static_cast<int>(m_metrics.cores.size()));
 
     // Simulate 8 cores
     constexpr size_t coreCount = 16;
@@ -273,6 +274,7 @@ bool RyzenCpu::Update()
             str.pop_back();
 
         strncpy_s(m_metrics.name, sizeof(m_metrics.name), str.c_str(), _TRUNCATE);
+        m_metrics.SetShortName(str.c_str(), static_cast<int>(m_metrics.cores.size()));
 
         unsigned int &coreCount = data.stFreqData.uLength;
         if (coreCount != m_metrics.cores.size())
