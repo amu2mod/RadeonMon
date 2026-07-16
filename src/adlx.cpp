@@ -1,6 +1,6 @@
 #include <cmath>
 #include <map>
-#ifdef TEST
+#ifdef TESTMODE
 #include <random>
 #endif
 
@@ -105,6 +105,7 @@ void ADLXGpuTelemetry::Init()
     gpuInfo.Log();
 
     g_cardName.SetValue(gpuInfo.name.empty() ? L"Unknown AMD GPU" : gpuInfo.name.c_str());
+    g_cardName.textLength = static_cast<UINT>(gpuInfo.name.size());
 
     LOG_INFO("Selected AMD GPU: %ls", gpuInfo.name.empty() ? L"Unknown" : gpuInfo.name.c_str());
     LOG_INFO("Vendor ID: %ls", gpuInfo.vendorId.empty() ? L"Unknown" : gpuInfo.vendorId.c_str());
@@ -139,7 +140,7 @@ void ADLXGpuTelemetry::Discover()
     // discoveredMetrics = {};
     GpuMetricsSnapshot &discoveredMetrics = m_snapshot;
 
-    LOG_INFO("");
+    LOGLN();
     LOG_INFO("=== ADLX GPU Metrics Support Discovery ===");
 
     auto discoverV0 = [&](const char *name, auto isSupportedFn, auto getRangeFn, uint32_t cap, auto &metric)
@@ -322,7 +323,7 @@ void ADLXGpuTelemetry::Discover()
                discoveredMetrics.fanDuty);
 
     LOG_INFO("=== End of Discovery ===");
-    LOG_INFO("");
+    LOGLN();
 }
 
 void ADLXGpuTelemetry::Destroy()
@@ -438,7 +439,7 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
 {
     GpuMetricsSnapshot snapshot;
 
-#ifdef TEST
+#ifdef TESTMODE
     static std::mt19937 rng(std::random_device{}());
 
     auto randDouble = [&](double min, double max)

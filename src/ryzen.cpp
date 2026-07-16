@@ -1,7 +1,7 @@
 #include "radeonmon/ryzen.hpp"
 #include "radeonmon/logging.hpp"
 
-#ifdef TEST
+#ifdef TESTMODE
 #include <random>
 #endif
 
@@ -69,7 +69,7 @@ static void LogCPUParameters(const CPUParameters *pCPU)
         return;
     }
 
-    LOG_DEBUG("");
+    LOGLN();
     LOG_DEBUG("============== CPUParameters ==============");
 
     LogOCMode(&pCPU->eMode);
@@ -125,7 +125,7 @@ static void LogCPUParameters(const CPUParameters *pCPU)
     LOG_DEBUG("fEDCValue_CCD           : %.3f A", pCPU->fEDCValue_CCD);
 
     LOG_DEBUG("============================================");
-    LOG_DEBUG("");
+    LOGLN();
 }
 
 static std::string wcharToUtf8(const wchar_t *wstr)
@@ -203,10 +203,6 @@ bool RyzenCpu::Init()
     // m_metrics.BuildJson(buffer, GPU_JSON_BUFFER_SIZE);
     // LOG_DEBUG("[Ryzen] Json=\n%s", buffer);
 
-#ifdef _DEBUG
-    m_metrics.Log();
-#endif
-
     m_isInitialized = true;
     return true;
 }
@@ -228,7 +224,7 @@ bool RyzenCpu::Update()
 
     std::lock_guard<std::mutex> lock(m_metricsMutex);
 
-#ifdef TEST
+#ifdef TESTMODE
     static std::mt19937 rng(std::random_device{}());
 
     std::string str = wcharToUtf8(L"AMD Ryzen 9 9950X3D 16-Core Processor");
@@ -280,6 +276,8 @@ bool RyzenCpu::Update()
         if (coreCount != m_metrics.cores.size())
             m_metrics.cores.resize(coreCount);
 
+        double totalUsage = 0.0;
+
         for (size_t i = 0; i < m_metrics.cores.size(); i++)
         {
             auto &core = m_metrics.cores[i];
@@ -287,8 +285,11 @@ bool RyzenCpu::Update()
             core.dTemperature = data.stFreqData.dCurrentTemp[i];
             core.dCurrentFreq = data.stFreqData.dCurrentFreq[i];
             core.dEffectiveFreq = data.stFreqData.dFreq[i];
+
+            totalUsage += core.dUsage;
         }
 
+        m_metrics.usage = m_metrics.cores.empty() ? 0.0 : totalUsage / static_cast<double>(m_metrics.cores.size());
         m_metrics.dTemperature = data.dTemperature;
         m_metrics.dPower = static_cast<double>(data.fPPTValue);
         return true;

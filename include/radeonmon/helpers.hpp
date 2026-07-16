@@ -26,7 +26,10 @@ inline HFONT CreateAppFont(int size, LPCWSTR family)
     int pixelSize = -MulDiv(size, g_dpi, 96);
     return CreateFontW(pixelSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-                       CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, family);
+                       CLEARTYPE_QUALITY,
+                       //    DEFAULT_PITCH | FF_DONTCARE,
+                       FIXED_PITCH | FF_MODERN,
+                       family);
 }
 
 inline void RecreateFont()
@@ -535,9 +538,10 @@ inline int BuildCombinedJson(char *buffer, int bufferSize)
 
     if (g_AdlxGPUTelemetry.isInitialized)
     {
-        // START_CHRONO(gpu);
-        int len = g_AdlxGPUTelemetry.Get().BuildJson(p, static_cast<int>(end - p + 1), g_AdlxGPUTelemetry.GetGpuInfo().shortName);
-        // END_CHRONO(gpu, "gpu json");
+        int len = g_AdlxGPUTelemetry.Get().BuildJson(
+            p,
+            static_cast<int>(end - p + 1),
+            g_AdlxGPUTelemetry.GetGpuInfo().shortName);
 
         if (len > 0)
             p += len;
@@ -551,9 +555,9 @@ inline int BuildCombinedJson(char *buffer, int bufferSize)
 
     if (g_cpu.IsInitialized())
     {
-        // START_CHRONO(cpu);
-        int len = g_cpu.GetMetrics().BuildJson(p, static_cast<int>(end - p + 1));
-        // END_CHRONO(cpu, "cpu json");
+        int len = g_cpu.GetMetrics().BuildJson(
+            p,
+            static_cast<int>(end - p + 1));
 
         if (len > 0)
             p += len;
@@ -561,6 +565,19 @@ inline int BuildCombinedJson(char *buffer, int bufferSize)
     else
     {
         write("null");
+    }
+
+    write(",\"processes\":");
+
+    {
+        int len = g_processWatcher.BuildJson(
+            p,
+            static_cast<int>(end - p + 1));
+
+        if (len > 0)
+            p += len;
+        else
+            write("null");
     }
 
     *p++ = '}';
@@ -620,3 +637,60 @@ inline INT_PTR OpenUrl(const wchar_t *url)
 
     return reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", url, nullptr, nullptr, SW_SHOWNORMAL));
 }
+
+inline std::string WideToUtf8(const std::wstring &wstr)
+{
+    if (wstr.empty())
+        return {};
+
+    int size = WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        wstr.c_str(),
+        -1,
+        nullptr,
+        0,
+        nullptr,
+        nullptr);
+
+    std::string result(size - 1, '\0');
+
+    WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        wstr.c_str(),
+        -1,
+        result.data(),
+        size,
+        nullptr,
+        nullptr);
+
+    return result;
+}
+
+#ifdef _DEBUG
+inline void EnableConsoleColors()
+{
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+
+    DWORD dwMode = 0;
+    GetConsoleMode(hOut, &dwMode);
+
+    dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+
+    SetConsoleMode(hOut, dwMode);
+}
+
+inline void LogRect(const char *name, const RECT &rc)
+{
+    LOG_DEBUG(
+        "%s: left=%ld top=%ld right=%ld bottom=%ld width=%ld height=%ld",
+        name,
+        rc.left,
+        rc.top,
+        rc.right,
+        rc.bottom,
+        rc.right - rc.left,
+        rc.bottom - rc.top);
+}
+#endif

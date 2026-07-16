@@ -1,4 +1,3 @@
-
 #include "radeonmon/webserver.hpp"
 
 #include <windows.h>
@@ -15,12 +14,12 @@
 #include "radeonmon/structures.hpp"
 #include "radeonmon/helpers.hpp"
 #include "radeonmon/adlx.hpp"
-#include "radeonmon/logging.hpp"
 #include "radeonmon/ryzen.hpp"
 #include "radeonmon/ryzen_sdk.hpp"
 #include "radeonmon/preferences.hpp"
-#include "radeonmon/version_checker.hpp"
 #include "radeonmon/autostart.hpp"
+#include "radeonmon/logging.hpp"
+#include "radeonmon/version_checker.hpp"
 
 #include <version.hpp>
 
@@ -131,6 +130,7 @@ LayoutMetrics CalculateLayoutMetrics()
     LayoutMetrics m{};
 
     HDC hdc = g_backBuffer.memDC;
+    g_backBuffer.Log();
 
     SIZE sz{};
 
@@ -191,7 +191,10 @@ LayoutMetrics CalculateLayoutMetrics()
         LOG_ERROR("GetTextExtentPoint32W failed");
 
     const int titleFontHeight = sz.cy;
+#ifdef _DEBUG
     const int titleFontWidth = sz.cx;
+    LOG_DEBUG("titleFontWidth=%d", titleFontWidth);
+#endif
 
     // Font-independent spacing: scale
     m.titlePadding = ScaleFontMetric(TITLE_PADDING);
@@ -199,11 +202,11 @@ LayoutMetrics CalculateLayoutMetrics()
     // Font-derived: no scaling
     m.titleHeight = titleFontHeight;
 
-    if (!GetTextExtentPoint32W(hdc, APPNAME, APPNAME_LENGTH, &sz))
+    if (!GetTextExtentPoint32W(hdc, g_appTitle.name, g_appTitle.textLength, &sz))
         LOG_ERROR("GetTextExtentPoint32W failed");
 
     // Font-derived: no scaling
-    m.titleWidth = sz.cx + titleFontWidth;
+    m.titleWidth = sz.cx;
 
     // ------------------------------------------------------------
     // Body font
@@ -368,24 +371,8 @@ void LayoutFrame(const LayoutMetrics &m)
     g_border.left = {0, m.border, m.border, m.windowHeight - m.border};
     g_border.right = {m.windowWidth - m.border, m.border, m.windowWidth, m.windowHeight - m.border};
 
-    // center the title inside the top border
-    int x = (m.windowWidth - m.titleWidth) / 2;
-    int y = (g_border.top.bottom - m.titleHeight) / 2;
-    g_titleRc = {x, y, x + m.titleWidth, y + m.titleHeight};
-    // g_titleTextRc = g_titleRc;
-
-#ifdef _DEBUG
-    // LOG_DEBUG("LayoutFrame: window={%ld,%ld,%ld,%ld} border=%d titleHeight=%d", rc.left, rc.top, rc.right, rc.bottom, border, titleHeight);
-
-    // DebugRect("border.top", g_border.top);
-    // DebugRect("border.bottom", g_border.bottom);
-    // DebugRect("border.left", g_border.left);
-    // DebugRect("border.right", g_border.right);
-
-    // DebugRect("title", g_titleRc);
-#endif
+    g_appTitle.UpdateRC(g_border.top, m);
 }
-
 void LayoutProperties2(const LayoutMetrics &m)
 {
     LOG_DEBUG("LayoutProperties2");
@@ -404,7 +391,7 @@ void LayoutProperties2(const LayoutMetrics &m)
     // Window
     g_windowRc = {0, 0, m.windowWidth, m.windowHeight};
 
-    // Frame + title
+    // Borders + Title
     LayoutFrame(m);
 
     // Properties
@@ -440,7 +427,19 @@ void LayoutProperties2(const LayoutMetrics &m)
 
     // Card name
     g_cardName.valueRc = {leftEdge, y, rightEdge, y + m.cardHeight};
-    y += m.cardHeight;
+    SIZE sz{};
+    HFONT oldFont = (HFONT)SelectObject(g_backBuffer.memDC, g_cardFont);
+    if (!GetTextExtentPoint32W(g_backBuffer.memDC, g_cardName.textValue, g_cardName.textLength, &sz))
+        LOG_ERROR("[LayoutProperties2] GetTextExtentPoint32W failed");
+
+    LOG_DEBUG("sz: %ld,%ld", sz.cx, sz.cy);
+
+    g_cardName.textX = g_cardName.valueRc.left + ((g_cardName.valueRc.right - g_cardName.valueRc.left) - sz.cx) / 2;
+    g_cardName.textY = g_cardName.valueRc.top + ((g_cardName.valueRc.bottom - g_cardName.valueRc.top) - sz.cy) / 2;
+
+    LOG_DEBUG("card position: %d,%d", g_cardName.textX, g_cardName.textY);
+
+    SelectObject(g_backBuffer.memDC, oldFont);
 
 #ifdef _DEBUG
     const int expectedBottom = m.windowHeight - m.border - m.paddingBottom;
@@ -472,7 +471,7 @@ void PaintProperties(HDC hdc)
             MoveToEx(hdc, p.labelRc.left, p.labelRc.top, nullptr);
             LineTo(hdc, p.labelRc.right, p.labelRc.top);
 
-#ifdef _DEBUG
+#ifdef GDIDRAW
             g_gdiDrawCallCount++;
 #endif
 
@@ -500,12 +499,10 @@ void PaintProperties(HDC hdc)
             int y = p.labelRc.top + ((p.labelRc.bottom - p.labelRc.top) - sz.cy) / 2;
 
             ExtTextOutW(hdc, x, y, ETO_CLIPPED, &p.labelRc, p.label.c_str(), len, nullptr);
-
-            p.repaintLabel = false;
-
-#ifdef _DEBUG
+#ifdef GDIDRAW
             g_gdiDrawCallCount++;
 #endif
+            p.repaintLabel = false;
         }
 
         SetTextColor(hdc, p.warning ? WARNINGCOLOR : VALUECOLOR);
@@ -518,8 +515,7 @@ void PaintProperties(HDC hdc)
         int y = p.valueRc.top + ((p.valueRc.bottom - p.valueRc.top) - sz.cy) / 2;
 
         ExtTextOutW(hdc, x, y, ETO_CLIPPED, &p.valueRc, p.textValue, len, nullptr);
-
-#ifdef _DEBUG
+#ifdef GDIDRAW
         g_gdiDrawCallCount++;
 #endif
 
@@ -529,7 +525,7 @@ void PaintProperties(HDC hdc)
     if (g_notification.dirty)
     {
         g_notification.DrawTextValue(g_backBuffer.memDC, NOTIFICATIONCOLOR, g_notificationFont);
-#ifdef _DEBUG
+#ifdef GDIDRAW
         g_gdiDrawCallCount++;
 #endif
         g_notification.dirty = false;
@@ -540,8 +536,7 @@ void PaintProperties(HDC hdc)
     {
         MoveToEx(hdc, g_serverSeparatorRc.valueRc.left, g_serverSeparatorRc.valueRc.top, nullptr);
         LineTo(hdc, g_serverSeparatorRc.valueRc.right, g_serverSeparatorRc.valueRc.top);
-
-#ifdef _DEBUG
+#ifdef GDIDRAW
         g_gdiDrawCallCount++;
 #endif
 
@@ -552,8 +547,7 @@ void PaintProperties(HDC hdc)
     if (g_serverStatusRc.dirty)
     {
         g_serverStatusRc.DrawTextValue(g_backBuffer.memDC, SERVERSTATUSCOLOR, g_notificationFont);
-
-#ifdef _DEBUG
+#ifdef GDIDRAW
         g_gdiDrawCallCount++;
 #endif
 
@@ -577,13 +571,16 @@ void PaintProperties(HDC hdc)
 
         // Draw centered text
         SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, LABELCOLOR);
+        // SetTextColor(hdc, LABELCOLOR);
+
+        SetTextColor(hdc, VALUECOLOR);
 
         HFONT oldFont = (HFONT)SelectObject(hdc, g_cardFont);
-        DrawTextW(hdc, g_cardName.textValue, -1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        ExtTextOutW(hdc, g_cardName.textX, g_cardName.textY, ETO_CLIPPED, &rc, g_cardName.textValue, g_cardName.textLength, nullptr);
+
         SelectObject(hdc, oldFont);
 
-#ifdef _DEBUG
+#ifdef GDIDRAW
         g_gdiDrawCallCount += 3;
 #endif
 
@@ -645,10 +642,18 @@ void PaintFrame(HDC hdc)
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, RGB(255, 255, 255));
 
-    // DrawText(hdc, APPNAME, -1, &g_titleRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    TextOutW(hdc, g_titleRc.left, g_titleRc.top, APPNAME, APPNAME_LENGTH);
+    HFONT oldFont = (HFONT)SelectObject(hdc, g_titleFont);
 
-#ifdef _DEBUG
+    // START_CHRONO(title);
+    // RECT rc = g_titleRc;
+    // DrawTextW(hdc, APPNAME, APPNAME_LENGTH, &rc, DT_LEFT | DT_TOP | DT_SINGLELINE); // 1.5ms
+    // TextOutW(hdc, g_titleRc.left, g_titleRc.top, APPNAME, APPNAME_LENGTH); // 57µs
+    ExtTextOutW(hdc, g_appTitle.rc.left, g_appTitle.rc.top, 0, nullptr, g_appTitle.name, g_appTitle.textLength, nullptr);
+
+    // END_CHRONO_MICRO(title, "title draw");
+
+    SelectObject(hdc, oldFont);
+#ifdef GDIDRAW
     g_gdiDrawCallCount += 5;
 #endif
 }
@@ -669,6 +674,25 @@ void Cleanup(HWND hwnd)
     SavePreferences();
     g_networkManager.Shutdown();
     g_AdlxGPUTelemetry.Destroy();
+}
+
+void AutoCheckVersion()
+{
+    std::wstring latestVersion;
+
+    if (!VersionChecker::GetLatestVersion(latestVersion))
+    {
+        LOG_ERROR("[AutoCheckVersion] Failed to check update");
+        return;
+    }
+
+    LOG_DEBUG("[AutoCheckVersion] Latest version found: %ls", latestVersion.c_str());
+
+    if (latestVersion != Version::String)
+    {
+        LOG_WARN("[AutoCheckVersion] New update available: %ls", latestVersion.c_str());
+        g_appTitle.SetTitle(APPNAME_UPDATE, APPNAME_UPDATE_LENGTH);
+    }
 }
 
 // ── window procedure ─────────────────────────────────────────────────────────
@@ -765,8 +789,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             SetAllRepaintLabelFlag(false);
         }
 
-#ifdef _DEBUG
-        // LOG_DEBUG("GDI draw count=%u", g_gdiDrawCallCount); // very verbose
+#ifdef GDIDRAW
+        LOG_TRACE("GDI draw count=%u", g_gdiDrawCallCount); // very verbose
         g_gdiDrawCallCount = 0;
 #endif
 
@@ -827,6 +851,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         if (wParam == APP_POLLING_ID)
         {
+            // START_CHRONO(process);
+            // END_CHRONO(process, "process Poll()");
+            // g_processWatcher.Log();
+
             if (!g_AdlxGPUTelemetry.isInitialized)
             {
                 LOG_WARN("adlx not init");
@@ -839,6 +867,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             // START_CHRONO(adlx);
             g_AdlxGPUTelemetry.Tick();
             GpuMetricsSnapshot snapshot = g_AdlxGPUTelemetry.Get();
+            g_processWatcher.Poll();
             // END_CHRONO(adlx, "ADLX");
 
             if (!snapshot.valid)
@@ -980,7 +1009,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         AppendMenu(hTemplateMenu, MF_STRING | (g_currentWebTemplate == IDM_WEBSERVER_TEMPLATE_LIGHT ? MF_CHECKED : MF_UNCHECKED), IDM_WEBSERVER_TEMPLATE_LIGHT, L"Mobile (light text)");
         AppendMenu(hTemplateMenu, MF_STRING | (g_currentWebTemplate == IDM_WEBSERVER_TEMPLATE_HEAVY ? MF_CHECKED : MF_UNCHECKED), IDM_WEBSERVER_TEMPLATE_HEAVY, L"PC (heavy CSS)");
 
-        AppendMenuW(hWebServerMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hStartStopMenu), L"Start/Stop");
+        AppendMenuW(hWebServerMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hStartStopMenu), g_webServer.IsRunning() ? L"Stop" : L"Start");
         AppendMenuW(hWebServerMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hTemplateMenu), L"Template");
 
         AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hWebServerMenu), L"Web Server");
@@ -1100,6 +1129,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                                        L"<a href=\"" +
                                        LATESTURL + L"\">Download latest version here</a>\n";
                 ShowUpdateDialog(hwnd, L"Update Check", L"Update available", message);
+                LOG_WARN("[App] New update available: %ls", latestVersion.c_str());
+                g_appTitle.SetTitle(APPNAME_UPDATE, APPNAME_UPDATE_LENGTH);
+                g_appTitle.UpdateRC(g_backBuffer.memDC, g_layoutMetrics, g_border.top, g_titleFont);
+                g_forceFrameRedraw = true;
+                InvalidateRect(hwnd, &g_appTitle.rc, FALSE);
+#ifdef _DEBUG
+                LogRect("title rect", g_appTitle.rc);
+#endif
+                UpdateWindow(hwnd);
             }
             else
             {
@@ -1364,11 +1402,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 {
 #ifdef _DEBUG
     AllocConsole();
+    EnableConsoleColors();
     FILE *f;
     freopen_s(&f, "CONOUT$", "w", stdout);
     freopen_s(&f, "CONOUT$", "w", stderr);
     freopen_s(&f, "CONIN$", "r", stdin);
-    LOG_DEBUG("Starting App");
+    LOG_INFO("[Main] Starting App");
 #endif
     g_isAdmin = IsRunningAsAdministrator();
 
@@ -1469,9 +1508,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
         g_notification.SetValue(L"cpu requires admin rights");
     }
 
+    AutoCheckVersion();
+
     ShowWindow(hwnd, nCmdShow);
 
-    LOG_DEBUG("Entering Dispatcher loop");
+    LOG_INFO("[Main] Entering Dispatcher loop");
 
     MSG msg{};
     while (GetMessage(&msg, nullptr, 0, 0))

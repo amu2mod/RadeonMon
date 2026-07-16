@@ -2,8 +2,9 @@
 #include <string>
 #include <vector>
 
-#include "AMD\RyzenMasterMonitoringSDK\include\IPlatform.h"
 #include "radeonmon/logging.hpp"
+
+#include "AMD\RyzenMasterMonitoringSDK\include\IPlatform.h"
 
 // Function pointer types based on the SDK's API (check the SDK readme/sample for exact signatures)
 typedef IPlatform &(__stdcall *GetPlatformFunc)();

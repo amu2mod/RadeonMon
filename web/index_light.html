@@ -29,10 +29,10 @@
         white-space: pre-wrap;
         word-break: break-word;
         font-family: monospace;
-        font-size: clamp(0.85rem, 4.5vw, 2rem);
+        font-size: clamp(0.85rem, 5.6vw, 2rem);
       }
 
-      #gpu {
+      #gpu, #cpu {
         margin-top: 0;
         padding-bottom: 1.1rem;
         margin-bottom: 1.1rem;
@@ -70,21 +70,26 @@
         line-height: 1;
         vertical-align: middle;
       }
+
+      @media screen and (min-width: 900px) {
+        pre {
+          font-size: clamp(0.85rem, 5vw, 1.8rem);
+        }
+      }
     </style>
   </head>
 <body>
 
 <pre id="gpu"></pre>
 <pre id="cpu"></pre>
+<pre id="process"></pre>
 
 <script>
 const NA = "--";
 
 const val = (v, fallback = NA) => v ?? fallback;
 const metric = (obj, fallback = NA) => obj?.value ?? fallback;
-const fixed = (v, digits = 1, fallback = NA) =>
-  typeof v === "number" ? v.toFixed(digits) : fallback;
-
+const fixed = (v, digits = 1, fallback = NA) =>  typeof v === "number" ? v.toFixed(digits) : fallback;
 const dim = (text) => `<span class="dim">${text}</span>`;
 const badgeGpu = (text) => `<span class="badge badge-gpu">${text}</span>`;
 const badgeCpu = (text) => `<span class="badge badge-cpu">${text}</span>`;
@@ -119,9 +124,9 @@ function colorTemp(temp) {
   const formatted = temp.toFixed(1);
 
   if (temp >= 100) return `<span class="temp-hot">${formatted}</span>`;
-  if (temp >= 95)  return `<span class="temp-warm">${formatted}</span>`;
+  if (temp >= 95)  return `<span class="temp-warm">${formatted} </span>`;
 
-  return `<span>${formatted}</span>`;
+  return `<span>${formatted} </span>`;
 }
 
 function colorFan(fanSpeed, hotspot) {
@@ -146,6 +151,7 @@ async function update() {
 
   const gpuData = data?.gpu ?? {};
   const cpuData = data?.cpu ?? {};
+  const processes = Array.isArray(data?.processes) ? data.processes : [];
   const cores = Array.isArray(cpuData.cores) ? cpuData.cores : [];
 
   const gpuName = val(gpuData.name);
@@ -170,7 +176,10 @@ async function update() {
   ${dim("Mem Temp:")}   ${colorTemp(metric(gpuData.memory_temperature))} ${dim("°C")}
   ${dim("Fan Speed:")}  ${colorFan(fanVal, hotspotMetric)} ${dim("RPM")}
   ${dim("Power:")}      ${metric(gpuData.total_board_power)} ${dim("W")}
-  ${dim("VRAM:")}       ${metric(gpuData.vram)} ${dim("MB")}`;
+  ${dim("Clock:")}      ${metric(gpuData.clock_speed)} ${dim("MHz")}
+  ${dim("Voltage:")}    ${metric(gpuData.voltage)} ${dim("mV")}
+  ${dim("VRAM:")}       ${metric(gpuData.vram)} ${dim("MB")}
+  ${dim("VRAM Clock:")} ${metric(gpuData.vram_clock_speed)} ${dim("MHz")}`;
 
   let cpuText =
 `${dim("CPU:")} ${cpuName !== NA ? badgeCpu(cpuName) : NA}
@@ -193,11 +202,34 @@ ${colorTemp(cpuData.temperature)} ${dim("°C")},  ${val(cpuData.power)} ${dim("W
     const unitMhz = dim("MHz");
     const unitPercent = dim("%");
 
-    cpuText +=
-`${coreLabel} ${colorTemp(tempVal)} ${unitDeg} ${fixed(clockVal, 0).padStart(6)} ${unitMhz} ${fixed(c?.u).padStart(5)}${unitPercent}\n   [${bar}]\n`;
+//     cpuText +=
+// `${coreLabel} ${colorTemp(tempVal)} ${unitDeg} ${fixed(clockVal, 0).padStart(6)} ${unitMhz} ${fixed(c?.u).padStart(5)}${unitPercent}\n   [${bar}]\n`;
+//   });
+
+      cpuText +=
+`${coreLabel} ${colorTemp(tempVal)} ${unitDeg} ${fixed(clockVal, 0).padStart(6)} ${unitMhz} ${fixed(c?.u).padStart(5)}${unitPercent}${window.innerWidth < 900 ? '\n' : ''}   [${bar}]\n`;
   });
 
   cpu.innerHTML = cpuText;
+
+let processText = `${dim("Processes:")}\n\n`;
+
+for (let i = 0; i < 5; i++) {
+  const p = processes[i];
+
+  if (p) {
+    const name = p?.name ?? NA;
+    const cpu = fixed(p?.cpu);
+
+    processText +=
+`${dim(`${String(i + 1).padStart(2)}.`)} ${name.padEnd(18)} ${cpu.padStart(5)}${dim("%")}\n`;
+  } else {
+    processText +=
+`${dim(`${String(i + 1).padStart(2)}.`)} ${NA.padEnd(18)} ${"0".padStart(5)}${dim("%")}\n`;
+  }
+}
+
+process.innerHTML = processText;
 }
 
 let failedAttempts = 0;

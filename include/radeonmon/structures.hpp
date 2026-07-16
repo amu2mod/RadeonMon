@@ -18,9 +18,9 @@
 #include <iphlpapi.h>
 #include <netioapi.h>
 
-#include "../../third_party/AMD/ADLX-1.5/SDK/Include/ADLXDefines.h"
-
 #include "radeonmon/logging.hpp"
+
+#include "../../third_party/AMD/ADLX-1.5/SDK/Include/ADLXDefines.h"
 
 extern UINT g_dpi;
 
@@ -42,6 +42,9 @@ struct PropertyItem
     bool dirty = true;
     bool warning = false;
     bool repaintLabel = true;
+    int textX;
+    int textY;
+    UINT textLength = 0;
 
     inline void SetLabel(const wchar_t *txt)
     {
@@ -132,6 +135,11 @@ struct GdiBackBuffer
 
     int width = 0;
     int height = 0;
+
+    void Log()
+    {
+        LOG_DEBUG("Back buffer= %dx%d", width, height);
+    }
 
     void Create(HDC referenceDC, int w, int h, COLORREF bgColor)
     {
@@ -234,6 +242,7 @@ struct RyzenMetrics
     char shortName[32] = "";
     double dTemperature = 0.0;
     double dPower = 0.0;
+    double usage = 0.0;
 
     int GetCoreCount()
     {
@@ -288,27 +297,6 @@ struct RyzenMetrics
         // Copy safely
         strncpy_s(shortName, sizeof(shortName), result.c_str(), _TRUNCATE);
     }
-
-#ifdef _DEBUG
-    void Log() const
-    {
-        LOG_DEBUG("");
-        LOG_DEBUG("----------------------------");
-        LOG_DEBUG("-- Ryzen Metrics");
-        LOG_DEBUG("Ryzen Metrics: Temp=%.2f C, Power=%.2f W, Cores=%zu",
-                  dTemperature,
-                  dPower,
-                  cores.size());
-
-        for (size_t i = 0; i < cores.size(); ++i)
-        {
-            cores[i].Log(i);
-        }
-
-        LOG_DEBUG("----------------------------");
-        LOG_DEBUG("");
-    }
-#endif
 
     int BuildJson(char *buffer, int bufferSize) const
     {
@@ -452,6 +440,22 @@ struct RyzenMetrics
 
         return static_cast<int>(p - buffer);
     }
+
+#ifdef _DEBUG
+    void Log() const
+    {
+        LOGLN();
+        LOG_DEBUG("----------------------------");
+        LOG_DEBUG("-- Ryzen Metrics");
+        LOG_DEBUG("Ryzen Metrics: Temp=%.2f C, Power=%.2f W, Cores=%zu", dTemperature, dPower, cores.size());
+
+        for (size_t i = 0; i < cores.size(); ++i)
+            cores[i].Log(i);
+
+        LOG_DEBUG("----------------------------");
+        LOGLN();
+    }
+#endif
 };
 
 struct WindowBorder
@@ -1120,7 +1124,7 @@ namespace RadeonMon::Hardware
 
         void Log() const
         {
-            LOG_INFO("");
+            LOGLN();
             LOG_INFO("=== GPU Information ===");
             LOG_INFO("Name:%ls", name.c_str());
             LOG_INFO("ShortName:%s", shortName);
@@ -1142,7 +1146,7 @@ namespace RadeonMon::Hardware
             LOG_INFO("BIOS Date:%ls", biosDate.c_str());
             LOG_INFO("Has Desktops:%ls", hasDesktops ? L"Yes" : L"No");
             LOG_INFO("=======================");
-            LOG_INFO("");
+            LOGLN();
         }
 
         int GetDriverPathTooltipWidth(HWND hwnd) const
@@ -1293,7 +1297,7 @@ namespace RadeonMon::Hardware
 
         void LogAll()
         {
-            LOG_DEBUG("");
+            LOGLN();
             LOG_DEBUG("Displays");
             LOG_DEBUG("---------------");
 
@@ -1301,7 +1305,7 @@ namespace RadeonMon::Hardware
                 d.Log();
 
             LOG_DEBUG("---------------");
-            LOG_DEBUG("");
+            LOGLN();
         }
 
         const RadeonMon::Hardware::DisplayInfo &Get(int index) const { return m_displays.at(index); }
@@ -1311,3 +1315,47 @@ namespace RadeonMon::Hardware
         size_t m_current = 0;
     };
 }
+
+struct AppTitle
+{
+    RECT rc{};
+    int x = 0;
+    int y = 0;
+    const wchar_t *name = nullptr;
+    uint8_t textLength = 0;
+
+    AppTitle(const wchar_t *n, uint8_t len) : name(n), textLength(len) {}
+
+    void SetTitle(const wchar_t *ptr, uint8_t len)
+    {
+        name = ptr;
+        textLength = len;
+    }
+
+    // Use already precomputed metrics to center the RC
+    void UpdateRC(const RECT &borderTop, const LayoutMetrics &m)
+    {
+        // center the title inside the top border
+        x = (m.windowWidth - m.titleWidth) / 2;
+        y = (borderTop.bottom - m.titleHeight) / 2;
+        rc = {x, y, x + m.titleWidth, y + m.titleHeight};
+    }
+
+    // Recompute the width then updates the layout metrics
+    void UpdateRC(HDC hdc, LayoutMetrics &m, const RECT &borderTop, HFONT font)
+    {
+        SIZE sz{};
+        HFONT oldFont = (HFONT)SelectObject(hdc, font);
+
+        if (!oldFont)
+            LOG_ERROR("SelectObject failed on g_titleFont");
+
+        if (!GetTextExtentPoint32W(hdc, name, textLength, &sz))
+            LOG_ERROR("GetTextExtentPoint32W failed");
+
+        m.titleWidth = sz.cx;
+        UpdateRC(borderTop, m);
+
+        SelectObject(hdc, oldFont);
+    }
+};

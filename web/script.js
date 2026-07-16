@@ -542,6 +542,46 @@ function applyCustomThreshold(boxId, thresholdClass) {
     }
 }
 
+/**
+ * Renders exactly 5 rows for the process monitor to maintain structural layout sizing.
+ */
+function renderProcessRows(processArray) {
+    const container = document.getElementById('process-list-container');
+    if (!container) return;
+
+    let htmlContent = '';
+
+    // 1. Loop through live items (capped at a maximum of 5 rows)
+    const liveItems = Array.isArray(processArray) ? processArray.slice(0, 5) : [];
+    liveItems.forEach(proc => {
+        const barPct = Math.min(Math.max(proc.cpu, 0), 100);
+        htmlContent += `
+            <div class="process-row">
+                <div class="process-bg-bar" style="width: ${barPct}%"></div>
+                <span class="process-name">${proc.name}</span>
+                <div class="process-stats">
+                    <span class="process-cpu">${proc.cpu.toFixed(1)}<span style="font-size: 0.65rem; font-weight: 400; color: var(--text-muted); margin-left: 1px;">%</span></span>
+                </div>
+            </div>
+        `;
+    });
+
+    // 2. Pad structural rows if the active stack contains less than 5 elements
+    const emptySlotsCount = 5 - liveItems.length;
+    for (let i = 0; i < emptySlotsCount; i++) {
+        htmlContent += `
+            <div class="process-row placeholder">
+                <span class="process-name">--</span>
+                <div class="process-stats">
+                    <span class="process-cpu">--</span>
+                </div>
+            </div>
+        `;
+    }
+
+    container.innerHTML = htmlContent;
+}
+
 async function fetchMetrics() {
     try {
         const response = await fetch(API_URL);
@@ -671,13 +711,26 @@ async function fetchMetrics() {
             historyData.cpu.push(null);
         }
 
+        // --- PROCESSES TELEMETRY PARSING ---
+        if (data.processes && Array.isArray(data.processes)) {
+            updateCardState('process-card', 'process-tag', true);
+            renderProcessRows(data.processes);
+        } else {
+            updateCardState('process-card', 'process-tag', false);
+            renderProcessRows([]); // Reverts rows safely to placeholders
+        }
+
     } catch (err) {
         setApiStatus(false, 'Offline', 'var(--accent-red)');
+
+        // Disable all metric cards cleanly
         updateCardState('gpu-card', 'gpu-tag', false);
         updateCardState('cpu-card', 'cpu-tag', false);
+        updateCardState('process-card', 'process-tag', false);
 
         currentCores = [];
         updateCoreDisplays();
+        renderProcessRows([]); // Safely drops row items back to empty dashed placeholders
         historyData.gpu.push(null);
         historyData.cpu.push(null);
     }

@@ -15,8 +15,8 @@
 #include "AMD/RyzenMasterMonitoringSDK/include/IDeviceManager.h"
 
 #include "radeonmon/structures.hpp"
-#include "radeonmon/logging.hpp"
 #include "radeonmon/constants.hpp"
+#include "radeonmon/logging.hpp"
 
 class RyzenCpu
 {
@@ -52,6 +52,12 @@ public:
         std::lock_guard<std::mutex> lock(m_metricsMutex);
         return m_metrics;
     }
+    inline double GetAverageUsage() const
+    {
+        std::lock_guard<std::mutex> lock(m_metricsMutex);
+        return m_metrics.usage;
+    }
+
     inline bool IsInitialized() const { return m_isInitialized; }
 
 private:

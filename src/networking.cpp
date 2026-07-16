@@ -220,7 +220,7 @@ void NetworkManager::Log() const
 {
     const auto addresses = GetAddresses();
 
-    LOG_INFO("");
+    LOGLN();
     LOG_INFO("Network List");
     LOG_INFO("-------------");
     for (const auto &ip : addresses)
@@ -231,5 +231,5 @@ void NetworkManager::Log() const
 #endif
     }
     LOG_INFO("-------------");
-    LOG_INFO("");
+    LOGLN();
 }

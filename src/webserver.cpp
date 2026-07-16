@@ -372,7 +372,9 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
     }
     if (route == L"/")
     {
+#ifdef _DEBUG
         LOG_DEBUG("[WebServer] [%s] GET %ls", GetPeerIp(pRequest).c_str(), route.c_str());
+#endif
         if (!SendResourceResponse(pRequest->RequestId, g_currentWebTemplate == IDM_WEBSERVER_TEMPLATE_LIGHT ? IDR_INDEX2_HTML : IDR_INDEX_HTML))
             SendErrorResponse(pRequest->RequestId, 500, "Failed to load resource");
         return;

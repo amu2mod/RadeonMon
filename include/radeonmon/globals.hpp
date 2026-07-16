@@ -1,4 +1,5 @@
 #pragma once
+
 #include <windows.h>
 
 #include <cstring>
@@ -12,6 +13,7 @@
 #include "radeonmon/constants.hpp"
 #include "radeonmon/networking.hpp"
 #include "radeonmon/webserver.hpp"
+#include "radeonmon/processwatcher.hpp"
 
 inline UINT g_dpi = 96;
 inline GdiBackBuffer g_backBuffer;
@@ -60,7 +62,7 @@ inline int g_width = APPWIDTH;
 inline int g_height = APPHEIGHT;
 inline int g_xPos = CW_USEDEFAULT;
 inline int g_yPos = CW_USEDEFAULT;
-inline RECT g_windowRc, g_titleRc, g_titleTextRc;
+inline RECT g_windowRc;
 inline WindowBorder g_border;
 inline bool g_forceFrameRedraw = false;
 inline bool g_isAdmin = false;
@@ -89,3 +91,7 @@ inline RadeonMon::Hardware::DisplayManager g_displayManager;
 inline int g_currentDisplayIndex = 0;
 
 inline int g_currentWebTemplate = IDM_WEBSERVER_TEMPLATE_LIGHT;
+
+inline ProcessWatcher g_processWatcher{g_cpu, g_webServer};
+
+inline AppTitle g_appTitle(APPNAME, APPNAME_LENGTH);

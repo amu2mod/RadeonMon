@@ -13,6 +13,8 @@
     --status-ok: #22c55e;
     --status-warn: #eab308;
     --status-off: #45454e;
+    --win-blue: #0078d7;
+    --win-blue-glow: rgba(0, 120, 215, 0.15);
 }
 
 * {
@@ -127,6 +129,13 @@ body {
 
 .card.disabled {
     opacity: 0.35;
+}
+
+.card.disabled #process-list-container,
+.card.disabled .process-cpu,
+.card.disabled h2 div {
+    opacity: 0.5;
+    transition: opacity 0.3s ease;
 }
 
 .card-header {
@@ -533,6 +542,70 @@ canvas {
 .delta-tag.delta-crit {
     color: #ef4444;
     /* >= 30°C (Bright Red) */
+}
+
+.process-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+.process-row {
+    background: #141418;
+    border: 1px solid #24242c;
+    border-radius: 6px;
+    padding: 0.55rem 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    height: 38px;
+    transition: all 0.2s ease;
+}
+
+/* Grayed styling when a slot drops to a placeholder state */
+.process-row.placeholder {
+    opacity: 0.25;
+    border-style: dashed;
+}
+
+.process-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-main);
+    z-index: 2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 70%;
+}
+
+.process-stats {
+    display: flex;
+    align-items: center;
+    z-index: 2;
+}
+
+.process-cpu {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #3b82f6;
+    /* Soft blue text */
+    letter-spacing: -0.025em;
+}
+
+/* Dynamic Inline Indicator Fill - Windows Blue Theme */
+.process-bg-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, rgba(0, 120, 215, 0.12) 0%, rgba(0, 120, 215, 0.02) 100%);
+    border-right: 2px solid rgba(0, 120, 215, 0.4);
+    transition: width 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    z-index: 1;
 }
 
 

@@ -1,5 +1,8 @@
 #pragma once
 
+#include "radeonmon/constants.hpp"
+#include "radeonmon/logging.hpp"
+
 #include <windows.h>
 #include <winhttp.h>
 #include <string>
@@ -26,7 +29,7 @@ namespace VersionChecker
 
             if (!WinHttpCrackUrl(url.c_str(), static_cast<DWORD>(url.length()), 0, &urlComp))
             {
-                LOG_ERROR("VersionChecker: WinHttpCrackUrl failed (err=%lu)", GetLastError());
+                LOG_ERROR("[VersionChecker] WinHttpCrackUrl failed (err=%lu)", GetLastError());
                 return false;
             }
 
@@ -63,28 +66,28 @@ namespace VersionChecker
             size_t keyPos = json.find(key);
             if (keyPos == std::wstring::npos)
             {
-                LOG_ERROR("VersionChecker: 'tag_name' key not found in JSON response");
+                LOG_ERROR("[VersionChecker] 'tag_name' key not found in JSON response");
                 return false;
             }
 
             size_t colonPos = json.find(L':', keyPos + key.length());
             if (colonPos == std::wstring::npos)
             {
-                LOG_ERROR("VersionChecker: malformed JSON near 'tag_name'");
+                LOG_ERROR("[VersionChecker] malformed JSON near 'tag_name'");
                 return false;
             }
 
             size_t firstQuote = json.find(L'"', colonPos + 1);
             if (firstQuote == std::wstring::npos)
             {
-                LOG_ERROR("VersionChecker: could not find opening quote for tag_name value");
+                LOG_ERROR("[VersionChecker] could not find opening quote for tag_name value");
                 return false;
             }
 
             size_t secondQuote = json.find(L'"', firstQuote + 1);
             if (secondQuote == std::wstring::npos)
             {
-                LOG_ERROR("VersionChecker: could not find closing quote for tag_name value");
+                LOG_ERROR("[VersionChecker] could not find closing quote for tag_name value");
                 return false;
             }
 
@@ -103,7 +106,7 @@ namespace VersionChecker
 
         if (REPOURL == nullptr)
         {
-            LOG_ERROR("VersionChecker: REPOURL is null");
+            LOG_ERROR("[VersionChecker] REPOURL is null");
             return false;
         }
 
@@ -125,7 +128,7 @@ namespace VersionChecker
         hSession = WinHttpOpen(L"VersionChecker/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
         if (!hSession)
         {
-            LOG_ERROR("VersionChecker: WinHttpOpen failed (err=%lu)", GetLastError());
+            LOG_ERROR("[VersionChecker] WinHttpOpen failed (err=%lu)", GetLastError());
             return false;
         }
 
@@ -134,7 +137,7 @@ namespace VersionChecker
             hConnect = WinHttpConnect(hSession, host.c_str(), port, 0);
             if (!hConnect)
             {
-                LOG_ERROR("VersionChecker: WinHttpConnect failed (err=%lu)", GetLastError());
+                LOG_ERROR("[VersionChecker] WinHttpConnect failed (err=%lu)", GetLastError());
                 break;
             }
 
@@ -142,7 +145,7 @@ namespace VersionChecker
             hRequest = WinHttpOpenRequest(hConnect, L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, flags);
             if (!hRequest)
             {
-                LOG_ERROR("VersionChecker: WinHttpOpenRequest failed (err=%lu)", GetLastError());
+                LOG_ERROR("[VersionChecker] WinHttpOpenRequest failed (err=%lu)", GetLastError());
                 break;
             }
 
@@ -151,13 +154,13 @@ namespace VersionChecker
             BOOL sent = WinHttpSendRequest(hRequest, extraHeaders, static_cast<DWORD>(-1), WINHTTP_NO_REQUEST_DATA, 0, 0, 0);
             if (!sent)
             {
-                LOG_ERROR("VersionChecker: WinHttpSendRequest failed (err=%lu)", GetLastError());
+                LOG_ERROR("[VersionChecker] WinHttpSendRequest failed (err=%lu)", GetLastError());
                 break;
             }
 
             if (!WinHttpReceiveResponse(hRequest, nullptr))
             {
-                LOG_ERROR("VersionChecker: WinHttpReceiveResponse failed (err=%lu)", GetLastError());
+                LOG_ERROR("[VersionChecker] WinHttpReceiveResponse failed (err=%lu)", GetLastError());
                 break;
             }
 
@@ -166,7 +169,7 @@ namespace VersionChecker
             DWORD statusSize = sizeof(statusCode);
             if (!WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_FLAG_NUMBER | WINHTTP_QUERY_STATUS_CODE, WINHTTP_HEADER_NAME_BY_INDEX, &statusCode, &statusSize, WINHTTP_NO_HEADER_INDEX))
             {
-                LOG_ERROR("VersionChecker: WinHttpQueryHeaders failed (err=%lu)", GetLastError());
+                LOG_ERROR("[VersionChecker] WinHttpQueryHeaders failed (err=%lu)", GetLastError());
                 break;
             }
 
@@ -174,12 +177,12 @@ namespace VersionChecker
 
             if (statusCode == 404)
             {
-                LOG_ERROR("VersionChecker: HTTP 404 - resource not found at REPOURL");
+                LOG_ERROR("[VersionChecker] HTTP 404 - resource not found at REPOURL");
                 break;
             }
             else if (statusCode != 200)
             {
-                LOG_ERROR("VersionChecker: unexpected HTTP status %lu", statusCode);
+                LOG_ERROR("[VersionChecker] unexpected HTTP status %lu", statusCode);
                 break;
             }
 
@@ -191,7 +194,7 @@ namespace VersionChecker
                 bytesAvailable = 0;
                 if (!WinHttpQueryDataAvailable(hRequest, &bytesAvailable))
                 {
-                    LOG_ERROR("VersionChecker: WinHttpQueryDataAvailable failed (err=%lu)", GetLastError());
+                    LOG_ERROR("[VersionChecker] WinHttpQueryDataAvailable failed (err=%lu)", GetLastError());
                     break;
                 }
 
@@ -204,7 +207,7 @@ namespace VersionChecker
                 DWORD bytesRead = 0;
                 if (!WinHttpReadData(hRequest, buffer.data(), bytesAvailable, &bytesRead))
                 {
-                    LOG_ERROR("VersionChecker: WinHttpReadData failed (err=%lu)", GetLastError());
+                    LOG_ERROR("[VersionChecker] WinHttpReadData failed (err=%lu)", GetLastError());
                     break;
                 }
 
@@ -214,13 +217,13 @@ namespace VersionChecker
 
             if (rawBody.empty())
             {
-                LOG_ERROR("VersionChecker: received empty response body (HTTP 200)");
+                LOG_ERROR("[VersionChecker] received empty response body (HTTP 200)");
                 break;
             }
 
             outBody = detail::Utf8ToWide(rawBody);
             success = true;
-            LOG_DEBUG("VersionChecker: fetched %zu bytes from REPOURL (HTTP 200)", rawBody.size());
+            LOG_TRACE("[VersionChecker] fetched %zu bytes from REPOURL (HTTP 200)", rawBody.size());
 
         } while (false);
 
@@ -243,7 +246,7 @@ namespace VersionChecker
 
         if (!FetchJson(body, httpStatus))
         {
-            LOG_ERROR("VersionChecker: GetLatestVersion failed (httpStatus=%lu)", httpStatus);
+            LOG_ERROR("[VersionChecker] GetLatestVersion failed (httpStatus=%lu)", httpStatus);
             return false;
         }
 
@@ -252,7 +255,6 @@ namespace VersionChecker
             return false;
         }
 
-        LOG_DEBUG("VersionChecker: latest tag_name = %ls", outVersion.c_str());
         return true;
     }
 

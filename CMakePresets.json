@@ -12,6 +12,16 @@
             }
         },
         {
+            "name": "MSVC + Ninja x64 (Debug-Local)",
+            "inherits": "Debug",
+            "binaryDir": "${sourceDir}/build/debug",
+            "cacheVariables": {
+                "ENABLE_LOCALFILES": "ON",
+                "ENABLE_GDIDRAW": "OFF",
+                "ENABLE_TESTMODE": "OFF"
+            }
+        },
+        {
             "name": "Release",
             "displayName": "MSVC + Ninja x64 (Release)",
             "generator": "Ninja",

@@ -1,8 +1,11 @@
 #pragma once
 
 constexpr wchar_t APPNAME[] = L"RadeonMon";
+constexpr wchar_t APPNAME_UPDATE[] = L"RadeonMon - Update available";
 constexpr uint8_t APPNAME_LENGTH = static_cast<uint8_t>(_countof(APPNAME) - 1);
+constexpr uint8_t APPNAME_UPDATE_LENGTH = static_cast<uint8_t>(_countof(APPNAME_UPDATE) - 1);
 static_assert(APPNAME_LENGTH <= UINT8_MAX);
+static_assert(APPNAME_UPDATE_LENGTH <= UINT8_MAX);
 
 // Polling rate
 constexpr int APP_REFRESH_TIMER = 2000;
@@ -30,7 +33,7 @@ constexpr wchar_t NOTIFICATION_FONT_FAMILY[] = L"Lucida Console";
 constexpr wchar_t MAXLABEL[] = L"1440p @1000Hz";
 constexpr int MAXLABEL_LENGTH = _countof(MAXLABEL) - 1;
 
-constexpr int TITLE_FONTSIZE = 14;
+constexpr int TITLE_FONTSIZE = 15;
 constexpr int FONTSIZE = 16;
 constexpr int NOTIFICATION_FONTSIZE = 11;
 constexpr int CARD_FONTSIZE = 13;

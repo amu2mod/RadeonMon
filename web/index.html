@@ -270,93 +270,113 @@
                 </div>
             </div>
 
-<div class="card" id="cpu-card">
-    <div class="card-header cpu">
-        <h2 id="cpu-title">CPU Metrics</h2>
-        <span class="tag inactive" id="cpu-tag">Offline</span>
-    </div>
+            <div class="card" id="cpu-card">
+                <div class="card-header cpu">
+                    <h2 id="cpu-title">CPU Metrics</h2>
+                    <span class="tag inactive" id="cpu-tag">Offline</span>
+                </div>
 
-    <div class="metrics">
-        <div class="metric-box" id="box-cpu-temp">
-            <div class="metric-info">
-                <span class="metric-label">Package Temp</span>
-                <div class="metric-value-container">
-                    <span id="cpu-temp">--</span><span class="unit">°C</span>
+                <div class="metrics">
+                    <div class="metric-box" id="box-cpu-temp">
+                        <div class="metric-info">
+                            <span class="metric-label">Package Temp</span>
+                            <div class="metric-value-container">
+                                <span id="cpu-temp">--</span><span class="unit">°C</span>
+                            </div>
+                        </div>
+                        <div class="ring-container">
+                            <svg class="progress-ring">
+                                <circle class="ring-track" cx="25" cy="25" r="24" stroke-width="3"></circle>
+                                <circle class="ring-fill2" id="cpu-temp-ring" cx="25" cy="25" r="24" stroke-width="3"></circle>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="metric-box" id="box-cpu-power">
+                        <div class="metric-info">
+                            <span class="metric-label">Power</span>
+                            <div class="metric-value-container">
+                                <span id="cpu-power">--</span><span class="unit">W</span>
+                            </div>
+                        </div>
+                        <div class="ring-container">
+                            <svg class="progress-ring">
+                                <circle class="ring-track" cx="25" cy="25" r="24" stroke-width="3"></circle>
+                                <circle class="ring-fill2" id="cpu-power-ring" cx="25" cy="25" r="24" stroke-width="3"></circle>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="metric-box" id="box-cpu-usage">
+                        <div class="metric-info">
+                            <span class="metric-label">CPU Load</span>
+                            <div class="metric-value-container">
+                                <span id="cpu-usage">--</span><span class="unit">%</span>
+                            </div>
+                        </div>
+                        <div class="ring-container">
+                            <svg class="progress-ring" viewBox="0 0 50 50">
+                                <circle class="ring-track" cx="25" cy="25" r="24" stroke-width="4"></circle>
+                                <circle class="ring-fill2" id="cpu-usage-ring" cx="25" cy="25" r="24" stroke-width="4"></circle>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="expert-section">
+                    <div class="core-header">
+                        <span class="expert-title">Per-Core Metrics</span>
+                        <div class="metric-selector" id="cpu-core-selector">
+                            <input type="radio" id="core-m-temp" name="core-metric" value="t" checked onchange="updateCoreDisplays()">
+                            <label for="core-m-temp">Temp</label>
+
+                            <input type="radio" id="core-m-load" name="core-metric" value="u" onchange="updateCoreDisplays()">
+                            <label for="core-m-load">Load</label>
+
+                            <input type="radio" id="core-m-clock" name="core-metric" value="c" onchange="updateCoreDisplays()">
+                            <label for="core-m-clock">Clock</label>
+                        </div>
+                    </div>
+
+                    <div class="core-grid" id="cpu-cores-container"></div>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <span class="chart-title">CPU History</span>
+                        <div class="metric-selector">
+                            <input type="radio" id="cpu-m-usage" name="cpu-metric" value="usage" checked onchange="renderCharts()">
+                            <label for="cpu-m-usage">Load</label>
+
+                            <input type="radio" id="cpu-m-temp" name="cpu-metric" value="temperature" onchange="renderCharts()">
+                            <label for="cpu-m-temp">Temp</label>
+
+                            <input type="radio" id="cpu-m-power" name="cpu-metric" value="power" onchange="renderCharts()">
+                            <label for="cpu-m-power">Power</label>
+                        </div>
+                    </div>
+                    <canvas id="cpu-chart"></canvas>
                 </div>
             </div>
-            <div class="ring-container">
-                <svg class="progress-ring">
-                    <circle class="ring-track" cx="25" cy="25" r="24" stroke-width="3"></circle>
-                    <circle class="ring-fill2" id="cpu-temp-ring" cx="25" cy="25" r="24" stroke-width="3"></circle>
-                </svg>
-            </div>
-        </div>
 
-        <div class="metric-box" id="box-cpu-power">
-            <div class="metric-info">
-                <span class="metric-label">Power</span>
-                <div class="metric-value-container">
-                    <span id="cpu-power">--</span><span class="unit">W</span>
+            <div class="card" id="process-card">
+                <div class="card-header">
+                    <h2 style="display: flex; align-items: center; gap: 0.5rem;">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="color: var(--win-blue); flex-shrink: 0;">
+                            <path d="M0 2.217L6.545 1.33V7.33H0V2.217zm0 5.897h6.545v6.01L0 13.237V8.114zm7.255-6.88L16 0v7.33H7.255V1.234zM16 8.114v6.643l-8.745-1.22V8.114H16z"/>
+                        </svg>
+                        <span style="transform: translateY(-2px); display:inline-block;">Top Processes</span>
+                    </h2>
+                    </h2>
+                    <span class="tag active" id="process-tag">Active</span>
+                </div>
+                <div class="process-list" id="process-list-container">
+                    <div class="process-row placeholder"><span class="process-name">--</span><div class="process-stats"><span class="process-cpu">--</span></div></div>
+                    <div class="process-row placeholder"><span class="process-name">--</span><div class="process-stats"><span class="process-cpu">--</span></div></div>
+                    <div class="process-row placeholder"><span class="process-name">--</span><div class="process-stats"><span class="process-cpu">--</span></div></div>
+                    <div class="process-row placeholder"><span class="process-name">--</span><div class="process-stats"><span class="process-cpu">--</span></div></div>
+                    <div class="process-row placeholder"><span class="process-name">--</span><div class="process-stats"><span class="process-cpu">--</span></div></div>
                 </div>
             </div>
-            <div class="ring-container">
-                <svg class="progress-ring">
-                    <circle class="ring-track" cx="25" cy="25" r="24" stroke-width="3"></circle>
-                    <circle class="ring-fill2" id="cpu-power-ring" cx="25" cy="25" r="24" stroke-width="3"></circle>
-                </svg>
-            </div>
-        </div>
-
-        <div class="metric-box" id="box-cpu-usage">
-            <div class="metric-info">
-                <span class="metric-label">CPU Load</span>
-                <div class="metric-value-container">
-                    <span id="cpu-usage">--</span><span class="unit">%</span>
-                </div>
-            </div>
-            <div class="ring-container">
-                <svg class="progress-ring" viewBox="0 0 50 50">
-                    <circle class="ring-track" cx="25" cy="25" r="24" stroke-width="4"></circle>
-                    <circle class="ring-fill2" id="cpu-usage-ring" cx="25" cy="25" r="24" stroke-width="4"></circle>
-                </svg>
-            </div>
-        </div>
-    </div>
-
-    <div class="expert-section">
-        <div class="core-header">
-            <span class="expert-title">Per-Core Metrics</span>
-            <div class="metric-selector" id="cpu-core-selector">
-                <input type="radio" id="core-m-temp" name="core-metric" value="t" checked onchange="updateCoreDisplays()">
-                <label for="core-m-temp">Temp</label>
-
-                <input type="radio" id="core-m-load" name="core-metric" value="u" onchange="updateCoreDisplays()">
-                <label for="core-m-load">Load</label>
-
-                <input type="radio" id="core-m-clock" name="core-metric" value="c" onchange="updateCoreDisplays()">
-                <label for="core-m-clock">Clock</label>
-            </div>
-        </div>
-
-        <div class="core-grid" id="cpu-cores-container"></div>
-    </div>
-
-    <div class="chart-container">
-        <div class="chart-header">
-            <span class="chart-title">CPU History</span>
-            <div class="metric-selector">
-                <input type="radio" id="cpu-m-usage" name="cpu-metric" value="usage" checked onchange="renderCharts()">
-                <label for="cpu-m-usage">Load</label>
-
-                <input type="radio" id="cpu-m-temp" name="cpu-metric" value="temperature" onchange="renderCharts()">
-                <label for="cpu-m-temp">Temp</label>
-
-                <input type="radio" id="cpu-m-power" name="cpu-metric" value="power" onchange="renderCharts()">
-                <label for="cpu-m-power">Power</label>
-            </div>
-        </div>
-        <canvas id="cpu-chart"></canvas>
-    </div>
-</div>
         </div> </div> </body>
 </html>
