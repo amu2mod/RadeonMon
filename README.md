@@ -13,6 +13,7 @@ This is an independent personal project and is not affiliated with AMD Corporati
 ---
 
 ## Overview
+
 <table align="center">
   <tr>
     <td align="center">
@@ -29,6 +30,13 @@ This is an independent personal project and is not affiliated with AMD Corporati
      <img width="500" alt="Dashboard Web Interface" src="https://github.com/user-attachments/assets/51f5bfb0-3d6f-42f0-9a4f-c1d340ac6e2c" />
       <br />
       <sub><b>Web Interface</b> — Full-featured HTML dashboard with advanced CSS styling</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="3" align="center" valign="middle">
+      <img width="600" alt="image" src="https://github.com/user-attachments/assets/1e4000f0-481e-44d9-9ba8-9ad76031e6df" />
+      <br />
+      <sub><b>Top Processes (Web Only)</b> — Highlights resource-heavy processes to quickly identify potential performance bottlenecks</sub>
     </td>
   </tr>
 </table>
