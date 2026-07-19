@@ -31,6 +31,7 @@ public:
 
     inline bool IsEnabled(uint32_t flag) const { return (gpuCaps & flag) != 0; }
     inline const RadeonMon::Hardware::GPUInfo GetGpuInfo() const { return gpuInfo; }
+    inline int GetSnapshotFPS() const { return m_snapshot.fps; }
 
 private:
     ADLXHelper ADLXHelp;

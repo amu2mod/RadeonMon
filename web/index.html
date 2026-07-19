@@ -359,6 +359,33 @@
                 </div>
             </div>
 
+            <!-- FPS Monitor Card -->
+            <div class="card" id="fps-card">
+                <div class="card-header">
+                    <h2 style="color: var(--accent-fps);">🎮 FPS Tracker</h2>
+                    <span class="tag active" id="fps-tag">Active</span>
+                </div>
+                
+                <div class="metrics" style="margin-bottom: 1rem;">
+                    <div class="metric-box" id="box-fps-main" style="flex: 1 1 100%; height: 72px;">
+                        <div class="metric-info">
+                            <span class="metric-label">Framerate</span>
+                            <div class="metric-value-container">
+                                <span id="fps-value">--</span><span class="unit">FPS</span>
+                                <span id="fps-delta" class="delta-tag"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-header">
+                        <span class="chart-title">FPS History</span>
+                    </div>
+                    <canvas id="fps-chart"></canvas>
+                </div>
+            </div>
+
             <div class="card" id="process-card">
                 <div class="card-header">
                     <h2 style="display: flex; align-items: center; gap: 0.5rem;">

@@ -757,7 +757,7 @@ namespace RadeonMon::Hardware
                 *t = '\0';
 
                 const bool neg = value < 0;
-                uint64_t v = neg ? -value : static_cast<uint64_t>(value);
+                uint64_t v = neg ? uint64_t(-(value + 1)) + 1 : uint64_t(value);
 
                 do
                 {
@@ -1358,4 +1358,11 @@ struct AppTitle
 
         SelectObject(hdc, oldFont);
     }
+};
+
+struct VersionCheckResult
+{
+    std::wstring latestVersion;
+    bool updateAvailable;
+    bool showDialogs;
 };

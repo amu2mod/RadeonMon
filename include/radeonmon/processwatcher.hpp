@@ -69,6 +69,8 @@ struct ProcessInfo
 class ProcessWatcher
 {
 public:
+    RyzenMetrics m_ryzenMetrics;
+
     void Initialize()
     {
         m_Buffer.resize(1024 * 1024); // 1 MB
@@ -105,9 +107,7 @@ public:
         GetSystemTimes(&idle, &kernel, &user);
 
         uint64_t systemTime = FileTimeToUInt64(kernel) + FileTimeToUInt64(user);
-        uint64_t systemDelta = (m_LastSystemTime != 0 && systemTime >= m_LastSystemTime)
-                                   ? systemTime - m_LastSystemTime
-                                   : 0;
+        uint64_t systemDelta = (m_LastSystemTime != 0 && systemTime >= m_LastSystemTime) ? systemTime - m_LastSystemTime : 0;
 
         m_LastSystemTime = systemTime;
 
@@ -190,7 +190,9 @@ public:
         for (const auto &entry : usage)
             processTotal += entry.cpu;
 
-        double realCpu = m_cpu.GetAverageUsage();
+        // double realCpu = m_cpu.GetAverageUsage();
+        m_ryzenMetrics = m_cpu.GetMetrics();
+        double &realCpu = m_ryzenMetrics.usage;
 
         if (processTotal > 0.0 && realCpu >= 0.0)
         {
@@ -226,9 +228,7 @@ public:
             std::string name;
 
             if (usage[i].namePtr && usage[i].nameLen > 0)
-            {
                 name = WideToUtf8(usage[i].namePtr, usage[i].nameLen / sizeof(WCHAR));
-            }
             else if (usage[i].pid == 4)
                 name = "System";
             else

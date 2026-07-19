@@ -17,7 +17,8 @@ let currentView = 'simple';
 
 const historyData = {
     gpu: [],
-    cpu: []
+    cpu: [],
+    fps: []
 };
 
 const FALLBACK_SCALES = {
@@ -29,7 +30,8 @@ const FALLBACK_SCALES = {
     clock_speed: 4450,
     vram_clock_speed: 3000,
     usage: 100,
-    voltage: 1200
+    voltage: 1200,
+    fps: 144, // Default histogram scaling cap
 };
 
 function setView(mode) {
@@ -168,6 +170,7 @@ function renderCharts() {
     const rootStyles = getComputedStyle(document.documentElement);
     const gpuColor = rootStyles.getPropertyValue('--accent-red').trim() || 'rgb(200, 35, 35)';
     const cpuColor = rootStyles.getPropertyValue('--accent-cpu').trim() || '#fb923c';
+    const fpsColor = rootStyles.getPropertyValue('--accent-fps').trim();
 
     if (gpuInput) {
         drawCanvasChart('gpu-chart', historyData.gpu, gpuInput.value, gpuColor);
@@ -175,6 +178,9 @@ function renderCharts() {
     if (cpuInput) {
         drawCanvasChart('cpu-chart', historyData.cpu, cpuInput.value, cpuColor);
     }
+
+    // Always render the sliding timeline for FPS
+    drawCanvasChart('fps-chart', historyData.fps, 'fps', fpsColor);
 }
 
 const setVal = (id, val) => {
@@ -321,9 +327,15 @@ function parseMetric(metricObj, scaleKey = null) {
         maxVal = scaleKey ? FALLBACK_SCALES[scaleKey] : 100;
     }
 
+    // Intercept negative values (error states) and sanitize them to null
+    const rawValue = metricObj.value;
+    const sanitizedValue = (rawValue !== null && rawValue !== undefined && rawValue >= 0)
+        ? rawValue
+        : null;
+
     return {
-        supported: !!metricObj.supported,
-        value: metricObj.supported ? metricObj.value : null,
+        supported: !!metricObj.supported && sanitizedValue !== null,
+        value: sanitizedValue,
         min: metricObj.min || 0,
         max: maxVal
     };
@@ -582,6 +594,53 @@ function renderProcessRows(processArray) {
     container.innerHTML = htmlContent;
 }
 
+/**
+ * Calculates a true rolling trend delta based on the previous sample in historyData
+ */
+function updateFpsDelta(currentFps) {
+    const deltaEl = document.getElementById('fps-delta');
+    if (!deltaEl) return;
+
+    // Check if we have at least one previous valid historical entry to compare against
+    const history = historyData.fps;
+    if (currentFps === null || currentFps === undefined || history.length < 1) {
+        deltaEl.textContent = '';
+        deltaEl.className = 'delta-tag';
+        return;
+    }
+
+    // Grab the most recent entry sitting at the tail end of the cache array
+    const lastEntry = history[history.length - 1];
+
+    // Safely pull the structural numerical value out of the object template
+    if (!lastEntry || !lastEntry.fps || lastEntry.fps.value === null) {
+        deltaEl.textContent = '';
+        deltaEl.className = 'delta-tag';
+        return;
+    }
+
+    const previousFps = lastEntry.fps.value;
+    const delta = Math.round(currentFps - previousFps);
+
+    deltaEl.className = 'delta-tag';
+
+    if (delta === 0) {
+        deltaEl.textContent = ''; // Hide entirely if frame timings match exactly
+    } else {
+        const prefix = delta > 0 ? '+' : '';
+        deltaEl.textContent = `(${prefix}${delta})`;
+
+        // Color threshold assignments matching your negative performance drops criteria
+        if (delta <= -20) {
+            deltaEl.classList.add('fps-crit');
+        } else if (delta <= -10) {
+            deltaEl.classList.add('fps-warm');
+        } else if (delta > 0) {
+            deltaEl.classList.add('fps-good');
+        }
+    }
+}
+
 async function fetchMetrics() {
     try {
         const response = await fetch(API_URL);
@@ -711,13 +770,47 @@ async function fetchMetrics() {
             historyData.cpu.push(null);
         }
 
+        // --- FPS TELEMETRY PARSING ---
+        if (data.fps !== undefined && data.fps !== null) {
+            updateCardState('fps-card', 'fps-tag', true);
+
+            const rawFps = Number(data.fps);
+
+            if (rawFps >= 0) {
+                // GAME RUNNING: Render normal telemetry
+                setVal('fps-value', rawFps);
+
+                const TARGET_REFRESH_RATE = 144;
+                updateFpsDelta(rawFps, TARGET_REFRESH_RATE);
+
+                historyData.fps.push({
+                    fps: { value: rawFps, max: FALLBACK_SCALES.fps || 144 }
+                });
+            } else {
+                // ACTIVE IDLE (e.g. -1): Use a simple clean dash
+                setVal('fps-value', '-');    // Fixed: Swapped "IDLE" for "-"
+                updateFpsDelta(null, null);   // Explicitly hides the delta string
+
+                // Keep the history line moving at 0 rather than breaking the canvas layout
+                historyData.fps.push({
+                    fps: { value: 0, max: FALLBACK_SCALES.fps || 144 }
+                });
+            }
+        } else {
+            // BACKEND DISABLED (null): Completely turn off the card
+            updateCardState('fps-card', 'fps-tag', false);
+            setVal('fps-value', null);
+            updateFpsDelta(null, null);
+            historyData.fps.push(null);
+        }
+
         // --- PROCESSES TELEMETRY PARSING ---
         if (data.processes && Array.isArray(data.processes)) {
             updateCardState('process-card', 'process-tag', true);
             renderProcessRows(data.processes);
         } else {
             updateCardState('process-card', 'process-tag', false);
-            renderProcessRows([]); // Reverts rows safely to placeholders
+            renderProcessRows([]);
         }
 
     } catch (err) {
@@ -727,17 +820,20 @@ async function fetchMetrics() {
         updateCardState('gpu-card', 'gpu-tag', false);
         updateCardState('cpu-card', 'cpu-tag', false);
         updateCardState('process-card', 'process-tag', false);
+        updateCardState('fps-card', 'fps-tag', false);
 
         currentCores = [];
         updateCoreDisplays();
         renderProcessRows([]); // Safely drops row items back to empty dashed placeholders
         historyData.gpu.push(null);
         historyData.cpu.push(null);
+        historyData.fps.push(null);
     }
 
     // Window History Cap
     if (historyData.gpu.length > MAX_HISTORY) historyData.gpu.shift();
     if (historyData.cpu.length > MAX_HISTORY) historyData.cpu.shift();
+    if (historyData.fps.length > MAX_HISTORY) historyData.fps.shift();
 
     if (currentView === 'advanced' || currentView === 'expert') {
         renderCharts();

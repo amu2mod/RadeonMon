@@ -71,6 +71,11 @@ constexpr int IDM_CHECK_VERSION = 1110;
 constexpr int IDM_ABOUT = 1111;
 constexpr int IDM_EXIT = 1112;
 
+// WM
+constexpr int WM_APP_LAYOUT = WM_APP + 1;
+constexpr int WM_APP_VERSION_RESULT = WM_APP + 2;
+constexpr int WM_APP_VERSION_ERROR = WM_APP + 3;
+
 constexpr wchar_t REPOURL[] = L"https://api.github.com/repos/amu2mod/RadeonMon/releases/latest";
 constexpr wchar_t LATESTURL[] = L"https://github.com/amu2mod/RadeonMon/releases/latest";
 constexpr wchar_t ABOUTURL[] = L"https://github.com/amu2mod/RadeonMon";

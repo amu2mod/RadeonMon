@@ -4,6 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstring>
+#include <filesystem>
 #include <iphlpapi.h>
 #include <ws2tcpip.h>
 
@@ -331,16 +332,25 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
 
         return;
     }
+
 #ifdef LOCALFILES
+    // Get current exe path to be able
+    static const std::filesystem::path s_basePath = []()
+    {
+        wchar_t modulePath[MAX_PATH];
+        GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
+        return std::filesystem::path(modulePath).parent_path();
+    }();
+
     if (route == L"/styles.css")
     {
-        SendFileResponse(pRequest->RequestId, L"styles.css");
+        SendFileResponse(pRequest->RequestId, (s_basePath / L"styles.css").wstring());
         return;
     }
 
     if (route == L"/script.js")
     {
-        SendFileResponse(pRequest->RequestId, L"script.js");
+        SendFileResponse(pRequest->RequestId, (s_basePath / L"script.js").wstring());
         return;
     }
 
@@ -348,11 +358,11 @@ void WebServer::HandleRequest(HTTP_REQUEST *pRequest)
     {
         if (g_currentWebTemplate == IDM_WEBSERVER_TEMPLATE_LIGHT)
         {
-            SendFileResponse(pRequest->RequestId, L"index_light.html");
+            SendFileResponse(pRequest->RequestId, (s_basePath / L"index_light.html").wstring());
         }
         else
         {
-            SendFileResponse(pRequest->RequestId, L"index.html");
+            SendFileResponse(pRequest->RequestId, (s_basePath / L"index.html").wstring());
         }
         return;
     }
@@ -402,7 +412,7 @@ bool WebServer::SendFileResponse(HTTP_REQUEST_ID requestId, std::wstring filenam
 {
     std::ifstream file;
 
-    LOG_DEBUG("filename=%ls", filename.c_str());
+    LOG_DEBUG("[WebServer] Serving %ls", filename.c_str());
 
     if (filename.empty())
         file = std::ifstream(m_htmlFilePath, std::ios::binary);

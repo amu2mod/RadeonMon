@@ -15,6 +15,7 @@
     --status-off: #45454e;
     --win-blue: #0078d7;
     --win-blue-glow: rgba(0, 120, 215, 0.15);
+    --accent-fps: #22d3ee;
 }
 
 * {
@@ -606,6 +607,26 @@ canvas {
     border-right: 2px solid rgba(0, 120, 215, 0.4);
     transition: width 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
     z-index: 1;
+}
+
+/* --- FPS Delta Notification Colors --- */
+.delta-tag.fps-good {
+    color: var(--accent-fps);
+}
+
+.delta-tag.fps-warm {
+    color: var(--status-warn, #eab308);
+    /* Delta below -10 */
+}
+
+.delta-tag.fps-crit {
+    color: #ef4444;
+    /* Delta below -20 */
+}
+
+/* New: Scales font layout down if the text is alphanumeric status strings */
+#fps-value:not(:empty) {
+    font-size: var(--fps-font-size, 1.5rem);
 }
 
 

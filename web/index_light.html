@@ -82,6 +82,7 @@
 
 <pre id="gpu"></pre>
 <pre id="cpu"></pre>
+<pre id="fps"></pre>
 <pre id="process"></pre>
 
 <script>
@@ -93,6 +94,8 @@ const fixed = (v, digits = 1, fallback = NA) =>  typeof v === "number" ? v.toFix
 const dim = (text) => `<span class="dim">${text}</span>`;
 const badgeGpu = (text) => `<span class="badge badge-gpu">${text}</span>`;
 const badgeCpu = (text) => `<span class="badge badge-cpu">${text}</span>`;
+
+let previousFps = null;
 
 function formatHotspotDelta(gpuTemp, hotspotTemp) {
   if (typeof gpuTemp !== "number" || typeof hotspotTemp !== "number") return "";
@@ -141,6 +144,30 @@ function colorFan(fanSpeed, hotspot) {
   }
 
   return `<span>${fanSpeed}</span>`;
+}
+
+function formatFpsDelta(currentFps, previousFps) {
+  if (typeof currentFps !== "number" || typeof previousFps !== "number") return "";
+
+  const delta = Math.round(currentFps - previousFps);
+
+  // No change: display nothing
+  if (delta === 0) return "";
+
+  const text = ` (${delta > 0 ? "+" : ""}${delta})`;
+
+  // FPS drop: critical
+  if (delta < -20) {
+    return `<span class="temp-hot">${text}</span>`;
+  }
+
+  // FPS drop: warning
+  if (delta < -10) {
+    return `<span class="temp-warm">${text}</span>`;
+  }
+
+  // FPS increase or small decrease
+  return `<span class="dim">${text}</span>`;
 }
 
 async function update() {
@@ -202,15 +229,22 @@ ${colorTemp(cpuData.temperature)} ${dim("°C")},  ${val(cpuData.power)} ${dim("W
     const unitMhz = dim("MHz");
     const unitPercent = dim("%");
 
-//     cpuText +=
-// `${coreLabel} ${colorTemp(tempVal)} ${unitDeg} ${fixed(clockVal, 0).padStart(6)} ${unitMhz} ${fixed(c?.u).padStart(5)}${unitPercent}\n   [${bar}]\n`;
-//   });
-
       cpuText +=
 `${coreLabel} ${colorTemp(tempVal)} ${unitDeg} ${fixed(clockVal, 0).padStart(6)} ${unitMhz} ${fixed(c?.u).padStart(5)}${unitPercent}${window.innerWidth < 900 ? '\n' : ''}   [${bar}]\n`;
   });
 
   cpu.innerHTML = cpuText;
+
+const fpsValue = data?.fps < 0 ? null : data?.fps;
+
+const fpsDelta = formatFpsDelta(fpsValue, previousFps);
+
+fps.innerHTML =
+`${dim("FPS:")} ${typeof fpsValue === "number" ? fpsValue.toFixed(0) : NA}${fpsDelta}`;
+
+if (typeof fpsValue === "number") {
+  previousFps = fpsValue;
+}
 
 let processText = `${dim("Processes:")}\n\n`;
 

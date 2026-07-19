@@ -375,7 +375,7 @@ void LayoutFrame(const LayoutMetrics &m)
 }
 void LayoutProperties2(const LayoutMetrics &m)
 {
-    LOG_DEBUG("LayoutProperties2");
+    // LOG_DEBUG("LayoutProperties2");
 
     if (m.windowWidth <= 0 || m.windowHeight <= 0)
     {
@@ -432,12 +432,8 @@ void LayoutProperties2(const LayoutMetrics &m)
     if (!GetTextExtentPoint32W(g_backBuffer.memDC, g_cardName.textValue, g_cardName.textLength, &sz))
         LOG_ERROR("[LayoutProperties2] GetTextExtentPoint32W failed");
 
-    LOG_DEBUG("sz: %ld,%ld", sz.cx, sz.cy);
-
     g_cardName.textX = g_cardName.valueRc.left + ((g_cardName.valueRc.right - g_cardName.valueRc.left) - sz.cx) / 2;
     g_cardName.textY = g_cardName.valueRc.top + ((g_cardName.valueRc.bottom - g_cardName.valueRc.top) - sz.cy) / 2;
-
-    LOG_DEBUG("card position: %d,%d", g_cardName.textX, g_cardName.textY);
 
     SelectObject(g_backBuffer.memDC, oldFont);
 
@@ -612,7 +608,7 @@ void OnResizeWindow(HWND hwnd, bool grow)
     g_forceFrameRedraw = true;
     SetAllRepaintLabelFlag(true);
 
-    PostMessage(hwnd, WM_APP + 1, 0, 0);
+    PostMessage(hwnd, WM_APP_LAYOUT, 0, 0);
 
     InvalidateRect(hwnd, nullptr, TRUE);
 
@@ -676,23 +672,34 @@ void Cleanup(HWND hwnd)
     g_AdlxGPUTelemetry.Destroy();
 }
 
-void AutoCheckVersion()
+void CheckVersionAsync(HWND hwnd, bool showDialogs)
 {
-    std::wstring latestVersion;
+    std::thread([hwnd, showDialogs]
+                {
+                    std::wstring latestVersion;
 
-    if (!VersionChecker::GetLatestVersion(latestVersion))
-    {
-        LOG_ERROR("[AutoCheckVersion] Failed to check update");
-        return;
-    }
+                    if (!VersionChecker::GetLatestVersion(latestVersion))
+                    {
+                        LOG_ERROR("[Version] Failed to check update");
 
-    LOG_DEBUG("[AutoCheckVersion] Latest version found: %ls", latestVersion.c_str());
+                        if (showDialogs)
+                        {
+                            PostMessage(hwnd, WM_APP_VERSION_ERROR, 0, 0);
+                        }
+                        return;
+                    }
 
-    if (latestVersion != Version::String)
-    {
-        LOG_WARN("[AutoCheckVersion] New update available: %ls", latestVersion.c_str());
-        g_appTitle.SetTitle(APPNAME_UPDATE, APPNAME_UPDATE_LENGTH);
-    }
+                    LOG_DEBUG("[Version] Latest version: %ls", latestVersion.c_str());
+
+                    const bool updateAvailable = (latestVersion != Version::String);
+
+                    if (updateAvailable)
+                        LOG_WARN("[Version] New update available: %ls", latestVersion.c_str());
+
+                    auto *result = new VersionCheckResult{std::move(latestVersion), updateAvailable, showDialogs};
+
+                    PostMessage(hwnd, WM_APP_VERSION_RESULT, 0, reinterpret_cast<LPARAM>(result)); })
+        .detach();
 }
 
 // ── window procedure ─────────────────────────────────────────────────────────
@@ -731,17 +738,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         SendMessage(g_hwndTooltip, TTM_ADDTOOL, 0, (LPARAM)&ti);
         SendMessage(g_hwndTooltip, TTM_SETDELAYTIME, TTDT_INITIAL, 0); // starts immediatly
 
-        PostMessage(hwnd, WM_APP + 1, 0, 0);
-
-        return 0;
-    }
-
-    case WM_APP + 1:
-    {
-        g_layoutMetrics = CalculateLayoutMetrics();
-        SetWindowPos(hwnd, nullptr, 0, 0, g_layoutMetrics.windowWidth, g_layoutMetrics.windowHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-        LayoutProperties2(g_layoutMetrics);
-        UpdateToolTipRect(hwnd, TOOLID_GPUINFO, g_cardName.valueRc);
+        PostMessage(hwnd, WM_APP_LAYOUT, 0, 0);
 
         return 0;
     }
@@ -838,7 +835,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         SetAllRepaintLabelFlag(true); // force all labels repaint
         g_forceFrameRedraw = true;    // force new border + title
 
-        PostMessage(hwnd, WM_APP + 1, 0, 0);
+        PostMessage(hwnd, WM_APP_LAYOUT, 0, 0);
 
         InvalidateRect(hwnd, nullptr, TRUE);
 
@@ -1083,9 +1080,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         }
 
         case IDM_ALWAYS_ON_TOP:
+        {
             g_alwaysOnTop = !g_alwaysOnTop;
             SetWindowPos(hwnd, g_alwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
             break;
+        }
 
         case IDM_AUTOSTART:
         {
@@ -1110,41 +1109,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         case IDM_CHECK_VERSION:
         {
-            std::wstring latestVersion;
-
-            if (!VersionChecker::GetLatestVersion(latestVersion))
-            {
-                LOG_ERROR("Failed to check update");
-                ShowUpdateDialog(hwnd, L"Update Check", L"Error", L"Failed to check for updates.", true);
-                break;
-            }
-
-            LOG_DEBUG("Latest version found: %ls", latestVersion.c_str());
-
-            if (latestVersion != Version::String)
-            {
-                std::wstring message = L"Current version: " + std::wstring(Version::String) + L"\n" +
-                                       L"Latest version: " + latestVersion + L"\n" +
-                                       +L"\n" +
-                                       L"<a href=\"" +
-                                       LATESTURL + L"\">Download latest version here</a>\n";
-                ShowUpdateDialog(hwnd, L"Update Check", L"Update available", message);
-                LOG_WARN("[App] New update available: %ls", latestVersion.c_str());
-                g_appTitle.SetTitle(APPNAME_UPDATE, APPNAME_UPDATE_LENGTH);
-                g_appTitle.UpdateRC(g_backBuffer.memDC, g_layoutMetrics, g_border.top, g_titleFont);
-                g_forceFrameRedraw = true;
-                InvalidateRect(hwnd, &g_appTitle.rc, FALSE);
-#ifdef _DEBUG
-                LogRect("title rect", g_appTitle.rc);
-#endif
-                UpdateWindow(hwnd);
-            }
-            else
-            {
-                std::wstring message = L"You are already running the latest version:\n" + std::wstring(Version::String);
-                ShowUpdateDialog(hwnd, L"Update Check", L"No update available", message);
-            }
-
+            CheckVersionAsync(hwnd, true);
             break;
         }
 
@@ -1160,14 +1125,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                                    L"<a href=\"" +
                                    ABOUTURL + L"\">GitHub repository</a>\r\n" +
                                    L"\r\n"
+                                   L"Contact: "
+                                   L"<a href=\"mailto:amu2mod@gmail.com\">amu2mod@gmail.com</a>\r\n"
+                                   L"\r\n"
                                    L"Licensed under the MIT License";
             ShowUpdateDialog(hwnd, L"About", APPNAME, message);
             break;
         }
 
         case IDM_EXIT:
+        {
             DestroyWindow(hwnd);
             break;
+        }
 
         case IDM_WEBSERVER_STOP:
         {
@@ -1391,6 +1361,56 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
     }
 
+    // Custom WMs
+    case WM_APP_LAYOUT:
+    {
+        g_layoutMetrics = CalculateLayoutMetrics();
+        SetWindowPos(hwnd, nullptr, 0, 0, g_layoutMetrics.windowWidth, g_layoutMetrics.windowHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        LayoutProperties2(g_layoutMetrics);
+        UpdateToolTipRect(hwnd, TOOLID_GPUINFO, g_cardName.valueRc);
+
+        return 0;
+    }
+
+    case WM_APP_VERSION_RESULT:
+    {
+        auto result = reinterpret_cast<VersionCheckResult *>(lParam);
+
+        if (result->updateAvailable)
+        {
+            g_appTitle.SetTitle(APPNAME_UPDATE, APPNAME_UPDATE_LENGTH);
+            g_appTitle.UpdateRC(g_backBuffer.memDC, g_layoutMetrics, g_border.top, g_titleFont);
+            g_forceFrameRedraw = true;
+            InvalidateRect(hwnd, &g_appTitle.rc, FALSE);
+
+            if (result->showDialogs)
+            {
+                std::wstring message = L"Current version: " + std::wstring(Version::String) + L"\n" +
+                                       L"Latest version: " + result->latestVersion + L"\n" +
+                                       +L"\n" +
+                                       L"<a href=\"" +
+                                       LATESTURL + L"\">Download latest version here</a>\n";
+                ShowUpdateDialog(hwnd, L"Update Check", L"Update available", message);
+                LOG_WARN("[App] New update available: %ls", result->latestVersion.c_str());
+            }
+        }
+        else if (result->showDialogs)
+        {
+            std::wstring message = L"You are already running the latest version:\n" + std::wstring(Version::String);
+            ShowUpdateDialog(hwnd, L"Update Check", L"No update available", message);
+        }
+
+        delete result;
+        return 0;
+    }
+
+    case WM_APP_VERSION_ERROR:
+    {
+        LOG_ERROR("Failed to check update");
+        ShowUpdateDialog(hwnd, L"Update Check", L"Error", L"Failed to check for updates.", true);
+        return 0;
+    }
+
     default:
         return DefWindowProc(hwnd, msg, wParam, lParam);
     }
@@ -1508,7 +1528,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
         g_notification.SetValue(L"cpu requires admin rights");
     }
 
-    AutoCheckVersion();
+    CheckVersionAsync(hwnd, false);
 
     ShowWindow(hwnd, nCmdShow);
 

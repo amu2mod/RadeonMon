@@ -86,7 +86,7 @@ bool NetworkManager::Initialize(HWND hwnd)
 
 std::vector<NetworkInterface> NetworkManager::Discover() const
 {
-    LOG_DEBUG("Discovering Network");
+    LOG_DEBUG("[Network] Discovering Network");
     std::vector<NetworkInterface> addresses;
 
     ULONG bufferSize = 0;
@@ -197,7 +197,7 @@ VOID CALLBACK NetworkManager::InterfaceChanged(PVOID context, [[maybe_unused]] P
         break;
     }
 
-    LOG_DEBUG("Network event: %s", event);
+    LOG_DEBUG("[Network] Event: %s", event);
     manager->m_pendingChanges++;
     manager->ScheduleRefresh();
 }
@@ -210,7 +210,7 @@ void NetworkManager::ScheduleRefresh()
     }
     else
     {
-        LOG_DEBUG("Network change detected, scheduling refresh in 2000ms");
+        LOG_DEBUG("[Network] change detected, scheduling refresh in 2000ms");
     }
 
     m_timer = SetTimer(m_hwnd, NETWORK_TIMER_ID, 2000, nullptr);
@@ -225,7 +225,7 @@ void NetworkManager::Log() const
     LOG_INFO("-------------");
     for (const auto &ip : addresses)
     {
-        LOG_INFO("- IP found: %ls", ip.display().c_str());
+        LOG_INFO("- %ls", ip.display().c_str());
 #ifndef _DEBUG
         (void)ip;
 #endif

@@ -551,13 +551,42 @@ inline int BuildCombinedJson(char *buffer, int bufferSize)
         write("null");
     }
 
+    if (g_isFpsEnabled)
+    {
+        write(",\"fps\":");
+
+        int fps = g_AdlxGPUTelemetry.GetSnapshotFPS();
+
+        // LOG_DEBUG("fps=%d", fps);
+
+        if (fps < 0)
+        {
+            *p++ = '-';
+            fps = -fps;
+        }
+
+        char tmp[10];
+        int n = 0;
+
+        do
+        {
+            tmp[n++] = static_cast<char>('0' + (fps % 10));
+            fps /= 10;
+        } while (fps);
+
+        while (n)
+            *p++ = tmp[--n];
+    }
+
     write(",\"cpu\":");
 
     if (g_cpu.IsInitialized())
     {
-        int len = g_cpu.GetMetrics().BuildJson(
-            p,
-            static_cast<int>(end - p + 1));
+        int len = 0;
+        if (g_webServer.IsRunning())
+            len = g_processWatcher.m_ryzenMetrics.BuildJson(p, static_cast<int>(end - p + 1));
+        else
+            len = g_cpu.GetMetrics().BuildJson(p, static_cast<int>(end - p + 1));
 
         if (len > 0)
             p += len;
