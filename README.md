@@ -33,7 +33,12 @@ This is an independent personal project and is not affiliated with AMD Corporati
     </td>
   </tr>
   <tr>
-    <td colspan="3" align="center" valign="middle">
+    <td align="center" valign="middle">
+    <img width="1025" height="453" alt="image" src="https://github.com/user-attachments/assets/75247373-1633-4f5b-8e1b-ccb4693615ce" />
+      <br />
+      <sub><b>FPS meter</b></sub>
+    </td>
+    <td colspan="2" align="center" valign="middle">
       <img width="600" alt="image" src="https://github.com/user-attachments/assets/1e4000f0-481e-44d9-9ba8-9ad76031e6df" />
       <br />
       <sub><b>Top Processes (Web Only)</b> — Highlights resource-heavy processes to quickly identify potential performance bottlenecks</sub>
