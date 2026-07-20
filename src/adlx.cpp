@@ -8,6 +8,8 @@
 #include "AMD/ADLX-1.5/SDK/Include/ADLX.h"
 #include "AMD/ADLX-1.5/SDK/Include/ISystem3.h"
 #include "AMD\ADLX-1.5\SDK\Include\IDisplays.h"
+#include "AMD\ADLX-1.5\SDK\Include\IGPUManualPowerTuning.h"
+#include "AMD\ADLX-1.5\SDK\Include\IGPUTuning.h"
 
 #include "radeonmon/globals.hpp"
 #include "radeonmon/helpers.hpp"
@@ -30,6 +32,9 @@ void ADLXGpuTelemetry::Init()
     }
 
     LOG_DEBUG("ADLX Init succeeded");
+
+    // Create block event
+    m_blockEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 
     res = ADLXHelp.GetSystemServices()->GetPerformanceMonitoringServices(&perfMonitoringService);
     if (!ADLX_SUCCEEDED(res) || !perfMonitoringService)
@@ -123,7 +128,28 @@ void ADLXGpuTelemetry::Init()
     gpuMetricsSupport2 = IADLXGPUMetricsSupport2Ptr(gpuMetricsSupport);
     gpuMetricsSupport3 = IADLXGPUMetricsSupport3Ptr(gpuMetricsSupport);
 
-    LOG_DEBUG("gpuMetricsSupport OK");
+    LOG_DEBUG("[ADLX] gpuMetricsSupport OK");
+
+    // Tuning
+    res = ADLXHelp.GetSystemServices()->GetGPUTuningServices(&gpuTuningService);
+    if (ADLX_FAILED(res))
+        LOG_ERROR("[ADLX] Get GPU tuning services failed");
+    else
+    {
+        LOG_DEBUG("[ADLX] gpuTuningService OK");
+
+        // Get Change handle
+        IADLXGPUTuningChangedHandlingPtr changeHandle;
+        res = gpuTuningService->GetGPUTuningChangedHandling(&changeHandle);
+        if (ADLX_SUCCEEDED(res))
+        {
+            // Create call back
+            // IADLXGPUTuningChangedListener *call = new CallBackGPUTuningChanged;
+
+            // Add call back
+            changeHandle->AddGPUTuningEventListener(this);
+        }
+    }
 
     isInitialized = true;
 }
@@ -217,6 +243,30 @@ void ADLXGpuTelemetry::Discover()
         {
             metric.min = min;
             metric.max = max;
+        }
+    };
+
+    auto discoverTuning = [&](const char *name, auto isSupportedFn, auto getRangeFn, uint32_t cap, auto &metric)
+    {
+        adlx_bool supported = false;
+        ADLX_RESULT res = (manualPowerTuning->*isSupportedFn)(&supported);
+
+        LOG_INFO("%s: %s", name, (ADLX_SUCCEEDED(res) && supported) ? "OK" : "NOT SUPPORTED");
+
+        if (!ADLX_SUCCEEDED(res) || !supported)
+            return;
+
+        gpuCaps |= cap;
+        metric.isSupported = true;
+
+        adlx_int min = 0, max = 0, step = 0;
+        res = (manualPowerTuning->*getRangeFn)(&min, &max, &step);
+
+        if (ADLX_SUCCEEDED(res))
+        {
+            metric.min = min;
+            metric.max = max;
+            // metric.step = step;
         }
     };
 
@@ -321,6 +371,9 @@ void ADLXGpuTelemetry::Discover()
                &IADLXGPUMetricsSupport3::GetGPUFanDutyRange,
                GPU_CAP_FAN_DUTY,
                discoveredMetrics.fanDuty);
+
+    // ===== Tuning ======
+    UpdateManualPowerTuning();
 
     LOG_INFO("=== End of Discovery ===");
     LOGLN();
@@ -768,4 +821,121 @@ void ADLXGpuTelemetry::PopulateGPUInfo(IADLXGPU *gpu)
 
     // Tooltip
     gpuInfo.BuildToolTip();
+}
+
+static void GPUUniqueName(IADLXGPUPtr gpu, char *uniqueName)
+{
+    if (nullptr != gpu && nullptr != uniqueName)
+    {
+        const char *gpuName = nullptr;
+        gpu->Name(&gpuName);
+        adlx_int id;
+        gpu->UniqueId(&id);
+        sprintf_s(uniqueName, 128, "name:%s, id:%d", gpuName, id);
+    }
+}
+
+adlx_bool ADLX_STD_CALL ADLXGpuTelemetry::OnGPUTuningChanged(IADLXGPUTuningChangedEvent *pGPUTuningChangedEvent)
+{
+    IADLXGPUTuningChangedEvent1 *pGPUTuningChangedEvent1 = nullptr;
+    pGPUTuningChangedEvent->QueryInterface(L"IADLXGPUTuningChangedEvent1", reinterpret_cast<void **>(&pGPUTuningChangedEvent1));
+    ADLX_SYNC_ORIGIN origin = pGPUTuningChangedEvent->GetOrigin();
+    if (origin == SYNC_ORIGIN_EXTERNAL)
+    {
+        // Get GPU
+        IADLXGPUPtr gpu;
+        pGPUTuningChangedEvent->GetGPU(&gpu);
+        char uniqueName[128] = "Unknown";
+        GPUUniqueName(gpu, uniqueName);
+        LOG_DEBUG("GPU: %s Get sync event, update required", uniqueName);
+
+        if (pGPUTuningChangedEvent->IsAutomaticTuningChanged())
+        {
+            LOG_DEBUG("\tAutomaticTuningChanged");
+        }
+        else if (pGPUTuningChangedEvent->IsPresetTuningChanged())
+        {
+            LOG_DEBUG("\tPresetTuningChanged");
+        }
+        else if (pGPUTuningChangedEvent->IsManualGPUCLKTuningChanged())
+        {
+            LOG_DEBUG("\tManualGPUCLKTuningChanged");
+        }
+        else if (pGPUTuningChangedEvent->IsManualVRAMTuningChanged())
+        {
+            LOG_DEBUG("\tManualVRAMTuningChanged");
+        }
+        else if (pGPUTuningChangedEvent->IsManualFanTuningChanged())
+        {
+            LOG_DEBUG("\tManualFanTuningChanged");
+        }
+        else if (pGPUTuningChangedEvent->IsManualPowerTuningChanged())
+        {
+            LOG_DEBUG("\tManualPowerTuningChanged");
+            UpdateManualPowerTuning();
+        }
+        else if (pGPUTuningChangedEvent1->IsSmartAccessMemoryChanged())
+        {
+            LOG_DEBUG("\tSmartAccessMemoryChanged");
+        }
+    }
+    SetEvent(m_blockEvent);
+
+    // Return true for ADLX to continue notifying the next listener, or false to stop notification.
+    return true;
+}
+
+void ADLXGpuTelemetry::UpdateManualPowerTuning()
+{
+    adlx_bool supported = false;
+    ADLX_RESULT res = gpuTuningService->IsSupportedManualPowerTuning(selectedGPU, &supported);
+    if (ADLX_FAILED(res) || supported == false)
+        LOG_INFO("GetManualPowerTuning: NOT SUPPORTED");
+    else
+    {
+        LOG_INFO("GetManualPowerTuning: OK");
+        gpuCaps |= GPU_CAP_MANUAL_POWER_TUNING;
+        m_snapshot.powerLimit.isSupported = true;
+        res = gpuTuningService->GetManualPowerTuning(selectedGPU, &manualPowerTuningIfc);
+        if (ADLX_FAILED(res) || manualPowerTuningIfc == nullptr)
+            LOG_ERROR("[ADLX] Get manual power tuning interface failed");
+        else
+        {
+            manualPowerTuning = IADLXManualPowerTuningPtr(manualPowerTuningIfc);
+            if (manualPowerTuning == nullptr)
+                LOG_ERROR("[ADLX] Get manual power tuning failed");
+            else
+            {
+                ADLX_IntRange powerRange;
+                res = manualPowerTuning->GetPowerLimitRange(&powerRange);
+
+                if (ADLX_SUCCEEDED(res))
+                {
+                    m_snapshot.powerLimit.min = static_cast<int>(powerRange.minValue);
+                    m_snapshot.powerLimit.max = static_cast<int>(powerRange.maxValue);
+
+                    // optional: store step
+
+                    LOG_DEBUG("[ADLX] powerRange: min=%d, max=%d", m_snapshot.powerLimit.min, m_snapshot.powerLimit.max);
+                }
+                else
+                    LOG_ERROR("[ADLX] GetPowerLimitRange failed");
+
+                adlx_int powerLimit;
+                res = manualPowerTuning->GetPowerLimit(&powerLimit);
+                if (ADLX_SUCCEEDED(res))
+                {
+                    m_snapshot.powerLimit.value = static_cast<int>(powerLimit);
+                    LOG_DEBUG("[ADLX] power limit=%d", m_snapshot.powerLimit.value);
+
+                    static int powerBase = static_cast<int>(std::round(m_snapshot.totalBoardPower.max / ((100 + m_snapshot.powerLimit.max) / 100.0)));
+                    m_snapshot.powerLimitWatts = static_cast<int>(std::round(powerBase * (100 + m_snapshot.powerLimit.value) / 100.0));
+
+                    // TODO: update UI
+                }
+                else
+                    LOG_ERROR("[ADLX] GetPowerLimit failed");
+            }
+        }
+    }
 }

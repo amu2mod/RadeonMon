@@ -4,10 +4,13 @@
 
 #include "AMD/ADLX-1.5/SDK/Include/IPerformanceMonitoring3.h"
 #include "AMD/ADLX-1.5/SDK/ADLXHelper/Windows/Cpp/ADLXHelper.h"
+#include "AMD/ADLX-1.5/SDK/Include/IGPUManualPowerTuning.h"
+#include "AMD/ADLX-1.5/SDK/Include/IGPUTuning.h"
+#include "AMD/ADLX-1.5/SDK/Include/IGPUTuning1.h"
 
 using namespace RadeonMon::Hardware;
 
-class ADLXGpuTelemetry
+class ADLXGpuTelemetry : public IADLXGPUTuningChangedListener
 {
 public:
     bool isInitialized = false;
@@ -19,15 +22,10 @@ public:
     void Discover(); // Discover all supported metrics functions
     void Destroy();
 
-    void Tick()
-    {
-        m_snapshot = Query();
-    }
+    inline void Tick() { m_snapshot = Query(); }
+    inline const GpuMetricsSnapshot &Get() const { return m_snapshot; }
 
-    const GpuMetricsSnapshot &Get() const
-    {
-        return m_snapshot;
-    }
+    adlx_bool ADLX_STD_CALL OnGPUTuningChanged(IADLXGPUTuningChangedEvent *pGPUTuningChangedEvent) override;
 
     inline bool IsEnabled(uint32_t flag) const { return (gpuCaps & flag) != 0; }
     inline const RadeonMon::Hardware::GPUInfo GetGpuInfo() const { return gpuInfo; }
@@ -41,12 +39,17 @@ private:
     IADLXGPUMetricsSupport1Ptr gpuMetricsSupport1 = nullptr;
     IADLXGPUMetricsSupport2Ptr gpuMetricsSupport2 = nullptr;
     IADLXGPUMetricsSupport3Ptr gpuMetricsSupport3 = nullptr;
+    IADLXGPUTuningServicesPtr gpuTuningService = nullptr;
+    IADLXInterfacePtr manualPowerTuningIfc;
+    IADLXManualPowerTuningPtr manualPowerTuning = nullptr;
 
     uint32_t gpuCaps = 0;
 
     GpuMetricsSnapshot m_snapshot;
 
     const bool &isFpsEnabled;
+
+    HANDLE m_blockEvent = nullptr;
 
     // Generic template to read ADLX metrics
     template <typename T, typename MetricFn>
@@ -64,6 +67,9 @@ private:
 
     // Retrieve all gpu info
     void PopulateGPUInfo(IADLXGPU *gpu);
+
+    // Helper to update power limit
+    void UpdateManualPowerTuning();
 
     int GetFPS();
 };

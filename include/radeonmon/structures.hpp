@@ -584,6 +584,20 @@ namespace RadeonMon::Hardware
         int max = 0;
     };
 
+    struct MetricPower
+    {
+        bool isSupported = false;
+        int value = 0; // current power consumption
+
+        int min = 0;
+        int max = 0;
+
+        // Power Limit specific to Radeon
+        int minPLOffset = 0;
+        int maxPLOffset = 0;
+        int currentPL = 0;
+    };
+
     struct FPSMetrics
     {
         int current = 0;
@@ -630,7 +644,10 @@ namespace RadeonMon::Hardware
         GPU_CAP_SHARED_MEMORY = 1 << 16,
 
         // V3
-        GPU_CAP_FAN_DUTY = 1 << 17
+        GPU_CAP_FAN_DUTY = 1 << 17,
+
+        // Tuning
+        GPU_CAP_MANUAL_POWER_TUNING = 1 << 18
     };
 
     struct GpuMetricsSnapshot
@@ -649,6 +666,8 @@ namespace RadeonMon::Hardware
         MetricDouble power;
         MetricDouble totalBoardPower;
         MetricInt voltage;
+        MetricInt powerLimit; // Tuning setting
+        int powerLimitWatts;
 
         MetricInt fanSpeed;
         MetricInt fanDuty;

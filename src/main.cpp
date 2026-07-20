@@ -911,7 +911,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             {
                 dirty = true;
                 wchar_t powerBuffer[16];
-                FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value));
+                // FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value));
+                int percent = static_cast<int>(static_cast<int>(snapshot.totalBoardPower.value) * 100.0 / snapshot.powerLimitWatts);
+                FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value), percent);
                 SetPropertyValueAtIndex(MetricsIndex::Power, static_cast<int>(snapshot.totalBoardPower.value), powerBuffer, 16);
             }
 
