@@ -14,13 +14,26 @@ This is an independent personal project and is not affiliated with AMD Corporati
 
 ## Overview
 
+# Windows Desktop Application
+
+<table align="center">
+    <tr>
+          <td align="center">
+            <img width="500" alt="Windows Main App" src="https://github.com/user-attachments/assets/f362581a-8627-4b04-b0ee-24113aa52e1a" />
+            <br />
+            <sub><b>Desktop App</b> — Normal usage</sub>
+          </td>
+          <td align="center">
+            <img width="500" alt="Warning and alert triggered" src="https://github.com/user-attachments/assets/1dba23ea-a731-408d-af93-2778db80c18a" />
+            <br />
+            <sub><b>Desktop App</b> — Warning and alert triggered</sub>
+          </td>
+    </tr>
+</table>
+
+# Web Interface
 <table align="center">
   <tr>
-    <td align="center">
-      <img width="321" alt="1" src="https://github.com/user-attachments/assets/63c701ee-5937-419f-b9f0-b5e9bdb33209" />
-      <br />
-      <sub><b>Desktop App</b> — Main Application Window</sub>
-    </td>
     <td align="center">
       <img height="400" alt="Mobile Web Interface" src="https://github.com/user-attachments/assets/2c376468-a5b2-4e0a-adff-104ed4530304" />
       <br />
@@ -41,7 +54,7 @@ This is an independent personal project and is not affiliated with AMD Corporati
     <td colspan="2" align="center" valign="middle">
       <img width="600" alt="image" src="https://github.com/user-attachments/assets/1e4000f0-481e-44d9-9ba8-9ad76031e6df" />
       <br />
-      <sub><b>Top Processes (Web Only)</b> — Highlights resource-heavy processes to quickly identify potential performance bottlenecks</sub>
+      <sub><b>Top Processes</b> — Highlights resource-heavy processes to quickly identify potential performance bottlenecks</sub>
     </td>
   </tr>
 </table>
