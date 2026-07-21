@@ -37,6 +37,20 @@ inline PropertyItem g_props[] =
         {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
 };
 
+enum MetricsIndex
+{
+    Temp = 0,
+    Hotspot = 2,
+    Vram = 4,
+    FanSpeed = 6,
+    Power = 8,
+    Cpu = 10,
+    Display = 12,
+    Fps = 14
+};
+
+static_assert(std::size(g_props) == Fps + 2, "g_props and MetricsIndex are out of sync");
+
 constexpr int g_propCount = _countof(g_props);
 constexpr int g_lineCount = g_propCount / 2;
 inline PropertyItem g_cardName = {L"", 0, 0, L"no card detected"};

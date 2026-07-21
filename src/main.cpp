@@ -29,18 +29,6 @@ using namespace RadeonMon::Hardware;
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "comctl32.lib")
 
-enum MetricsIndex
-{
-    Temp = 0,
-    Hotspot = 2,
-    Vram = 4,
-    FanSpeed = 6,
-    Power = 8,
-    Cpu = 10,
-    Display = 12,
-    Fps = 14
-};
-
 void SetDisplayLine(const DisplayInfo &display, HWND hwnd = nullptr)
 {
     PropertyItem &prop = g_props[MetricsIndex::Display];
@@ -293,7 +281,7 @@ void ResetDirty()
     MarkAllPropsDirty(g_props);
 }
 
-bool SetPropertyValueAtLine(int line, LPCWSTR textValue, int valueSize, bool warning = false)
+bool SetPropertyValueAtLine(int line, LPCWSTR textValue, int valueSize, TextLevel level = TextLevel::Neutral)
 {
     /**
      * line 1 = 0
@@ -314,12 +302,12 @@ bool SetPropertyValueAtLine(int line, LPCWSTR textValue, int valueSize, bool war
     PropertyItem &p = g_props[index];
     lstrcpynW(p.textValue, textValue, valueSize);
     p.dirty = true;
-    p.warning = warning;
+    p.textLevel = level;
 
     return true;
 }
 
-bool SetPropertyValueAtIndex(int index, int value, LPCWSTR textValue, int valueSize, bool warning = false)
+bool SetPropertyValueAtIndex(int index, int value, LPCWSTR textValue, int valueSize, TextLevel level = TextLevel::Neutral)
 {
     if (index < 0 || index >= g_propCount)
     {
@@ -331,7 +319,7 @@ bool SetPropertyValueAtIndex(int index, int value, LPCWSTR textValue, int valueS
     p.value = value;
     lstrcpynW(p.textValue, textValue, valueSize);
     p.dirty = true;
-    p.warning = warning;
+    p.textLevel = level;
 
     return true;
 }
@@ -487,7 +475,6 @@ void PaintProperties(HDC hdc)
             SetTextColor(hdc, LABELCOLOR);
 
             SIZE sz{};
-            // int len = (int)wcslen(p.label);
             int len = static_cast<int>(p.label.length());
             GetTextExtentPoint32W(hdc, p.label.c_str(), len, &sz);
 
@@ -501,7 +488,7 @@ void PaintProperties(HDC hdc)
             p.repaintLabel = false;
         }
 
-        SetTextColor(hdc, p.warning ? WARNINGCOLOR : VALUECOLOR);
+        SetTextColor(hdc, colorMapping[p.textLevel]);
 
         SIZE sz{};
         int len = (int)wcslen(p.textValue);
@@ -855,7 +842,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (!g_AdlxGPUTelemetry.isInitialized)
             {
                 LOG_WARN("adlx not init");
-                g_AdlxGPUTelemetry.Init(); // retry
+                g_AdlxGPUTelemetry.Init(hwnd); // retry
                 return 0;
             }
 
@@ -876,7 +863,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 dirty = true;
                 wchar_t tempBuffer[16];
                 FormatTemperature(tempBuffer, static_cast<int>(snapshot.temperature.value));
-                SetPropertyValueAtIndex(MetricsIndex::Temp, static_cast<int>(snapshot.temperature.value), tempBuffer, 16, snapshot.temperature.value >= TEMPERATURE_THRESHOLD);
+                TextLevel level = snapshot.temperature.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.temperature.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning
+                                                                                                                                                                             : TextLevel::Neutral;
+                SetPropertyValueAtIndex(MetricsIndex::Temp, static_cast<int>(snapshot.temperature.value), tempBuffer, 16, level);
             }
 
             // Hotspot
@@ -885,7 +874,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 dirty = true;
                 wchar_t hotspotBuffer[16];
                 FormatHotspot(hotspotBuffer, static_cast<int>(snapshot.temperature.value), static_cast<int>(snapshot.hotspot.value));
-                SetPropertyValueAtIndex(MetricsIndex::Hotspot, static_cast<int>(snapshot.hotspot.value), hotspotBuffer, 16, snapshot.hotspot.value >= TEMPERATURE_THRESHOLD);
+                TextLevel level = snapshot.hotspot.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.hotspot.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning
+                                                                                                                                                                     : TextLevel::Neutral;
+                SetPropertyValueAtIndex(MetricsIndex::Hotspot, static_cast<int>(snapshot.hotspot.value), hotspotBuffer, 16, level);
             }
 
             // VRAM Temperature
@@ -894,7 +885,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 dirty = true;
                 wchar_t vramBuffer[16];
                 FormatTemperature(vramBuffer, static_cast<int>(snapshot.memoryTemperature.value));
-                SetPropertyValueAtIndex(MetricsIndex::Vram, static_cast<int>(snapshot.memoryTemperature.value), vramBuffer, 16, snapshot.memoryTemperature.value >= TEMPERATURE_THRESHOLD);
+                TextLevel level = snapshot.memoryTemperature.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.memoryTemperature.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning
+                                                                                                                                                                                         : TextLevel::Neutral;
+                SetPropertyValueAtIndex(MetricsIndex::Vram, static_cast<int>(snapshot.memoryTemperature.value), vramBuffer, 16, level);
             }
 
             // Fan Speed
@@ -903,7 +896,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 dirty = true;
                 wchar_t fanBuffer[16];
                 FormatFanSpeed(fanBuffer, snapshot.fanSpeed.value);
-                SetPropertyValueAtIndex(MetricsIndex::FanSpeed, snapshot.fanSpeed.value, fanBuffer, 16);
+
+                // Level detection based on hotspot and fanspeed
+                TextLevel level = TextLevel::Neutral;
+                if (snapshot.hotspot.value >= 80 && snapshot.fanSpeed.value == 0)
+                    level = TextLevel::Alert;
+                else if (snapshot.hotspot.value >= TEMPERATURE_ALERT_THRESHOLD && snapshot.fanSpeed.value <= 500)
+                    level = TextLevel::Alert;
+                else if (snapshot.hotspot.value >= 90 && snapshot.fanSpeed.value <= 500)
+                    level = TextLevel::Warning;
+
+                SetPropertyValueAtIndex(MetricsIndex::FanSpeed, snapshot.fanSpeed.value, fanBuffer, 16, level);
             }
 
             // Power Consumption
@@ -911,9 +914,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             {
                 dirty = true;
                 wchar_t powerBuffer[16];
-                // FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value));
-                int percent = static_cast<int>(static_cast<int>(snapshot.totalBoardPower.value) * 100.0 / snapshot.powerLimitWatts);
-                FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value), percent);
+                if (!snapshot.powerLimit.isSupported)
+                    FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value));
+                else
+                {
+                    int percent = static_cast<int>(static_cast<int>(snapshot.totalBoardPower.value) * 100.0 / snapshot.powerLimitWatts);
+                    FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value), percent);
+                }
                 SetPropertyValueAtIndex(MetricsIndex::Power, static_cast<int>(snapshot.totalBoardPower.value), powerBuffer, 16);
             }
 
@@ -934,7 +941,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     dirty = true;
                     wchar_t cpuBuffer[20];
                     FormatCpuMetrics(cpuBuffer, cpuIntegerTemp, cpuIntegerPower);
-                    SetPropertyValueAtIndex(MetricsIndex::Cpu, cpuIntegerTemp, cpuBuffer, 16, cpuIntegerTemp >= TEMPERATURE_THRESHOLD);
+                    TextLevel level = cpuIntegerTemp >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : cpuIntegerTemp >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning
+                                                                                                                                                         : TextLevel::Neutral;
+                    SetPropertyValueAtIndex(MetricsIndex::Cpu, cpuIntegerTemp, cpuBuffer, 16, level);
                     SetPropertyValue2OnlyAtIndex(MetricsIndex::Cpu, cpuIntegerPower);
                 }
             }
@@ -955,7 +964,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 wchar_t fpsBuffer[16];
                 int delta = current - old;
                 FormatFPS(fpsBuffer, current, old);
-                SetPropertyValueAtIndex(MetricsIndex::Fps, snapshot.fps, fpsBuffer, 16, delta <= -10);
+                TextLevel level = delta <= -20 ? TextLevel::Alert : delta <= -10 ? TextLevel::Warning
+                                                                                 : TextLevel::Neutral;
+                SetPropertyValueAtIndex(MetricsIndex::Fps, snapshot.fps, fpsBuffer, 16, level);
             }
 
             if (dirty)
@@ -1175,7 +1186,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
                 LOG_DEBUG("Selecting interface: %ls", netIf.display().c_str());
 
-                g_webServer.LaunchServerOnInterface(netIf);
+                if (!g_webServer.LaunchServerOnInterface(netIf))
+                {
+                    LOG_ERROR("[App] Failed to launch the server on interface %ls (%ls)", netIf.adapterName.c_str(), netIf.address.c_str());
+                    break;
+                }
                 auto addr = g_webServer.GetBoundInterface().value().address;
                 std::wstring txt = L"http://" + addr + L":" + WEBSERVER_PORT;
                 g_serverStatusRc.SetValue(txt.c_str());
@@ -1413,6 +1428,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
     }
 
+    case WM_APP_GPU_PWR_TUNING_CHANGE:
+    {
+        wchar_t powerBuffer[16];
+
+        auto snapshot = g_AdlxGPUTelemetry.Get();
+
+        if (!snapshot.powerLimit.isSupported)
+            FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value));
+        else
+        {
+            int percent = static_cast<int>(static_cast<int>(snapshot.totalBoardPower.value) * 100.0 / snapshot.powerLimitWatts);
+            FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value), percent);
+        }
+        SetPropertyValueAtIndex(MetricsIndex::Power, static_cast<int>(snapshot.totalBoardPower.value), powerBuffer, 16);
+        return 0;
+    }
     default:
         return DefWindowProc(hwnd, msg, wParam, lParam);
     }
@@ -1489,7 +1520,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 
     SetTimer(hwnd, APP_POLLING_ID, APP_REFRESH_TIMER, nullptr);
 
-    g_AdlxGPUTelemetry.Init();
+    g_AdlxGPUTelemetry.Init(hwnd);
     g_AdlxGPUTelemetry.Discover();
 
     g_displayManager.Discover();

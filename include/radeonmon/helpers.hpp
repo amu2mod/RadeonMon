@@ -247,54 +247,54 @@ inline bool FormatFanSpeed(wchar_t (&buffer)[N], int rpm)
     return true;
 }
 
-// template <size_t N>
-// inline bool FormatPowerConsumption(wchar_t (&buffer)[N], int watts)
-// {
-//     constexpr auto MAXBUFSIZE = _countof(L"999 W"); // 6 (5 chars + null)
-//     static_assert(N >= MAXBUFSIZE, "Buffer too small for FormatPowerConsumption");
+template <size_t N>
+inline bool FormatPowerConsumption(wchar_t (&buffer)[N], int watts)
+{
+    constexpr auto MAXBUFSIZE = _countof(L"999 W"); // 6 (5 chars + null)
+    static_assert(N >= MAXBUFSIZE, "Buffer too small for FormatPowerConsumption");
 
-//     constexpr int CONTENT_WIDTH = MAXBUFSIZE - 1; // 5
+    constexpr int CONTENT_WIDTH = MAXBUFSIZE - 1; // 5
 
-//     wchar_t *p = buffer;
+    wchar_t *p = buffer;
 
-//     if (watts < 0 || watts > 999)
-//     {
-//         *p++ = L'n';
-//         *p++ = L'/';
-//         *p++ = L'a';
-//         while (p - buffer < CONTENT_WIDTH)
-//             *p++ = L' ';
-//         *p = L'\0';
-//         return false;
-//     }
+    if (watts < 0 || watts > 999)
+    {
+        *p++ = L'n';
+        *p++ = L'/';
+        *p++ = L'a';
+        while (p - buffer < CONTENT_WIDTH)
+            *p++ = L' ';
+        *p = L'\0';
+        return false;
+    }
 
-//     // Format wattage
-//     if (watts >= 100)
-//     {
-//         *p++ = static_cast<wchar_t>(L'0' + (watts / 100));
-//         *p++ = static_cast<wchar_t>(L'0' + ((watts / 10) % 10));
-//         *p++ = static_cast<wchar_t>(L'0' + (watts % 10));
-//     }
-//     else if (watts >= 10)
-//     {
-//         *p++ = static_cast<wchar_t>(L'0' + (watts / 10));
-//         *p++ = static_cast<wchar_t>(L'0' + (watts % 10));
-//     }
-//     else
-//     {
-//         *p++ = static_cast<wchar_t>(L'0' + watts);
-//     }
+    // Format wattage
+    if (watts >= 100)
+    {
+        *p++ = static_cast<wchar_t>(L'0' + (watts / 100));
+        *p++ = static_cast<wchar_t>(L'0' + ((watts / 10) % 10));
+        *p++ = static_cast<wchar_t>(L'0' + (watts % 10));
+    }
+    else if (watts >= 10)
+    {
+        *p++ = static_cast<wchar_t>(L'0' + (watts / 10));
+        *p++ = static_cast<wchar_t>(L'0' + (watts % 10));
+    }
+    else
+    {
+        *p++ = static_cast<wchar_t>(L'0' + watts);
+    }
 
-//     *p++ = L' ';
-//     *p++ = L'W';
+    *p++ = L' ';
+    *p++ = L'W';
 
-//     // Pad to fixed width
-//     while (p - buffer < CONTENT_WIDTH)
-//         *p++ = L' ';
+    // Pad to fixed width
+    while (p - buffer < CONTENT_WIDTH)
+        *p++ = L' ';
 
-//     *p = L'\0';
-//     return true;
-// }
+    *p = L'\0';
+    return true;
+}
 
 template <size_t N>
 inline bool FormatPowerConsumption(wchar_t (&buffer)[N], int watts, int percent)

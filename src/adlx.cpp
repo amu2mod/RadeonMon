@@ -15,8 +15,10 @@
 #include "radeonmon/helpers.hpp"
 #include "radeonmon/logging.hpp"
 
-void ADLXGpuTelemetry::Init()
+void ADLXGpuTelemetry::Init(HWND hwnd)
 {
+    m_hwnd = hwnd;
+
     ADLX_RESULT res = ADLX_FAIL;
 
     selectedGPU = nullptr;
@@ -523,6 +525,8 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
         m.max = max;
     };
 
+    snapshot.powerLimitWatts = 334;
+
     setDouble(snapshot.usage, randDouble(92.0, 100.0), 0, 100);
 
     setInt(snapshot.clockSpeed, randInt(2400, 3000), 0, 3500);
@@ -530,12 +534,13 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
 
     setDouble(snapshot.temperature, randDouble(55.0, 90.0), 0, 110);
     setDouble(snapshot.hotspot, randDouble(90.0, 105.0), 0, 120);
-    setDouble(snapshot.memoryTemperature, randDouble(80.0, 98.0), 0, 110);
+    setDouble(snapshot.memoryTemperature, randDouble(80.0, 105.0), 0, 110);
     setDouble(snapshot.intakeTemperature, randDouble(35.0, 45.0), 0, 60);
 
     setDouble(snapshot.power, randDouble(250.0, 340.0), 0, 400);
-    setDouble(snapshot.totalBoardPower, randDouble(270.0, 360.0), 0, 400);
+    setDouble(snapshot.totalBoardPower, randDouble(270.0, 334.0), 0, 334);
     setInt(snapshot.voltage, randInt(950, 1150), 800, 1300);
+    setInt(snapshot.powerLimit, 10, -30, 10);
 
     setInt(snapshot.fanSpeed, randInt(0, 1000), 0, 3000);
     setInt(snapshot.fanDuty, randInt(45, 90), 0, 100);
@@ -549,7 +554,7 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
     snapshot.fps = isFpsEnabled ? randInt(100, 180) : -1;
 
     return snapshot;
-#endif
+#else
     // START_CHRONO(query);
     snapshot = m_snapshot;
 
@@ -729,6 +734,7 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
     }
 
     return snapshot;
+#endif
 }
 
 void ADLXGpuTelemetry::PopulateGPUInfo(IADLXGPU *gpu)
@@ -931,7 +937,7 @@ void ADLXGpuTelemetry::UpdateManualPowerTuning()
                     static int powerBase = static_cast<int>(std::round(m_snapshot.totalBoardPower.max / ((100 + m_snapshot.powerLimit.max) / 100.0)));
                     m_snapshot.powerLimitWatts = static_cast<int>(std::round(powerBase * (100 + m_snapshot.powerLimit.value) / 100.0));
 
-                    // TODO: update UI
+                    PostMessage(m_hwnd, WM_APP_GPU_PWR_TUNING_CHANGE, 0, 0); // update ui
                 }
                 else
                     LOG_ERROR("[ADLX] GetPowerLimit failed");

@@ -145,9 +145,9 @@ set(CPACK_GENERATOR "ZIP")
 
 # Set custom name for each zip
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-win64-debug")
+    set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}_win64_debug")
 else()
-    set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}-win64")
+    set(CPACK_PACKAGE_FILE_NAME "${PROJECT_NAME}-${PROJECT_VERSION}_win64")
 endif()
 
 # Disable subfolder

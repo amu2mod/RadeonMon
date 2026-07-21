@@ -18,7 +18,7 @@ public:
 
     inline explicit ADLXGpuTelemetry(const bool &fpsEnabled) : isFpsEnabled(fpsEnabled) {}
 
-    void Init();
+    void Init(HWND hwnd);
     void Discover(); // Discover all supported metrics functions
     void Destroy();
 
@@ -50,6 +50,7 @@ private:
     const bool &isFpsEnabled;
 
     HANDLE m_blockEvent = nullptr;
+    HWND m_hwnd = nullptr;
 
     // Generic template to read ADLX metrics
     template <typename T, typename MetricFn>

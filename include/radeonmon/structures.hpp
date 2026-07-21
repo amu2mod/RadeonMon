@@ -30,6 +30,14 @@ enum class PropertyType
     Separator
 };
 
+enum TextLevel
+{
+    Neutral = 0,
+    Warning = 1,
+    Alert = 2,
+    Count = 3
+};
+
 struct PropertyItem
 {
     std::wstring label;
@@ -40,7 +48,7 @@ struct PropertyItem
     RECT valueRc;
     PropertyType type = PropertyType::Text;
     bool dirty = true;
-    bool warning = false;
+    TextLevel textLevel = TextLevel::Neutral;
     bool repaintLabel = true;
     int textX;
     int textY;
@@ -582,20 +590,6 @@ namespace RadeonMon::Hardware
         int value = 0;
         int min = 0;
         int max = 0;
-    };
-
-    struct MetricPower
-    {
-        bool isSupported = false;
-        int value = 0; // current power consumption
-
-        int min = 0;
-        int max = 0;
-
-        // Power Limit specific to Radeon
-        int minPLOffset = 0;
-        int maxPLOffset = 0;
-        int currentPL = 0;
     };
 
     struct FPSMetrics

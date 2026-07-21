@@ -39,19 +39,28 @@ constexpr int NOTIFICATION_FONTSIZE = 11;
 constexpr int CARD_FONTSIZE = 13;
 
 constexpr UINT FONTSIZE_MIN = 10;
-constexpr UINT FONTSIZE_MAX = 22;
+constexpr UINT FONTSIZE_MAX = 26;
 
-constexpr int TEMPERATURE_THRESHOLD = 95;
+constexpr int TEMPERATURE_WARNING_THRESHOLD = 95;
+constexpr int TEMPERATURE_ALERT_THRESHOLD = 100;
 
 #define rgb(r, g, b) RGB(r, g, b) // vscode trick
 constexpr COLORREF BACKGROUNDCOLOR = rgb(30, 30, 30);
 constexpr COLORREF LABELCOLOR = rgb(180, 180, 180);
 constexpr COLORREF VALUECOLOR = rgb(240, 240, 240);
 constexpr COLORREF WARNINGCOLOR = rgb(255, 165, 0);
+constexpr COLORREF ALERTCOLOR = rgb(221, 0, 0);
 constexpr COLORREF SEPARATORCOLOR = rgb(60, 60, 60);
 constexpr COLORREF BORDERCOLOR = rgb(200, 35, 35);
 constexpr COLORREF NOTIFICATIONCOLOR = rgb(241, 215, 5);
 constexpr COLORREF SERVERSTATUSCOLOR = rgb(0, 134, 223);
+
+constexpr COLORREF colorMapping[] = {
+    VALUECOLOR,
+    WARNINGCOLOR,
+    ALERTCOLOR};
+
+static_assert(std::size(colorMapping) == static_cast<std::size_t>(TextLevel::Count), "colorMapping and TextLevel are out of sync");
 
 // Timer IDs
 constexpr UINT_PTR APP_POLLING_ID = 1;
@@ -75,6 +84,7 @@ constexpr int IDM_EXIT = 1112;
 constexpr int WM_APP_LAYOUT = WM_APP + 1;
 constexpr int WM_APP_VERSION_RESULT = WM_APP + 2;
 constexpr int WM_APP_VERSION_ERROR = WM_APP + 3;
+constexpr int WM_APP_GPU_PWR_TUNING_CHANGE = WM_APP + 4;
 
 constexpr wchar_t REPOURL[] = L"https://api.github.com/repos/amu2mod/RadeonMon/releases/latest";
 constexpr wchar_t LATESTURL[] = L"https://github.com/amu2mod/RadeonMon/releases/latest";
