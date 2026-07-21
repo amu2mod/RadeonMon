@@ -21,12 +21,12 @@ This is an independent personal project and is not affiliated with AMD Corporati
           <td align="center">
             <img width="500" alt="Windows Main App" src="https://github.com/user-attachments/assets/f362581a-8627-4b04-b0ee-24113aa52e1a" />
             <br />
-            <sub><b>Desktop App</b> — Normal usage</sub>
+             <sub><b>Normal usage</b></sub>
           </td>
           <td align="center">
             <img width="500" alt="Warning and alert triggered" src="https://github.com/user-attachments/assets/1dba23ea-a731-408d-af93-2778db80c18a" />
             <br />
-            <sub><b>Desktop App</b> — Warning and alert triggered</sub>
+            <sub><b>Warning and alert triggered</b></sub>
           </td>
     </tr>
 </table>
@@ -37,12 +37,12 @@ This is an independent personal project and is not affiliated with AMD Corporati
     <td align="center">
       <img height="400" alt="Mobile Web Interface" src="https://github.com/user-attachments/assets/2c376468-a5b2-4e0a-adff-104ed4530304" />
       <br />
-      <sub><b>Web Interface</b> — Ultra-lightweight template optimized for mobile devices</sub>
+      <sub>Ultra-lightweight template optimized for mobile devices</sub>
     </td>
     <td align="center">
      <img width="500" alt="Dashboard Web Interface" src="https://github.com/user-attachments/assets/51f5bfb0-3d6f-42f0-9a4f-c1d340ac6e2c" />
       <br />
-      <sub><b>Web Interface</b> — Full-featured HTML dashboard with advanced CSS styling</sub>
+      <sub>Full-featured HTML dashboard with advanced CSS styling</sub>
     </td>
   </tr>
   <tr>
