@@ -1189,6 +1189,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 if (!g_webServer.LaunchServerOnInterface(netIf))
                 {
                     LOG_ERROR("[App] Failed to launch the server on interface %ls (%ls)", netIf.adapterName.c_str(), netIf.address.c_str());
+
+                    std::wstring message =
+                        L"Failed to launch the web server on interface \n\n"
+                        L"<" +
+                        netIf.adapterName + L">\n" +
+                        netIf.address +
+                        L"\nport " +
+                        WEBSERVER_PORT;
+
+                    TaskDialog(nullptr, nullptr, L"Server Launch Error", L"Unable to start the web server.", message.c_str(), TDCBF_OK_BUTTON, TD_ERROR_ICON, nullptr);
+
                     break;
                 }
                 auto addr = g_webServer.GetBoundInterface().value().address;
