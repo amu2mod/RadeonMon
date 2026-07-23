@@ -22,9 +22,9 @@ if(NOT GIT_TAG)
     set(GIT_TAG "v0.0.0")
 endif()
 
-string(REGEX MATCH "([0-9]+)\\.([0-9]+)\\.([0-9]+)" _ "${GIT_TAG}")
+string(REGEX MATCH "([0-9]+)\\.([0-9]+)\\.([0-9]+)" VERSION_MATCH "${GIT_TAG}")
 
-if(NOT CMAKE_MATCH_1)
+if(NOT VERSION_MATCH)
     message(FATAL_ERROR "Cannot parse version from git tag: ${GIT_TAG}")
 endif()
 
@@ -44,10 +44,6 @@ project(radeonmon
     VERSION ${APP_VERSION_STR}
     LANGUAGES CXX
 )
-
-# CPack version
-# set(CPACK_PACKAGE_VERSION "${APP_VERSION_STR}")
-# include(CPack)
 
 message(STATUS "Version string: ${APP_VERSION_STR}")
 message(STATUS "Version resource: ${APP_VERSION_RC}")
@@ -71,12 +67,25 @@ add_executable(radeonmon WIN32
     src/ryzen.cpp
     src/networking.cpp
     src/webserver.cpp
+    src/cpugraph.cpp
     resources/resources.rc
     ${CMAKE_BINARY_DIR}/generated/version.rc
 )
 
-# target_compile_definitions(radeonmon PRIVATE TEST)
-# target_compile_definitions(radeonmon PRIVATE LOCALFILES)
+option(ENABLE_TESTMODE "Enable TEST preprocessor define" OFF)
+option(ENABLE_LOCALFILES "Enable LOCALFILES preprocessor define" OFF)
+
+if(ENABLE_TESTMODE)
+    target_compile_definitions(radeonmon PRIVATE TESTMODE)
+endif()
+
+if(ENABLE_LOCALFILES)
+    target_compile_definitions(radeonmon PRIVATE LOCALFILES)
+endif()
+
+if(ENABLE_GDIDRAW)
+    target_compile_definitions(radeonmon PRIVATE GDIDRAW)
+endif()
 
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/radeonmon/version.hpp.in
@@ -92,9 +101,9 @@ configure_file(
 
 target_include_directories(radeonmon PRIVATE
     include
+    src
     third_party
     ${CMAKE_CURRENT_BINARY_DIR}/generated/include
-
 )
 
 target_compile_features(radeonmon PRIVATE cxx_std_23)
