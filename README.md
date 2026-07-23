@@ -36,6 +36,13 @@ This is an independent personal project and is not affiliated with AMD Corporati
             <sub><b>Warning and alert triggered</b></sub>
           </td>
     </tr>
+    <tr>
+      <td colspan="3" align="center">
+        <img height="300" alt="CPU bar graph" src="https://github.com/user-attachments/assets/36849a05-7690-4eac-9fc2-5a38e3fa77b7" />
+        <br />
+        <sub><b>CPU graph after clicking the CPU label</b></sub>
+      </td>
+    </tr>
 </table>
 
 # Web Interface
