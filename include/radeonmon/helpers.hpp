@@ -103,6 +103,63 @@ inline bool FormatTemperature(wchar_t (&buffer)[N], int temp)
 }
 
 template <size_t N>
+inline bool FormatTemperatureWithoutUnit(wchar_t (&buffer)[N], double temp)
+{
+    constexpr auto MAXBUFSIZE = _countof(L" 999.9"); // 7 characters
+    static_assert(N >= MAXBUFSIZE, "Buffer too small for FormatTemperature (double)");
+
+    constexpr int CONTENT_WIDTH = MAXBUFSIZE - 1; // 6
+
+    wchar_t *p = buffer;
+
+    // Invalid range
+    if (temp < -99.0 || temp > 999.9)
+    {
+        *p++ = L'n';
+        *p++ = L'/';
+        *p++ = L'a';
+        *p++ = L' ';
+        *p++ = L' ';
+        *p++ = L' ';
+        *p = L'\0';
+        return false;
+    }
+
+    // Leading space (matches original swprintf_s " %.1f")
+    *p++ = L' ';
+
+    // Handle negative
+    bool negative = temp < 0.0;
+    if (negative)
+        temp = -temp;
+
+    // Round to 1 decimal place
+    long long value = static_cast<long long>(temp * 10.0 + 0.5);
+    long long integer = value / 10;
+    int decimal = value % 10;
+
+    // Integer part
+    if (integer >= 100)
+        *p++ = static_cast<wchar_t>(L'0' + (integer / 100) % 10);
+
+    if (integer >= 10)
+        *p++ = static_cast<wchar_t>(L'0' + (integer / 10) % 10);
+
+    *p++ = static_cast<wchar_t>(L'0' + integer % 10);
+
+    // Decimal part
+    *p++ = L'.';
+    *p++ = static_cast<wchar_t>(L'0' + decimal);
+
+    // Pad with spaces to fixed width
+    while (p - buffer < CONTENT_WIDTH)
+        *p++ = L' ';
+
+    *p = L'\0';
+    return true;
+}
+
+template <size_t N>
 inline bool FormatHotspot(wchar_t (&buffer)[N], int temp, int hotspot)
 {
     constexpr auto MAXBUFSIZE = _countof(L"150°C (+100)"); // 13
@@ -501,6 +558,120 @@ inline bool FormatFPS(wchar_t (&buffer)[N], int current, int previous)
     return true;
 }
 
+template <size_t N>
+inline bool FormatFrequency(wchar_t (&buffer)[N], double freq)
+{
+    constexpr auto MAXBUFSIZE = _countof(L"9999"); // 5 characters
+    static_assert(N >= MAXBUFSIZE, "Buffer too small for FormatFrequency");
+
+    constexpr int CONTENT_WIDTH = MAXBUFSIZE - 1; // 4
+
+    wchar_t *p = buffer;
+
+    // Invalid range → "n/a "
+    if (freq < 0.0 || freq > 9999.0)
+    {
+        *p++ = L'n';
+        *p++ = L'/';
+        *p++ = L'a';
+        *p++ = L' ';
+        *p = L'\0';
+        return false;
+    }
+
+    // Round to nearest integer
+    long long value = static_cast<long long>(freq + 0.5);
+
+    if (value == 0)
+    {
+        *p++ = L'0';
+    }
+    else
+    {
+        wchar_t digits[8]; // enough for 9999
+        int i = 0;
+
+        while (value > 0)
+        {
+            digits[i++] = L'0' + (value % 10);
+            value /= 10;
+        }
+
+        while (i > 0)
+        {
+            *p++ = digits[--i];
+        }
+    }
+
+    // Pad with spaces to fixed width
+    while (p - buffer < CONTENT_WIDTH)
+        *p++ = L' ';
+
+    *p = L'\0';
+    return true;
+}
+
+template <size_t N>
+inline bool FormatUsage(wchar_t (&buffer)[N], double usage)
+{
+    constexpr auto MAXBUFSIZE = _countof(L" 100"); // 5 characters
+    static_assert(N >= MAXBUFSIZE, "Buffer too small for FormatUsage");
+
+    constexpr int CONTENT_WIDTH = MAXBUFSIZE - 1; // 4
+
+    wchar_t *p = buffer;
+    wchar_t *start = buffer;
+
+    // Invalid range
+    if (usage < 0.0 || usage > 100.0)
+    {
+        *p++ = L'n';
+        *p++ = L'/';
+        *p++ = L'a';
+        *p = L'\0';
+        while (p - start < CONTENT_WIDTH)
+            *p++ = L' ';
+        *p = L'\0';
+        return false;
+    }
+
+    // Round to nearest integer
+    long long value = static_cast<long long>(usage + 0.5);
+
+    // Format the number first
+    if (value == 0)
+    {
+        *p++ = L'0';
+    }
+    else if (value == 100)
+    {
+        *p++ = L'1';
+        *p++ = L'0';
+        *p++ = L'0';
+    }
+    else
+    {
+        if (value >= 10)
+            *p++ = static_cast<wchar_t>(L'0' + (value / 10));
+        *p++ = static_cast<wchar_t>(L'0' + (value % 10));
+    }
+
+    // Add left padding (spaces on the left)
+    int len = static_cast<int>(p - start);
+    if (len < CONTENT_WIDTH)
+    {
+        // Shift the number to the right
+        memmove(start + (CONTENT_WIDTH - len), start, len * sizeof(wchar_t));
+        // Fill left with spaces
+        for (int i = 0; i < CONTENT_WIDTH - len; ++i)
+            start[i] = L' ';
+        p = start + CONTENT_WIDTH;
+    }
+
+    *p = L'\0';
+    return true;
+}
+
 inline bool IsAMDVendor(const char *vendorId)
 {
     if (vendorId == nullptr)
@@ -797,3 +968,23 @@ inline void LogRect(const char *name, const RECT &rc)
         rc.bottom - rc.top);
 }
 #endif
+
+// Converts a UTF-8 (or ASCII-safe) byte buffer, as returned by WinHttpReadData,
+// into a std::wstring using the Win32 conversion API.
+inline std::wstring Utf8ToWide(const std::string &utf8)
+{
+    if (utf8.empty())
+    {
+        return std::wstring();
+    }
+
+    int required = MultiByteToWideChar(CP_UTF8, 0, utf8.data(), static_cast<int>(utf8.size()), nullptr, 0);
+    if (required <= 0)
+    {
+        return std::wstring();
+    }
+
+    std::wstring wide(required, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, utf8.data(), static_cast<int>(utf8.size()), &wide[0], required);
+    return wide;
+}

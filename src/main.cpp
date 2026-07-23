@@ -207,6 +207,7 @@ LayoutMetrics CalculateLayoutMetrics()
 
     // Font-derived
     m.lineHeight = sz.cy;
+    m.charWidth = sz.cx;
 
     // Constants: scale
     m.lineGap = ScaleFontMetric(LINE_GAP);
@@ -396,6 +397,8 @@ void LayoutProperties2(const LayoutMetrics &m)
 
         p.labelRc = {leftEdge, y, leftEdge + m.labelWidth, y + m.lineHeight};
         p.valueRc = {leftEdge + m.labelWidth + m.gap, y, rightEdge, y + m.lineHeight};
+
+        p.textLabelRc = {leftEdge, y, leftEdge + static_cast<int>(m.charWidth * p.label.size()), y + m.lineHeight};
 
         y += m.lineHeight;
     }
@@ -970,7 +973,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             }
 
             if (dirty)
+            {
                 InvalidateRect(hwnd, nullptr, FALSE);
+
+                if (g_cpuGraph.GetHwnd())
+                {
+                    g_cpuGraph.Update();
+                }
+            }
         }
         else if (wParam == NETWORK_TIMER_ID)
         {
@@ -1284,7 +1294,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         pt.x = LOWORD(lParam);
         pt.y = HIWORD(lParam);
 
-        if (PtInRect(&g_clickableUrlRect, pt) && g_webServer.IsRunning()) // web server url
+        if (PtInRect(&g_props[MetricsIndex::Cpu].textLabelRc, pt)) // cpu
+        {
+            // if (!g_cpuGraph.GetHwnd())
+            //     LOG_ERROR("Create failed");
+
+            g_cpuGraph.Create(hwnd);
+            g_cpuGraph.Show();
+
+            LOG_DEBUG("Showing CPU Graph");
+            return 0;
+        }
+
+        else if (PtInRect(&g_clickableUrlRect, pt) && g_webServer.IsRunning()) // web server url
         {
             LOG_DEBUG("Opening %ls", g_serverStatusRc.textValue);
             INT_PTR ret = OpenUrl(g_serverStatusRc.textValue);
@@ -1292,7 +1314,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 LOG_ERROR("Failed to open URL (ShellExecuteW): %td", ret);
             return 0;
         }
-        else if (PtInRect(&g_props[MetricsIndex::Display].labelRc, pt)) // display label
+        else if (PtInRect(&g_props[MetricsIndex::Display].textLabelRc, pt)) // display label
         {
             auto current = g_displayManager.Next();
             if (current.has_value())
@@ -1323,11 +1345,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             POINT pt = {LOWORD(lParam), HIWORD(lParam)};
 
-            if (PtInRect(&g_clickableUrlRect, pt) && g_webServer.IsRunning()) // web server url
+            if (g_cpu.IsInitialized() && PtInRect(&g_props[MetricsIndex::Cpu].textLabelRc, pt)) // cpu
+                SetCursor(LoadCursor(nullptr, IDC_HAND));
+            else if (PtInRect(&g_clickableUrlRect, pt) && g_webServer.IsRunning()) // web server url
             {
                 SetCursor(LoadCursor(nullptr, IDC_HAND));
             }
-            else if (PtInRect(&g_props[MetricsIndex::Display].labelRc, pt)) // display label
+            else if (PtInRect(&g_props[MetricsIndex::Display].textLabelRc, pt)) // display label
             {
                 SetCursor(LoadCursor(nullptr, IDC_HAND));
             }

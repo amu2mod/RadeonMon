@@ -53,6 +53,7 @@ struct PropertyItem
     int textX;
     int textY;
     UINT textLength = 0;
+    RECT textLabelRc;
 
     inline void SetLabel(const wchar_t *txt)
     {
@@ -570,6 +571,9 @@ struct LayoutMetrics
 
     int windowWidth;
     int windowHeight;
+
+    // font
+    int charWidth;
 };
 
 namespace RadeonMon::Hardware

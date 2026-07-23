@@ -2,6 +2,7 @@
 
 #include "radeonmon/constants.hpp"
 #include "radeonmon/logging.hpp"
+#include "radeonmon/helpers.hpp"
 
 #include <windows.h>
 #include <winhttp.h>
@@ -36,26 +37,6 @@ namespace VersionChecker
             host = hostBuf;
             path = pathBuf;
             return true;
-        }
-
-        // Converts a UTF-8 (or ASCII-safe) byte buffer, as returned by WinHttpReadData,
-        // into a std::wstring using the Win32 conversion API.
-        inline std::wstring Utf8ToWide(const std::string &utf8)
-        {
-            if (utf8.empty())
-            {
-                return std::wstring();
-            }
-
-            int required = MultiByteToWideChar(CP_UTF8, 0, utf8.data(), static_cast<int>(utf8.size()), nullptr, 0);
-            if (required <= 0)
-            {
-                return std::wstring();
-            }
-
-            std::wstring wide(required, L'\0');
-            MultiByteToWideChar(CP_UTF8, 0, utf8.data(), static_cast<int>(utf8.size()), &wide[0], required);
-            return wide;
         }
 
         // Extracts the value of "tag_name": "<value>" from a raw wide JSON string.
@@ -221,7 +202,7 @@ namespace VersionChecker
                 break;
             }
 
-            outBody = detail::Utf8ToWide(rawBody);
+            outBody = Utf8ToWide(rawBody);
             success = true;
             LOG_TRACE("[VersionChecker] fetched %zu bytes from REPOURL (HTTP 200)", rawBody.size());
 

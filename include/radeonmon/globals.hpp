@@ -14,6 +14,7 @@
 #include "radeonmon/networking.hpp"
 #include "radeonmon/webserver.hpp"
 #include "radeonmon/processwatcher.hpp"
+#include "radeonmon/cpugraph.hpp"
 
 inline UINT g_dpi = 96;
 inline GdiBackBuffer g_backBuffer;
@@ -109,3 +110,5 @@ inline int g_currentWebTemplate = IDM_WEBSERVER_TEMPLATE_LIGHT;
 inline ProcessWatcher g_processWatcher{g_cpu, g_webServer};
 
 inline AppTitle g_appTitle(APPNAME, APPNAME_LENGTH);
+
+inline CpuGraphWindow g_cpuGraph(g_cpu);
