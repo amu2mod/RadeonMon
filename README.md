@@ -4,6 +4,8 @@ A lightweight Windows monitoring application for AMD Radeon GPUs, built using th
 
 Designed for low-overhead real-time monitoring with minimal CPU and GPU resource usage, keeping performance impact as low as possible.
 
+The interface is fully resizable, with large, easy-to-read text and DPI awareness for each monitor, ensuring crisp and sharp display across different screen sizes and scaling settings.
+
 Monitor GPU metrics such as temperatures, VRAM temp and power consumption. RadeonMon is read-only and does not modify GPU settings or apply configuration changes. 
 
 Includes a lightweight local web interface for remote monitoring from a phone or a tablet on your local network.
@@ -14,22 +16,35 @@ This is an independent personal project and is not affiliated with AMD Corporati
 
 ## Overview
 
+# Windows Desktop Application
+
+<table align="center">
+    <tr>
+          <td align="center">
+            <img width="500" alt="Windows Main App" src="https://github.com/user-attachments/assets/f362581a-8627-4b04-b0ee-24113aa52e1a" />
+            <br />
+             <sub><b>Normal usage</b></sub>
+          </td>
+          <td align="center">
+            <img width="500" alt="Warning and alert triggered" src="https://github.com/user-attachments/assets/1dba23ea-a731-408d-af93-2778db80c18a" />
+            <br />
+            <sub><b>Warning and alert triggered</b></sub>
+          </td>
+    </tr>
+</table>
+
+# Web Interface
 <table align="center">
   <tr>
     <td align="center">
-      <img width="321" alt="1" src="https://github.com/user-attachments/assets/63c701ee-5937-419f-b9f0-b5e9bdb33209" />
-      <br />
-      <sub><b>Desktop App</b> — Main Application Window</sub>
-    </td>
-    <td align="center">
       <img height="400" alt="Mobile Web Interface" src="https://github.com/user-attachments/assets/2c376468-a5b2-4e0a-adff-104ed4530304" />
       <br />
-      <sub><b>Web Interface</b> — Ultra-lightweight template optimized for mobile devices</sub>
+      <sub>Ultra-lightweight template optimized for mobile devices</sub>
     </td>
     <td align="center">
      <img width="500" alt="Dashboard Web Interface" src="https://github.com/user-attachments/assets/51f5bfb0-3d6f-42f0-9a4f-c1d340ac6e2c" />
       <br />
-      <sub><b>Web Interface</b> — Full-featured HTML dashboard with advanced CSS styling</sub>
+      <sub>Full-featured HTML dashboard with advanced CSS styling</sub>
     </td>
   </tr>
   <tr>
@@ -41,7 +56,7 @@ This is an independent personal project and is not affiliated with AMD Corporati
     <td colspan="2" align="center" valign="middle">
       <img width="600" alt="image" src="https://github.com/user-attachments/assets/1e4000f0-481e-44d9-9ba8-9ad76031e6df" />
       <br />
-      <sub><b>Top Processes (Web Only)</b> — Highlights resource-heavy processes to quickly identify potential performance bottlenecks</sub>
+      <sub><b>Top Processes</b> — Highlights resource-heavy processes to quickly identify potential performance bottlenecks</sub>
     </td>
   </tr>
 </table>
