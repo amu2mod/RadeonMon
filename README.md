@@ -21,6 +21,11 @@ This is an independent personal project and is not affiliated with AMD Corporati
 <table align="center">
     <tr>
           <td align="center">
+            <img width="500" alt="idle state" src="https://github.com/user-attachments/assets/862abc7b-f053-400f-a6cf-629e094a9ee7" />
+            <br />
+             <sub><b>Idle GPU state showing minimal power consumption</b></sub>
+          </td>
+          <td align="center">
             <img width="500" alt="Windows Main App" src="https://github.com/user-attachments/assets/f362581a-8627-4b04-b0ee-24113aa52e1a" />
             <br />
              <sub><b>Normal usage</b></sub>
