@@ -95,6 +95,7 @@ constexpr wchar_t LATESTURL[] = L"https://github.com/amu2mod/RadeonMon/releases/
 constexpr wchar_t ABOUTURL[] = L"https://github.com/amu2mod/RadeonMon";
 
 constexpr wchar_t WEBSERVER_PORT[] = L"9090";
+constexpr int WEBSERVER_PORT_NUM = 9090;
 
 // Tooltips
 constexpr UINT_PTR TOOLID_GPUINFO = 1;

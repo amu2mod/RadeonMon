@@ -1,4 +1,4 @@
-const API_URL = `http://${window.location.hostname}:9090/api`;
+const API_URL = `https://${window.location.hostname}:9090/api`;
 const POLL_INTERVAL = 2000;
 const MAX_HISTORY = 30; // 60s sliding window
 const CIRCUMFERENCE = 150.8; // 2 * Math.PI * 24
@@ -6,6 +6,77 @@ let currentCores = [];
 // Connection title state flags
 let isCpuTitleSet = false;
 let isGpuTitleSet = false;
+
+// --- Header Fullscreen Toggle with Wake Lock ---
+const fullscreenBtn = document.getElementById('fullscreen-btn');
+let wakeLock = null;
+
+async function requestWakeLock() {
+    try {
+        if ('wakeLock' in navigator) {
+            wakeLock = await navigator.wakeLock.request('screen');
+        }
+    } catch (err) {
+        console.warn(`Wake Lock error: ${err.name}, ${err.message}`);
+    }
+}
+
+async function releaseWakeLock() {
+    if (wakeLock !== null) {
+        try {
+            await wakeLock.release();
+            wakeLock = null;
+        } catch (err) {
+            console.warn(`Wake Lock release error: ${err.name}, ${err.message}`);
+        }
+    }
+}
+
+if (fullscreenBtn) {
+    const btnText = fullscreenBtn.querySelector('.btn-text');
+
+    async function updateFullscreenUI() {
+        const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+        fullscreenBtn.classList.toggle('is-fullscreen', isFS);
+        if (btnText) {
+            btnText.textContent = isFS ? 'Exit Fullscreen' : 'Fullscreen';
+        }
+
+        if (isFS) {
+            await requestWakeLock();
+        } else {
+            await releaseWakeLock();
+        }
+    }
+
+    fullscreenBtn.addEventListener('click', () => {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen();
+            } else if (document.documentElement.webkitRequestFullscreen) {
+                document.documentElement.webkitRequestFullscreen();
+            }
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        }
+    });
+
+    document.addEventListener('visibilitychange', async () => {
+        const isFS = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        if (wakeLock !== null && document.visibilityState === 'visible' && isFS) {
+            await requestWakeLock();
+        }
+    });
+
+    document.addEventListener('fullscreenchange', updateFullscreenUI);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenUI);
+}
+
 
 const CORE_METRIC_CONFIG = {
     t: { max: 100, unit: '°C' },
@@ -844,5 +915,91 @@ window.addEventListener('resize', () => {
     if (currentView === 'advanced' || currentView === 'expert') renderCharts();
 });
 
+document.addEventListener('DOMContentLoaded', () => {
+    const STORAGE_KEY = 'radeonmon_card_order';
+
+    // 1. Function to update disabled state of up/down buttons
+    function updateButtonStates() {
+        const cards = Array.from(document.querySelectorAll('.card'));
+
+        // Ensure every card has a numerical order assigned
+        cards.forEach((c, i) => {
+            if (c.style.order === '') c.style.order = i;
+        });
+
+        // Sort by current CSS order
+        cards.sort((a, b) => parseInt(a.style.order) - parseInt(b.style.order));
+
+        cards.forEach((card, index) => {
+            const upBtn = card.querySelector('.order-btn.move-up');
+            const downBtn = card.querySelector('.order-btn.move-down');
+
+            if (upBtn) upBtn.disabled = (index === 0);
+            if (downBtn) downBtn.disabled = (index === cards.length - 1);
+        });
+    }
+
+    // 2. Save current order to LocalStorage
+    function saveCardOrder() {
+        const cardOrderData = [];
+        document.querySelectorAll('.card').forEach(card => {
+            if (card.id) {
+                cardOrderData.push({ id: card.id, order: card.style.order });
+            }
+        });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cardOrderData));
+    }
+
+    // 3. Restore order from LocalStorage
+    function loadCardOrder() {
+        const savedOrder = localStorage.getItem(STORAGE_KEY);
+        if (!savedOrder) return;
+
+        try {
+            const cardOrderData = JSON.parse(savedOrder);
+            cardOrderData.forEach(item => {
+                const card = document.getElementById(item.id);
+                if (card) {
+                    card.style.order = item.order;
+                }
+            });
+        } catch (e) {
+            console.error('Failed to load card order from localStorage', e);
+        }
+    }
+
+    // Initialize layout and button states on startup
+    loadCardOrder();
+    updateButtonStates();
+
+    // 4. Delegate click event for reordering buttons
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.order-btn');
+        if (!btn || btn.disabled) return;
+
+        const card = btn.closest('.card');
+        const parent = card.parentElement;
+        const cards = Array.from(parent.children).filter(c => c.classList.contains('card'));
+
+        cards.forEach((c, i) => {
+            if (c.style.order === '') c.style.order = i;
+        });
+
+        cards.sort((a, b) => parseInt(a.style.order) - parseInt(b.style.order));
+
+        const index = cards.indexOf(card);
+        const targetIndex = btn.classList.contains('move-up') ? index - 1 : index + 1;
+
+        if (targetIndex >= 0 && targetIndex < cards.length) {
+            const targetCard = cards[targetIndex];
+            [card.style.order, targetCard.style.order] = [targetCard.style.order, card.style.order];
+
+            saveCardOrder();
+            updateButtonStates();
+        }
+    });
+});
+
 fetchMetrics();
 setInterval(fetchMetrics, POLL_INTERVAL);
+

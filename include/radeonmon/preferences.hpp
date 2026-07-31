@@ -38,6 +38,9 @@ inline void SavePreferences()
 
     swprintf_s(buffer, L"%d", g_currentWebTemplate == IDM_WEBSERVER_TEMPLATE_LIGHT ? IDM_WEBSERVER_TEMPLATE_LIGHT : IDM_WEBSERVER_TEMPLATE_HEAVY);
     WritePrivateProfileStringW(L"WebServer", L"Template", buffer, path);
+
+    swprintf_s(buffer, L"%d", g_DontShowHttpsWebServerWarning ? 1 : 0);
+    WritePrivateProfileStringW(L"WebServer", L"WebServerHttpsWarning", buffer, path);
 }
 
 inline void LoadPreferences()
@@ -61,4 +64,6 @@ inline void LoadPreferences()
     g_isFpsEnabled = GetPrivateProfileIntW(L"Window", L"FpsEnabled", 0, path) != 0;
 
     g_currentWebTemplate = GetPrivateProfileIntW(L"WebServer", L"Template", IDM_WEBSERVER_TEMPLATE_LIGHT, path);
+
+    g_DontShowHttpsWebServerWarning = GetPrivateProfileIntW(L"WebServer", L"WebServerHttpsWarning", 0, path) != 0;
 }

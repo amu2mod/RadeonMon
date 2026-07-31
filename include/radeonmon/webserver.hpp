@@ -10,6 +10,8 @@
 
 #include <windows.h>
 #include <http.h>
+#include <wincrypt.h>
+#include <ncrypt.h>
 
 #include <string>
 #include <thread>
@@ -73,6 +75,8 @@ private:
     bool SendErrorResponse(HTTP_REQUEST_ID requestId, USHORT statusCode, const char *reason);
     bool SendResourceResponse(HTTP_REQUEST_ID requestId, int resourceId);
     bool SendJsonResponse(HTTP_REQUEST_ID requestId, const char *json, ULONG jsonSize);
+    PCCERT_CONTEXT GetOrCreateSelfSignedCert(const std::wstring &subjectCn);
+    bool BindSslCert(const std::wstring &ipAddress, USHORT port, PCCERT_CONTEXT cert);
 
     HANDLE m_hReqQueue = NULL;
     HTTP_SERVER_SESSION_ID m_serverSession = 0;

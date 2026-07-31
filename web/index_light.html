@@ -13,37 +13,104 @@
       }
 
       body {
+        display: flex;
+        flex-direction: column;
         user-select: none;
         -webkit-user-select: none;
         -webkit-tap-highlight-color: transparent;
+        padding: 0.6rem 0.5rem;
+        box-sizing: border-box;
       }
 
       html {
         background-color: rgb(30, 30, 30);
         color: rgb(240, 240, 240);
         font-family: Consolas, "SFMono-Regular", "Liberation Mono", Menlo, Monaco, monospace;
-        padding: 0.6rem 0.5rem;
+      }
+
+      /* Floating Fullscreen Toggle Button at 75% width */
+      #fullscreen-btn {
+        position: fixed;
+        top: 0.5rem;
+        left: 75%;
+        transform: translateX(-50%);
+        z-index: 2000;
+        background: #2a2a2a;
+        color: #888888;
+        border: 1px solid #383838;
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        font-family: inherit;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+        transition: background 0.2s, color 0.2s;
+        white-space: nowrap;
+      }
+
+      #fullscreen-btn:hover {
+        background: #383838;
+        color: #ffffff;
+      }
+
+      body > pre {
+        position: relative;
+        margin-top: 0;
+        margin-bottom: 1.1rem;
+        padding-bottom: 1.1rem;
+        padding-right: 2.5rem;
+        border-bottom: 1px solid #383838;
+      }
+
+      body > pre:last-child {
+        margin-bottom: 0;
+        border-bottom: none;
       }
 
       pre {
-        white-space: pre-wrap;
-        word-break: break-word;
-        font-family: monospace;
-        font-size: clamp(0.85rem, 5.6vw, 2rem);
+        font-size: clamp(1rem, 2.5vw, 1.5rem);
       }
 
-      #gpu, #cpu {
+      #fps {
         margin-top: 0;
-        padding-bottom: 1.1rem;
-        margin-bottom: 1.1rem;
-        border-bottom: 1px solid #ffffff;
+        display: flex;
+        align-items: center;
+        min-height: 1.5rem;
       }
 
-      #cpu {
-        margin-bottom: 0;
+      .section-controls {
+        position: absolute;
+        top: 0;
+        right: 0;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
       }
 
-      /* Colored Text Badges with Tight Border & Box Glow */
+      .btn-order {
+        background: #2a2a2a;
+        color: #888888;
+        border: 1px solid #383838;
+        border-radius: 3px;
+        padding: 2px 6px;
+        font-size: 0.65rem;
+        line-height: 1;
+        cursor: pointer;
+        font-family: inherit;
+      }
+
+      .btn-order:hover:not(:disabled) {
+        background: #383838;
+        color: #ffffff;
+      }
+
+      .btn-order:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+        border-color: #2a2a2a;
+      }
+
       .badge {
         display: inline-block;
         padding: 0.05em 0.3em;
@@ -53,15 +120,15 @@
       }
 
       .badge-gpu {
-        color: #E60012; /* AMD Radeon Red Font */
+        color: #E60012;
         border: 1px solid #E60012;
-        box-shadow: 0 0 8px rgba(230, 0, 19, 0.322); /* Red Box Glow */
+        box-shadow: 0 0 8px rgba(230, 0, 19, 0.322);
       }
 
       .badge-cpu {
-        color: #ED5C2B; /* AMD Ryzen Orange Font */
+        color: #ED5C2B;
         border: 1px solid #ED5C2B;
-        box-shadow: 0 0 8px rgba(237, 91, 43, 0.308); /* Orange Box Glow */
+        box-shadow: 0 0 8px rgba(237, 91, 43, 0.308);
       }
 
       .bar {
@@ -71,102 +138,205 @@
         vertical-align: middle;
       }
 
-      @media screen and (min-width: 900px) {
-        pre {
-          font-size: clamp(0.85rem, 5vw, 1.8rem);
+      .core-row {
+        display: flex;
+        flex-wrap: wrap;
+        column-gap: 1ch;
+        row-gap: 0.2rem;
+        margin-bottom: 0.2rem;
+      }
+
+      .core-info {
+        white-space: pre;
+      }
+
+      .core-bar {
+        white-space: pre;
+      }
+
+      @media screen and (min-width: 600px) {
+        body {
+          padding: 0.6rem 0.5rem;
         }
       }
+
+      @media screen and (min-width: 1024px) {
+        body {
+          padding: 2.5rem 4rem;
+          max-width: 1400px;
+          margin: 0 auto;
+        }
+
+        #fullscreen-btn {
+          left: 50%;
+        }
+      }
+
     </style>
   </head>
 <body>
 
-<pre id="gpu"></pre>
-<pre id="cpu"></pre>
-<pre id="fps"></pre>
-<pre id="process"></pre>
+<button id="fullscreen-btn" onclick="toggleFullscreen()">Enter Fullscreen</button>
+
+<pre id="fps" style="order: 1;"><div class="section-controls"><button class="btn-order btn-up" onclick="moveSection(this, -1)">▲</button><button class="btn-order btn-down" onclick="moveSection(this, 1)">▼</button></div><span class="content"></span></pre>
+<pre id="gpu" style="order: 2;"><div class="section-controls"><button class="btn-order btn-up" onclick="moveSection(this, -1)">▲</button><button class="btn-order btn-down" onclick="moveSection(this, 1)">▼</button></div><span class="content"></span></pre>
+<pre id="cpu" style="order: 3;"><div class="section-controls"><button class="btn-order btn-up" onclick="moveSection(this, -1)">▲</button><button class="btn-order btn-down" onclick="moveSection(this, 1)">▼</button></div><span class="content"></span></pre>
+<pre id="process" style="order: 4;"><div class="section-controls"><button class="btn-order btn-up" onclick="moveSection(this, -1)">▲</button><button class="btn-order btn-down" onclick="moveSection(this, 1)">▼</button></div><span class="content"></span></pre>
 
 <script>
 const NA = "--";
+const STORAGE_KEY = "overlay_section_orders";
 
 const val = (v, fallback = NA) => v ?? fallback;
 const metric = (obj, fallback = NA) => obj?.value ?? fallback;
-const fixed = (v, digits = 1, fallback = NA) =>  typeof v === "number" ? v.toFixed(digits) : fallback;
+const fixed = (v, digits = 1, fallback = NA) => typeof v === "number" ? v.toFixed(digits) : fallback;
 const dim = (text) => `<span class="dim">${text}</span>`;
 const badgeGpu = (text) => `<span class="badge badge-gpu">${text}</span>`;
 const badgeCpu = (text) => `<span class="badge badge-cpu">${text}</span>`;
 
 let previousFps = null;
 
+let wakeLock = null;
+
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => {
+        wakeLock = null;
+      });
+    } else {
+      console.warn('Wake Lock API not available');
+    }
+  } catch (err) {
+    console.warn('Wake Lock request failed:', err.name, err.message);
+  }
+}
+
+async function releaseWakeLock() {
+  if (wakeLock) {
+    try {
+      await wakeLock.release();
+    } catch (err) {}
+    wakeLock = null;
+  }
+}
+
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && document.fullscreenElement && !wakeLock) {
+    await requestWakeLock();
+  }
+});
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+document.addEventListener('fullscreenchange', async () => {
+  const btn = document.getElementById('fullscreen-btn');
+  if (document.fullscreenElement) {
+    btn.textContent = 'Exit Fullscreen';
+    await requestWakeLock();
+  } else {
+    btn.textContent = 'Enter Fullscreen';
+    await releaseWakeLock();
+  }
+});
+
+function saveOrders() {
+  const orders = {};
+  document.querySelectorAll('body > pre').forEach(pre => {
+    if (pre.id) {
+      orders[pre.id] = pre.style.order;
+    }
+  });
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+  } catch (e) {}
+}
+
+function loadOrders() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
+    const orders = JSON.parse(saved);
+    Object.entries(orders).forEach(([id, order]) => {
+      const pre = document.getElementById(id);
+      if (pre) pre.style.order = order;
+    });
+  } catch (e) {}
+}
+
+function updateButtonStates() {
+  const allPres = Array.from(document.querySelectorAll('body > pre'));
+  allPres.sort((a, b) => parseInt(a.style.order || 0) - parseInt(b.style.order || 0));
+
+  allPres.forEach((pre, index) => {
+    const btnUp = pre.querySelector('.btn-up');
+    const btnDown = pre.querySelector('.btn-down');
+
+    if (btnUp) btnUp.disabled = (index === 0);
+    if (btnDown) btnDown.disabled = (index === allPres.length - 1);
+  });
+}
+
+function moveSection(btn, direction) {
+  const currentPre = btn.closest('pre');
+  const allPres = Array.from(document.querySelectorAll('body > pre'));
+
+  allPres.sort((a, b) => parseInt(a.style.order || 0) - parseInt(b.style.order || 0));
+
+  const currentIndex = allPres.indexOf(currentPre);
+  const targetIndex = currentIndex + direction;
+
+  if (targetIndex >= 0 && targetIndex < allPres.length) {
+    const targetPre = allPres[targetIndex];
+    
+    const tempOrder = currentPre.style.order;
+    currentPre.style.order = targetPre.style.order;
+    targetPre.style.order = tempOrder;
+
+    updateButtonStates();
+    saveOrders();
+  }
+}
+
 function formatHotspotDelta(gpuTemp, hotspotTemp) {
   if (typeof gpuTemp !== "number" || typeof hotspotTemp !== "number") return "";
-
   const delta = Math.round(hotspotTemp - gpuTemp);
-
-  // If delta is 0 or negative, display nothing
   if (delta <= 0) return "";
-
   const text = ` (+${delta})`;
-
-  // Threshold 2: Critical (Above 40°C delta)
-  if (delta > 40) {
-    return `<span class="temp-hot">${text}</span>`;
-  }
-
-  // Threshold 1: Warning (Above 25°C delta)
-  if (delta > 25) {
-    return `<span class="temp-warm">${text}</span>`;
-  }
-
-  // Standard output (dimmed to keep focus on primary reading)
+  if (delta > 40) return `<span class="temp-hot">${text}</span>`;
+  if (delta > 25) return `<span class="temp-warm">${text}</span>`;
   return `<span class="dim">${text}</span>`;
 }
 
 function colorTemp(temp) {
   if (typeof temp !== "number") return `<span>${NA}</span>`;
-
   const formatted = temp.toFixed(1);
-
   if (temp >= 100) return `<span class="temp-hot">${formatted}</span>`;
   if (temp >= 95)  return `<span class="temp-warm">${formatted} </span>`;
-
   return `<span>${formatted} </span>`;
 }
 
 function colorFan(fanSpeed, hotspot) {
   if (typeof fanSpeed !== "number") return `<span>${NA}</span>`;
-
-  if (fanSpeed < 500 && typeof hotspot === "number" && hotspot > 90) {
-    return `<span class="temp-hot">${fanSpeed}</span>`;
-  }
-
-  if (fanSpeed <= 300 && typeof hotspot === "number" && hotspot > 80) {
-    return `<span class="temp-warm">${fanSpeed}</span>`;
-  }
-
+  if (fanSpeed < 500 && typeof hotspot === "number" && hotspot > 90) return `<span class="temp-hot">${fanSpeed}</span>`;
+  if (fanSpeed <= 300 && typeof hotspot === "number" && hotspot > 80) return `<span class="temp-warm">${fanSpeed}</span>`;
   return `<span>${fanSpeed}</span>`;
 }
 
 function formatFpsDelta(currentFps, previousFps) {
   if (typeof currentFps !== "number" || typeof previousFps !== "number") return "";
-
   const delta = Math.round(currentFps - previousFps);
-
-  // No change: display nothing
   if (delta === 0) return "";
-
   const text = ` (${delta > 0 ? "+" : ""}${delta})`;
-
-  // FPS drop: critical
-  if (delta < -20) {
-    return `<span class="temp-hot">${text}</span>`;
-  }
-
-  // FPS drop: warning
-  if (delta < -10) {
-    return `<span class="temp-warm">${text}</span>`;
-  }
-
-  // FPS increase or small decrease
+  if (delta < -20) return `<span class="temp-hot">${text}</span>`;
+  if (delta < -10) return `<span class="temp-warm">${text}</span>`;
   return `<span class="dim">${text}</span>`;
 }
 
@@ -195,7 +365,7 @@ async function update() {
 
   const deltaTag = formatHotspotDelta(gpuTempMetric, hotspotMetric);
 
-  gpu.innerHTML =
+  document.querySelector("#gpu .content").innerHTML =
   `${dim("GPU:")} ${gpuName !== NA ? badgeGpu(gpuName) : NA}
 
   ${dim("Temp:")}       ${colorTemp(gpuTempMetric)} ${dim("°C")}
@@ -229,41 +399,38 @@ ${colorTemp(cpuData.temperature)} ${dim("°C")},  ${val(cpuData.power)} ${dim("W
     const unitMhz = dim("MHz");
     const unitPercent = dim("%");
 
-      cpuText +=
-`${coreLabel} ${colorTemp(tempVal)} ${unitDeg} ${fixed(clockVal, 0).padStart(6)} ${unitMhz} ${fixed(c?.u).padStart(5)}${unitPercent}${window.innerWidth < 900 ? '\n' : ''}   [${bar}]\n`;
+    cpuText += `<div class="core-row">
+      <span class="core-info">${coreLabel} ${colorTemp(tempVal)} ${unitDeg} ${fixed(clockVal, 0).padStart(6)} ${unitMhz} ${fixed(c?.u).padStart(5)}${unitPercent}</span>
+      <span class="core-bar">[${bar}]</span>
+    </div>`;
   });
 
-  cpu.innerHTML = cpuText;
+  document.querySelector("#cpu .content").innerHTML = cpuText;
 
-const fpsValue = data?.fps < 0 ? null : data?.fps;
+  const fpsValue = data?.fps < 0 ? null : data?.fps;
+  const fpsDelta = formatFpsDelta(fpsValue, previousFps);
 
-const fpsDelta = formatFpsDelta(fpsValue, previousFps);
+  document.querySelector("#fps .content").innerHTML = `${dim("FPS:")} ${typeof fpsValue === "number" ? fpsValue.toFixed(0) : NA}${fpsDelta}`;
 
-fps.innerHTML =
-`${dim("FPS:")} ${typeof fpsValue === "number" ? fpsValue.toFixed(0) : NA}${fpsDelta}`;
-
-if (typeof fpsValue === "number") {
-  previousFps = fpsValue;
-}
-
-let processText = `${dim("Processes:")}\n\n`;
-
-for (let i = 0; i < 5; i++) {
-  const p = processes[i];
-
-  if (p) {
-    const name = p?.name ?? NA;
-    const cpu = fixed(p?.cpu);
-
-    processText +=
-`${dim(`${String(i + 1).padStart(2)}.`)} ${name.padEnd(18)} ${cpu.padStart(5)}${dim("%")}\n`;
-  } else {
-    processText +=
-`${dim(`${String(i + 1).padStart(2)}.`)} ${NA.padEnd(18)} ${"0".padStart(5)}${dim("%")}\n`;
+  if (typeof fpsValue === "number") {
+    previousFps = fpsValue;
   }
-}
 
-process.innerHTML = processText;
+  let processText = `${dim("Processes:")}\n\n`;
+
+  for (let i = 0; i < 5; i++) {
+    const p = processes[i];
+    if (p) {
+      const name = p?.name ?? NA;
+      const cpu = fixed(p?.cpu);
+      processText += `${dim(`${String(i + 1).padStart(2)}.`)} ${name.padEnd(18)} ${cpu.padStart(5)}${dim("%")}\n`;
+    } else {
+      const processName = NA.padEnd(18);
+      processText += `${dim(`${String(i + 1).padStart(2)}.`)} ${processName} ${"0".padStart(5)}${dim("%")}\n`;
+    }
+  }
+
+  document.querySelector("#process .content").innerHTML = processText;
 }
 
 let failedAttempts = 0;
@@ -272,19 +439,20 @@ const MAX_FAILURES = 3;
 async function loop() {
   try {
     await update();
-    failedAttempts = 0; // Reset counter on successful update
+    failedAttempts = 0;
   } catch (e) {
     failedAttempts++;
-
     if (failedAttempts >= MAX_FAILURES) {
-      gpu.textContent = "";
-      cpu.textContent = "connection lost, restart the webserver and refresh this page";
-      return; // Stop scheduling further updates
+      document.querySelectorAll('pre').forEach(p => p.style.display = 'none');
+      document.body.innerHTML = '<pre>connection lost, restart the webserver and refresh this page</pre>';
+      return;
     }
   }
-
   setTimeout(loop, 2000);
 }
+
+loadOrders();
+updateButtonStates();
 
 loop();
 </script>

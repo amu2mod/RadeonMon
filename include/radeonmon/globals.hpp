@@ -112,3 +112,5 @@ inline ProcessWatcher g_processWatcher{g_cpu, g_webServer};
 inline AppTitle g_appTitle(APPNAME, APPNAME_LENGTH);
 
 inline CpuGraphWindow g_cpuGraph(g_cpu);
+
+inline bool g_DontShowHttpsWebServerWarning = false;

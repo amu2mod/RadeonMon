@@ -14,6 +14,8 @@
 
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "crypt32.lib")
+#pragma comment(lib, "ncrypt.lib")
 
 WebServer::WebServer() : m_hReqQueue(NULL), m_running(false), m_initialized(false) {}
 
@@ -25,14 +27,15 @@ WebServer::~WebServer()
         HttpTerminate(HTTP_INITIALIZE_SERVER, nullptr);
 }
 
-bool WebServer::Init(const std::wstring &urlPrefix, const std::wstring &htmlFilePath)
+bool WebServer::Init(const std::wstring &netInterfaceAddress, const std::wstring &htmlFilePath)
 {
-
     // required for winsock functions
     WSADATA wsaData;
     int r = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (r != 0)
         LOG_DEBUG("[WebServer] WSAStartup failed: %d", r);
+
+    std::wstring urlPrefix = L"https://" + netInterfaceAddress + L":" + WEBSERVER_PORT + L"/";
 
     m_urlPrefix = urlPrefix;
     m_htmlFilePath = htmlFilePath;
@@ -40,10 +43,22 @@ bool WebServer::Init(const std::wstring &urlPrefix, const std::wstring &htmlFile
     ULONG result = NO_ERROR;
     HTTP_BINDING_INFO bindingInfo = {};
 
-    result = HttpInitialize(HTTPAPI_VERSION_2, HTTP_INITIALIZE_SERVER, nullptr);
+    result = HttpInitialize(HTTPAPI_VERSION_2, HTTP_INITIALIZE_SERVER | HTTP_INITIALIZE_CONFIG, nullptr);
 
     if (result != NO_ERROR)
         goto fail;
+
+    // bind the SSL cert
+    if (m_urlPrefix.rfind(L"https://", 0) == 0)
+    {
+        auto cert = GetOrCreateSelfSignedCert(netInterfaceAddress);
+        if (cert)
+        {
+            if (!BindSslCert(netInterfaceAddress, WEBSERVER_PORT_NUM, cert))
+                LOG_DEBUG("[WebServer] BindSslCert failed, continuing without HTTPS bind");
+            CertFreeCertificateContext(cert);
+        }
+    }
 
     result = HttpCreateServerSession(HTTPAPI_VERSION_2, &m_serverSession, 0);
 
@@ -560,11 +575,19 @@ bool WebServer::LaunchServerOnInterface(const NetworkInterface &netIf)
         return false;
     }
 
-    std::wstring urlPrefix = L"http://" + netIf.address + L":" + WEBSERVER_PORT + L"/";
+    // auto cert = GetOrCreateSelfSignedCert(netIf.address);
+    // if (cert)
+    // {
+    //     BindSslCert(netIf.address, WEBSERVER_PORT_NUM, cert);
+    //     CertFreeCertificateContext(cert);
+    // }
+
+    // std::wstring urlPrefix = L"https://" + netIf.address + L":" + WEBSERVER_PORT + L"/";
+    // std::wstring urlPrefix = L"http://" + netIf.address + L":" + WEBSERVER_PORT + L"/";
 
     auto html = LoadResourceString(IDR_INDEX_HTML);
 
-    if (!Init(urlPrefix, L"index.html"))
+    if (!Init(netIf.address, L"index.html"))
     {
         LOG_ERROR("[WebServer] Init failed for %ls, ERROR_ACCESS_DENIED", std::wstring(netIf.address.begin(), netIf.address.end()).c_str());
         return false;
@@ -584,4 +607,138 @@ bool WebServer::LaunchServerOnInterface(const NetworkInterface &netIf)
     m_boundInterface = netIf;
 
     return IsRunning();
+}
+
+// Returns a cert context with a private key, creating one in the machine
+// store if it doesn't already exist. Caller must CertFreeCertificateContext.
+PCCERT_CONTEXT WebServer::GetOrCreateSelfSignedCert(const std::wstring &subjectCn)
+{
+    HCERTSTORE hStore = CertOpenStore(CERT_STORE_PROV_SYSTEM, 0, 0, CERT_SYSTEM_STORE_LOCAL_MACHINE, L"MY");
+    if (!hStore)
+        return nullptr;
+
+    // Look for an existing cert we made previously (tag it via a friendly name)
+    PCCERT_CONTEXT existing = CertFindCertificateInStore(hStore, X509_ASN_ENCODING, 0, CERT_FIND_SUBJECT_STR, subjectCn.c_str(), nullptr);
+    if (existing)
+    {
+        CertCloseStore(hStore, 0);
+        return existing;
+    }
+
+    // Build subject name "CN=<subjectCn>"
+    std::wstring subjectStr = L"CN=" + subjectCn;
+    DWORD encodedLen = 0;
+    CertStrToNameW(X509_ASN_ENCODING, subjectStr.c_str(), CERT_X500_NAME_STR, nullptr, nullptr, &encodedLen, nullptr);
+    std::vector<BYTE> encodedName(encodedLen);
+    CertStrToNameW(X509_ASN_ENCODING, subjectStr.c_str(), CERT_X500_NAME_STR, nullptr, encodedName.data(), &encodedLen, nullptr);
+
+    CERT_NAME_BLOB subjectBlob = {(DWORD)encodedName.size(), encodedName.data()};
+
+    // Create a CNG key pair for the cert
+    NCRYPT_PROV_HANDLE hProvider = 0;
+    NCryptOpenStorageProvider(&hProvider, MS_KEY_STORAGE_PROVIDER, 0);
+
+    NCRYPT_KEY_HANDLE hKey = 0;
+    std::wstring keyName = L"WebServerTlsKey_" + subjectCn;
+    NCryptCreatePersistedKey(hProvider, &hKey, NCRYPT_RSA_ALGORITHM, keyName.c_str(), 0, NCRYPT_MACHINE_KEY_FLAG);
+
+    DWORD keyLen = 2048;
+    NCryptSetProperty(hKey, NCRYPT_LENGTH_PROPERTY, (PBYTE)&keyLen, sizeof(keyLen), 0);
+    NCryptFinalizeKey(hKey, 0);
+
+    CRYPT_KEY_PROV_INFO keyProvInfo = {};
+    keyProvInfo.pwszContainerName = (LPWSTR)keyName.c_str();
+    keyProvInfo.pwszProvName = (LPWSTR)MS_KEY_STORAGE_PROVIDER;
+    keyProvInfo.dwFlags = NCRYPT_MACHINE_KEY_FLAG;
+    keyProvInfo.dwKeySpec = AT_KEYEXCHANGE;
+
+    SYSTEMTIME startTime, endTime;
+    GetSystemTime(&startTime);
+    GetSystemTime(&endTime);
+    endTime.wYear += 5; // 5-year validity
+
+    CRYPT_ALGORITHM_IDENTIFIER sigAlg = {};
+    sigAlg.pszObjId = (LPSTR)szOID_RSA_SHA256RSA;
+
+    PCCERT_CONTEXT cert = CertCreateSelfSignCertificate(hKey, &subjectBlob, 0, &keyProvInfo, &sigAlg, &startTime, &endTime, nullptr);
+
+    // Add IP/DNS SANs (loopback + LAN) so the browser accepts the name match
+    // (build via CertExtensions / szOID_SUBJECT_ALT_NAME2 — see note below)
+
+    if (cert)
+    {
+        CertAddCertificateContextToStore(hStore, cert, CERT_STORE_ADD_REPLACE_EXISTING, nullptr);
+        // Mark it exportable/trusted for the machine, and optionally add to
+        // "Trusted Root" store too, so the phone... no, that's for THIS PC only.
+    }
+
+    NCryptFreeObject(hKey);
+    NCryptFreeObject(hProvider);
+    CertCloseStore(hStore, 0);
+    return cert;
+}
+
+bool WebServer::BindSslCert(const std::wstring &ipAddress, USHORT port, PCCERT_CONTEXT cert)
+{
+    LOG_DEBUG("[WebServer] BindSslCert: binding cert to %ls:%d", ipAddress.c_str(), port);
+
+    SOCKADDR_IN addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+
+    int ptonResult = InetPtonW(AF_INET, ipAddress.c_str(), &addr.sin_addr);
+    if (ptonResult != 1)
+    {
+        LOG_DEBUG("[WebServer] BindSslCert: InetPtonW failed for '%ls', result=%d, WSAError=%d",
+                  ipAddress.c_str(), ptonResult, WSAGetLastError());
+        return false;
+    }
+
+    HTTP_SERVICE_CONFIG_SSL_SET sslSet = {};
+    sslSet.KeyDesc.pIpPort = (PSOCKADDR)&addr;
+
+    BYTE hash[20];
+    DWORD hashLen = sizeof(hash);
+    if (!CertGetCertificateContextProperty(cert, CERT_HASH_PROP_ID, hash, &hashLen))
+    {
+        LOG_DEBUG("[WebServer] BindSslCert: CertGetCertificateContextProperty failed, GetLastError=%lu", GetLastError());
+        return false;
+    }
+
+    LOG_DEBUG("[WebServer] BindSslCert: cert hash length=%lu, hash=%02X%02X%02X%02X...",
+              hashLen, hash[0], hash[1], hash[2], hash[3]);
+
+    sslSet.ParamDesc.pSslHash = hash;
+    sslSet.ParamDesc.SslHashLength = hashLen;
+
+    GUID appId = {0x11111111, 0x2222, 0x3333, {0x44, 0x44, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55}};
+    sslSet.ParamDesc.AppId = appId;
+    sslSet.ParamDesc.pSslCertStoreName = (PWSTR)L"MY";
+
+    ULONG result = HttpSetServiceConfiguration(nullptr, HttpServiceConfigSSLCertInfo,
+                                               &sslSet, sizeof(sslSet), nullptr);
+
+    LOG_DEBUG("[WebServer] BindSslCert: HttpSetServiceConfiguration result=%lu", result);
+
+    if (result == ERROR_ALREADY_EXISTS)
+    {
+        LOG_DEBUG("[WebServer] BindSslCert: binding already exists, deleting and retrying");
+
+        ULONG delResult = HttpDeleteServiceConfiguration(nullptr, HttpServiceConfigSSLCertInfo,
+                                                         &sslSet, sizeof(sslSet), nullptr);
+        LOG_DEBUG("[WebServer] BindSslCert: HttpDeleteServiceConfiguration result=%lu", delResult);
+
+        result = HttpSetServiceConfiguration(nullptr, HttpServiceConfigSSLCertInfo,
+                                             &sslSet, sizeof(sslSet), nullptr);
+        LOG_DEBUG("[WebServer] BindSslCert: retry HttpSetServiceConfiguration result=%lu", result);
+    }
+
+    if (result != NO_ERROR)
+    {
+        LOG_DEBUG("[WebServer] BindSslCert: FAILED, final result=%lu", result);
+        return false;
+    }
+
+    LOG_DEBUG("[WebServer] BindSslCert: succeeded");
+    return true;
 }

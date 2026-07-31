@@ -1198,22 +1198,62 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
                 if (!g_webServer.LaunchServerOnInterface(netIf))
                 {
-                    LOG_ERROR("[App] Failed to launch the server on interface %ls (%ls)", netIf.adapterName.c_str(), netIf.address.c_str());
+                    LOG_ERROR("[App] Failed to launch the server on interface %ls (%ls)",
+                              netIf.adapterName.c_str(), netIf.address.c_str());
 
                     std::wstring message =
-                        L"Failed to launch the web server on interface \n\n"
-                        L"<" +
-                        netIf.adapterName + L">\n" +
-                        netIf.address +
-                        L"\nport " +
+                        L"Failed to launch the web server on interface\n\n"
+                        L"Interface: " +
+                        netIf.adapterName + L"\n"
+                                            L"Address: " +
+                        netIf.address + L"\n"
+                                        L"Port: " +
                         WEBSERVER_PORT;
 
-                    TaskDialog(nullptr, nullptr, L"Server Launch Error", L"Unable to start the web server.", message.c_str(), TDCBF_OK_BUTTON, TD_ERROR_ICON, nullptr);
+                    TaskDialog(
+                        nullptr,
+                        nullptr,
+                        L"Server Launch Error",
+                        L"Unable to start the web server.",
+                        message.c_str(),
+                        TDCBF_OK_BUTTON,
+                        TD_ERROR_ICON,
+                        nullptr);
 
                     break;
                 }
+
+                if (!g_DontShowHttpsWebServerWarning)
+                {
+                    std::wstring message =
+                        L"The web server has started successfully.\n\n"
+                        L"URL:\n"
+                        L"https://" +
+                        netIf.address + L":" + WEBSERVER_PORT + L"\n\n"
+                                                                L"The server uses a self-signed HTTPS certificate. "
+                                                                L"Your web browser may display a security warning the first time you connect. "
+                                                                L"This is expected because the certificate is not issued by a public Certificate Authority.\n\n"
+                                                                L"Before proceeding, verify that the browser is connecting to the address shown above.";
+
+                    TASKDIALOGCONFIG config = {};
+                    config.cbSize = sizeof(config);
+                    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION;
+                    config.pszWindowTitle = L"Web Server Started";
+                    config.pszMainInstruction = L"HTTPS Web Server";
+                    config.pszContent = message.c_str();
+                    config.pszVerificationText = L"Don't show this message again";
+                    config.dwCommonButtons = TDCBF_OK_BUTTON;
+
+                    BOOL checked = FALSE;
+
+                    TaskDialogIndirect(&config, nullptr, nullptr, &checked);
+
+                    if (checked)
+                        g_DontShowHttpsWebServerWarning = true;
+                }
+
                 auto addr = g_webServer.GetBoundInterface().value().address;
-                std::wstring txt = L"http://" + addr + L":" + WEBSERVER_PORT;
+                std::wstring txt = L"https://" + addr + L":" + WEBSERVER_PORT;
                 g_serverStatusRc.SetValue(txt.c_str());
                 g_clickableUrlRect = GetCenteredTextRect(g_backBuffer.memDC, g_notificationFont, &g_serverStatusRc.valueRc, txt.c_str());
                 g_serverStatusRc.DrawTextValue(g_backBuffer.memDC, SERVERSTATUSCOLOR, g_notificationFont);
@@ -1421,6 +1461,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         LayoutProperties2(g_layoutMetrics);
         UpdateToolTipRect(hwnd, TOOLID_GPUINFO, g_cardName.valueRc);
 
+        // update url rect
+        if (g_webServer.IsRunning())
+        {
+            auto addr = g_webServer.GetBoundInterface().value().address;
+            std::wstring txt = L"https://" + addr + L":" + WEBSERVER_PORT;
+            g_clickableUrlRect = GetCenteredTextRect(g_backBuffer.memDC, g_notificationFont, &g_serverStatusRc.valueRc, txt.c_str());
+        }
         return 0;
     }
 
@@ -1551,8 +1598,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     g_networkManager.Initialize(hwnd);
     g_networkManager.Log();
 
-    SetAlwaysOnTop(hwnd, g_alwaysOnTop);
-
     SetTimer(hwnd, APP_POLLING_ID, APP_REFRESH_TIMER, nullptr);
 
     g_AdlxGPUTelemetry.Init(hwnd);
@@ -1599,6 +1644,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     CheckVersionAsync(hwnd, false);
 
     ShowWindow(hwnd, nCmdShow);
+
+    SetAlwaysOnTop(hwnd, g_alwaysOnTop);
 
     LOG_INFO("[Main] Entering Dispatcher loop");
 
