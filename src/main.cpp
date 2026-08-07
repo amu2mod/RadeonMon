@@ -1,4 +1,5 @@
 #include "radeonmon/webserver.hpp"
+#include "radeonmon/colors.hpp"
 
 #include <windows.h>
 #include <shellscalingapi.h>
@@ -168,6 +169,7 @@ LayoutMetrics CalculateLayoutMetrics()
     // ------------------------------------------------------------
     m.paddingTop = ScaleFontMetric(PADDING_TOP);
     m.paddingBottom = ScaleFontMetric(PADDING_BOTTOM);
+    m.cardPaddingTopBottom = ScaleFontMetric(CARD_PADDING);
 
     // ------------------------------------------------------------
     // Title font
@@ -236,7 +238,8 @@ LayoutMetrics CalculateLayoutMetrics()
         LOG_ERROR("GetTextExtentPoint32W failed");
 
     // Font-derived
-    m.cardHeight = sz.cy;
+    // m.cardHeight = sz.cy;
+    m.cardHeight = sz.cy + (m.cardPaddingTopBottom * 2);
 
     SelectObject(hdc, originalFont);
 
@@ -362,6 +365,7 @@ void LayoutFrame(const LayoutMetrics &m)
 
     g_appTitle.UpdateRC(g_border.top, m);
 }
+
 void LayoutProperties2(const LayoutMetrics &m)
 {
     // LOG_DEBUG("LayoutProperties2");
@@ -418,13 +422,22 @@ void LayoutProperties2(const LayoutMetrics &m)
 
     // Card name
     g_cardName.valueRc = {leftEdge, y, rightEdge, y + m.cardHeight};
+
     SIZE sz{};
     HFONT oldFont = (HFONT)SelectObject(g_backBuffer.memDC, g_cardFont);
+
     if (!GetTextExtentPoint32W(g_backBuffer.memDC, g_cardName.textValue, g_cardName.textLength, &sz))
         LOG_ERROR("[LayoutProperties2] GetTextExtentPoint32W failed");
 
     g_cardName.textX = g_cardName.valueRc.left + ((g_cardName.valueRc.right - g_cardName.valueRc.left) - sz.cx) / 2;
-    g_cardName.textY = g_cardName.valueRc.top + ((g_cardName.valueRc.bottom - g_cardName.valueRc.top) - sz.cy) / 2;
+
+    const int contentTop = g_cardName.valueRc.top + m.cardPaddingTopBottom;
+    const int contentBottom = g_cardName.valueRc.bottom - m.cardPaddingTopBottom;
+
+    g_cardName.textY = contentTop + ((contentBottom - contentTop) - sz.cy) / 2;
+    g_cardName.textRc = {g_cardName.valueRc.left, g_cardName.valueRc.top + m.cardPaddingTopBottom, g_cardName.valueRc.right, g_cardName.valueRc.bottom - m.cardPaddingTopBottom};
+
+    y += m.cardHeight;
 
     SelectObject(g_backBuffer.memDC, oldFont);
 
@@ -562,7 +575,8 @@ void PaintProperties(HDC hdc)
         SetTextColor(hdc, VALUECOLOR);
 
         HFONT oldFont = (HFONT)SelectObject(hdc, g_cardFont);
-        ExtTextOutW(hdc, g_cardName.textX, g_cardName.textY, ETO_CLIPPED, &rc, g_cardName.textValue, g_cardName.textLength, nullptr);
+        // ExtTextOutW(hdc, g_cardName.textX, g_cardName.textY, ETO_CLIPPED, &rc, g_cardName.textValue, g_cardName.textLength, nullptr);
+        ExtTextOutW(hdc, g_cardName.textX, g_cardName.textY, ETO_CLIPPED, &g_cardName.textRc, g_cardName.textValue, g_cardName.textLength, nullptr);
 
         SelectObject(hdc, oldFont);
 
@@ -803,7 +817,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             ResetDirty();
         }
 
-        // InvalidateRect(hwnd, nullptr, FALSE);
+        InvalidateRect(hwnd, nullptr, FALSE);
         return 0;
     }
 
@@ -812,24 +826,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_DPICHANGED:
     {
-        g_dpi = HIWORD(wParam);
+        LOG_DEBUG("WM_DPICHANGED");
 
-        RecreateFont();
+        g_dpi = HIWORD(wParam);
 
         const RECT *r = reinterpret_cast<const RECT *>(lParam);
 
         g_width = r->right - r->left;
         g_height = r->bottom - r->top;
 
-        SetWindowPos(hwnd, nullptr, r->left, r->top, g_width, g_height, SWP_NOZORDER | SWP_NOACTIVATE);
-        SetAllRepaintLabelFlag(true); // force all labels repaint
-        g_forceFrameRedraw = true;    // force new border + title
-
-        PostMessage(hwnd, WM_APP_LAYOUT, 0, 0);
-
-        InvalidateRect(hwnd, nullptr, TRUE);
-
         LOG_DEBUG("New DPI: %u (%.0f%%), %dxx%d", g_dpi, (g_dpi / 96.0) * 100.0, g_width, g_height);
+
+        RecreateFont();
+        PostMessage(hwnd, WM_APP_LAYOUT, 0, 0);
 
         return 0;
     }
@@ -1334,7 +1343,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         pt.x = LOWORD(lParam);
         pt.y = HIWORD(lParam);
 
-        if (PtInRect(&g_props[MetricsIndex::Cpu].textLabelRc, pt)) // cpu
+        if (PtInRect(&g_props[MetricsIndex::Cpu].textLabelRc, pt) && g_cpu.IsInitialized()) // cpu
         {
             // if (!g_cpuGraph.GetHwnd())
             //     LOG_ERROR("Create failed");
@@ -1456,9 +1465,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     // Custom WMs
     case WM_APP_LAYOUT:
     {
+        LOG_DEBUG("WM_APP_LAYOUT");
+
         g_layoutMetrics = CalculateLayoutMetrics();
-        SetWindowPos(hwnd, nullptr, 0, 0, g_layoutMetrics.windowWidth, g_layoutMetrics.windowHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
         LayoutProperties2(g_layoutMetrics);
+
+        // commit new repaint
+        SetAllRepaintLabelFlag(true); // force all labels repaint
+        g_forceFrameRedraw = true;    // force new border + title
+        SetWindowPos(hwnd, nullptr, 0, 0, g_layoutMetrics.windowWidth, g_layoutMetrics.windowHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+
         UpdateToolTipRect(hwnd, TOOLID_GPUINFO, g_cardName.valueRc);
 
         // update url rect
@@ -1567,6 +1583,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 
     POINT pt = {g_xPos, g_yPos};
     POINT pt2 = {g_xPos + g_width, g_yPos + g_height};
+
     if (isPointValid(pt) && isPointValid(pt2))
     {
         g_dpi = getDpiFromPoint(pt);
@@ -1575,9 +1592,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     }
     else
     {
-        LOG_DEBUG("Invalid position from preferences, reseting the position");
+        LOG_ERROR("[Main] Invalid position from preferences, reseting the position");
         g_dpi = GetDpiForSystem();
-        LOG_DEBUG("DPI: %u (%.0f%%)", g_dpi, (g_dpi / 96.0) * 100.0);
+        LOG_DEBUG("[Main] DPI: %u (%.0f%%)", g_dpi, (g_dpi / 96.0) * 100.0);
         g_width = MulDiv(g_width, g_dpi, 96);
         g_height = MulDiv(g_height, g_dpi, 96);
 
@@ -1592,7 +1609,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 
     RecreateFont();
 
-    LOG_DEBUG("window created %dx%d at position {%d,%d}", g_width, g_height, g_xPos, g_yPos);
+    LOG_DEBUG("[Main] window created %dx%d at position {%d,%d}", g_width, g_height, g_xPos, g_yPos);
     HWND hwnd = CreateWindowEx(0, CLASS_NAME, APPNAME, WS_POPUP, g_xPos, g_yPos, g_width, g_height, nullptr, nullptr, hInstance, nullptr);
 
     g_networkManager.Initialize(hwnd);
@@ -1613,7 +1630,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     if (g_AdlxGPUTelemetry.isInitialized)
         UpdateToolTipText(hwnd, TOOLID_GPUINFO, g_AdlxGPUTelemetry.GetGpuInfo().GetTooltip(), g_AdlxGPUTelemetry.GetGpuInfo().GetDriverPathTooltipWidth(g_hwndTooltip));
 
-    LOG_DEBUG("Admin mode: %s", g_isAdmin ? "yes" : "no");
+    LOG_DEBUG("[Main] Admin mode: %s", g_isAdmin ? "yes" : "no");
 
     if (g_isAdmin)
     {

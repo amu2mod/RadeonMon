@@ -21,7 +21,7 @@ constexpr int APPHEIGHT = 370;
 constexpr int WINDOW_RESIZE_STEP = 20;
 constexpr int PADDING_LEFT = 14;
 constexpr int PADDING_TOP = 9;
-constexpr int PADDING_BOTTOM = 8;
+constexpr int PADDING_BOTTOM = 9;
 constexpr int LABEL_WIDTH = 170;
 constexpr int LINE_HEIGHT = 24;
 constexpr int LINE_GAP = 6;
@@ -30,6 +30,7 @@ constexpr int BORDER = 1;
 constexpr int TITLE_PADDING = 4;
 constexpr int SEPARATOR_HEIGHT = 1;
 constexpr int SPACER = 10;
+constexpr int CARD_PADDING = 2;
 
 // Fonts
 constexpr wchar_t FONT_FAMILY[] = L"Consolas";
@@ -47,24 +48,6 @@ constexpr UINT FONTSIZE_MAX = 26;
 
 constexpr int TEMPERATURE_WARNING_THRESHOLD = 95;
 constexpr int TEMPERATURE_ALERT_THRESHOLD = 100;
-
-#define rgb(r, g, b) RGB(r, g, b) // vscode trick
-constexpr COLORREF BACKGROUNDCOLOR = rgb(30, 30, 30);
-constexpr COLORREF LABELCOLOR = rgb(180, 180, 180);
-constexpr COLORREF VALUECOLOR = rgb(240, 240, 240);
-constexpr COLORREF WARNINGCOLOR = rgb(255, 165, 0);
-constexpr COLORREF ALERTCOLOR = rgb(221, 0, 0);
-constexpr COLORREF SEPARATORCOLOR = rgb(60, 60, 60);
-constexpr COLORREF BORDERCOLOR = rgb(200, 35, 35);
-constexpr COLORREF NOTIFICATIONCOLOR = rgb(241, 215, 5);
-constexpr COLORREF SERVERSTATUSCOLOR = rgb(0, 134, 223);
-
-constexpr COLORREF colorMapping[] = {
-    VALUECOLOR,
-    WARNINGCOLOR,
-    ALERTCOLOR};
-
-static_assert(std::size(colorMapping) == static_cast<std::size_t>(TextLevel::Count), "colorMapping and TextLevel are out of sync");
 
 // Timer IDs
 constexpr UINT_PTR APP_POLLING_ID = 1;

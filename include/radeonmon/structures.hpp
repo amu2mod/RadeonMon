@@ -19,6 +19,7 @@
 #include <netioapi.h>
 
 #include "radeonmon/logging.hpp"
+#include "radeonmon/constants.hpp"
 
 #include "../../third_party/AMD/ADLX-1.5/SDK/Include/ADLXDefines.h"
 
@@ -54,6 +55,7 @@ struct PropertyItem
     int textY;
     UINT textLength = 0;
     RECT textLabelRc;
+    RECT textRc;
 
     inline void SetLabel(const wchar_t *txt)
     {
@@ -568,6 +570,9 @@ struct LayoutMetrics
     // card font (g_cardFont)
     int cardHeight;
     int paddingBottom;
+
+    // card
+    int cardPaddingTopBottom = CARD_PADDING;
 
     int windowWidth;
     int windowHeight;

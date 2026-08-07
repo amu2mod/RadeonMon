@@ -1,6 +1,7 @@
 #include "radeonmon/cpugraph.hpp"
 #include "radeonmon/logging.hpp"
 #include "radeonmon/helpers.hpp"
+#include "radeonmon/preferences.hpp"
 
 #include <assert.h>
 
@@ -25,33 +26,65 @@ bool CpuGraphWindow::Create(HWND hParent)
 
     RegisterClassEx(&wc);
 
-    POINT cursor;
-    GetCursorPos(&cursor);
+    if (!LoadSettings())
+    {
+        LOG_ERROR("[CPU] Failed to load settings");
+
+        m_x = -1;
+        m_y = -1;
+        m_width = 400;
+        m_height = 300;
+        m_savedDpi = 96;
+    }
 
     UINT dpiX = 96;
     UINT dpiY = 96;
 
-    HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+    bool validSize = m_width >= 100 && m_width <= 10000 && m_height >= 100 && m_height <= 10000;
+    bool validDpi = m_savedDpi >= 72 && m_savedDpi <= 1000;
 
-    GetDpiForMonitor(
-        monitor,
-        MDT_EFFECTIVE_DPI,
-        &dpiX,
-        &dpiY);
+    POINT pt1 = {m_x, m_y};
+    POINT pt2 = {m_x + m_width, m_y + m_height};
 
-    int width = MulDiv(500, dpiX, 96);
-    int x = MulDiv(60, dpiX, 96);
-    int y = MulDiv(15, dpiX, 96);
+    bool validPosition = isPointValid(pt1) && isPointValid(pt2);
+
+    if (validSize && validDpi && validPosition)
+    {
+        HMONITOR monitor = MonitorFromPoint(pt1, MONITOR_DEFAULTTONEAREST);
+        GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+        m_width = MulDiv(m_width, dpiX, m_savedDpi);
+        m_height = MulDiv(m_height, dpiY, m_savedDpi);
+    }
+    else
+    {
+        LOG_ERROR("[CPU] Invalid settings, resetting window position/size");
+
+        POINT cursor;
+        GetCursorPos(&cursor);
+
+        HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+
+        GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+
+        m_width = MulDiv(400, dpiX, 96);
+        m_height = MulDiv(300, dpiY, 96);
+
+        int xScale = MulDiv(60, dpiX, 96);
+        int yScale = MulDiv(15, dpiY, 96);
+
+        m_x = cursor.x - xScale;
+        m_y = cursor.y - yScale;
+    }
 
     m_hwnd = CreateWindowEx(
         WS_EX_TOPMOST,
         L"CpuGraphWindow",
         Utf8ToWide(m_cpu.GetMetrics().name).c_str(),
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME,
-        cursor.x - x,
-        cursor.y - y,
-        width,
-        300,
+        m_x,
+        m_y,
+        m_width,
+        m_height,
         hParent,
         nullptr,
         GetModuleHandle(nullptr),
@@ -131,6 +164,8 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
 
     case WM_DESTROY:
+        if (!SaveSettings())
+            LOG_ERROR("[CPU] Failed to save settings");
         m_hwnd = nullptr;
         return 0;
 
@@ -196,21 +231,14 @@ void CpuGraphWindow::DrawCoreBarGraph(HDC hdc, const RECT &rc)
         return MulDiv(value, dpi, USER_DEFAULT_SCREEN_DPI);
     };
 
-    const int margin = Scale(20);
-    const int labelWidth = Scale(220);
-    const int barGap = Scale(10);
-
-    const int barHeight = Scale(15);
-    const int spacing = Scale(8);
-
-    const int barLeft = margin + labelWidth + barGap;
-    const int maxBarWidth = rc.right - barLeft - margin;
+    const int barLeft = m_MarginLeftRight + m_LabelWidth + m_BarLeftMargin;
+    const int maxBarWidth = rc.right - barLeft - m_MarginLeftRight;
 
     constexpr COLORREF dimColor = RGB(136, 136, 136);
     constexpr COLORREF textColor = RGB(225, 228, 234);
     constexpr COLORREF headerTextColor = RGB(56, 189, 248);
 
-    int y = margin;
+    int y = m_MarginTopBottom;
 
     SetBkMode(hdc, TRANSPARENT);
     SelectObject(hdc, m_hFont);
@@ -223,12 +251,12 @@ void CpuGraphWindow::DrawCoreBarGraph(HDC hdc, const RECT &rc)
 
         SetTextColor(hdc, dimColor);
 
-        TextOutW(hdc, margin, textY, L"CPU", 3);
+        TextOutW(hdc, m_MarginLeftRight, textY, L"CPU", 3);
 
         SIZE sz;
         GetTextExtentPoint32W(hdc, L"CPU", 3, &sz);
 
-        int x = margin + sz.cx + Scale(10);
+        int x = m_MarginLeftRight + sz.cx + m_BarLeftMargin;
 
         auto DrawHeaderPart = [&](const wchar_t *text, COLORREF color)
         {
@@ -255,19 +283,19 @@ void CpuGraphWindow::DrawCoreBarGraph(HDC hdc, const RECT &rc)
         DrawHeaderPart(buf, headerTextColor);
         DrawHeaderPart(L" W", dimColor);
 
-        y += m_FontHeight + spacing / 2;
+        y += m_FontHeight + m_Spacing / 2;
 
         // Horizontal separator.
         HPEN separatorPen = CreatePen(PS_SOLID, Scale(1), RGB(80, 80, 80));
         HPEN oldPen = (HPEN)SelectObject(hdc, separatorPen);
 
-        MoveToEx(hdc, margin, y, nullptr);
-        LineTo(hdc, rc.right - margin, y);
+        MoveToEx(hdc, m_MarginLeftRight, y, nullptr);
+        LineTo(hdc, rc.right - m_MarginLeftRight, y);
 
         SelectObject(hdc, oldPen);
         DeleteObject(separatorPen);
 
-        y += spacing;
+        y += m_Spacing;
     }
 
     for (size_t i = 0; i < cpu.cores.size(); ++i)
@@ -275,25 +303,23 @@ void CpuGraphWindow::DrawCoreBarGraph(HDC hdc, const RECT &rc)
         const RyzenCoreMetrics &core = cpu.cores[i];
 
         // Center the bar vertically within the text line.
-        int barY = y + (m_FontHeight - barHeight) / 2;
+        int barY = y + (m_FontHeight - m_BarHeight) / 2;
 
-        RECT background{barLeft, barY, barLeft + maxBarWidth, barY + barHeight};
+        RECT background{barLeft, barY, barLeft + maxBarWidth, barY + m_BarHeight};
 
         FillRect(hdc, &background, chartBgBrush);
 
         int barWidth = static_cast<int>(maxBarWidth * (core.dUsage / 100.0));
 
-        RECT bar{barLeft, barY, barLeft + barWidth, barY + barHeight};
+        RECT bar{barLeft, barY, barLeft + barWidth, barY + m_BarHeight};
 
         FillRect(hdc, &bar, barBrush);
 
-        const int markerWidth = Scale(2);
+        const int markerAreaWidth = rc.right - barLeft - m_MarginLeftRight - m_MarkerWidth;
 
-        const int maxBarWidth = rc.right - barLeft - margin - markerWidth;
-
-        RECT startMarker{barLeft, barY, barLeft + markerWidth, barY + barHeight};
-        RECT middleMarker{barLeft + maxBarWidth / 2, barY, barLeft + maxBarWidth / 2 + markerWidth, barY + barHeight};
-        RECT endMarker{barLeft + maxBarWidth, barY, barLeft + maxBarWidth + markerWidth, barY + barHeight};
+        RECT startMarker{barLeft, barY, barLeft + m_MarkerWidth, barY + m_BarHeight};
+        RECT middleMarker{barLeft + markerAreaWidth / 2, barY, barLeft + markerAreaWidth / 2 + m_MarkerWidth, barY + m_BarHeight};
+        RECT endMarker{barLeft + markerAreaWidth, barY, barLeft + markerAreaWidth + m_MarkerWidth, barY + m_BarHeight};
 
         FillRect(hdc, &startMarker, markerBrush);
         FillRect(hdc, &middleMarker, markerBrush);
@@ -306,12 +332,12 @@ void CpuGraphWindow::DrawCoreBarGraph(HDC hdc, const RECT &rc)
         swprintf_s(coreText, L"%02zu", i);
 
         SetTextColor(hdc, dimColor);
-        TextOutW(hdc, margin, textY, coreText, lstrlenW(coreText));
+        TextOutW(hdc, m_MarginLeftRight, textY, coreText, lstrlenW(coreText));
 
         SIZE sz;
         GetTextExtentPoint32W(hdc, coreText, lstrlenW(coreText), &sz);
 
-        int x = margin + sz.cx;
+        int x = m_MarginLeftRight + sz.cx;
 
         auto DrawPart = [&](const wchar_t *text, COLORREF color)
         {
@@ -340,7 +366,10 @@ void CpuGraphWindow::DrawCoreBarGraph(HDC hdc, const RECT &rc)
         DrawPart(buf, textColor);
         DrawPart(L"%", dimColor);
 
-        y += m_FontHeight + spacing;
+        if (i + 1 != cpu.cores.size())
+            y += m_FontHeight + m_Spacing;
+        else
+            y += m_FontHeight;
     }
 }
 
@@ -354,7 +383,6 @@ void CpuGraphWindow::CreateUIFont()
 
     const UINT dpi = GetDpiForWindow(m_hwnd);
 
-    // 16 px at 96 DPI, scaled proportionally.
     const int height = -MulDiv(16, dpi, USER_DEFAULT_SCREEN_DPI);
 
     m_hFont = CreateFontW(
@@ -376,12 +404,45 @@ void CpuGraphWindow::CreateUIFont()
     HDC hdc = GetDC(m_hwnd);
     HFONT oldFont = (HFONT)SelectObject(hdc, m_hFont);
 
-    TEXTMETRIC tm;
+    TEXTMETRIC tm{};
     GetTextMetrics(hdc, &tm);
+
     m_FontHeight = tm.tmHeight;
+    m_FontAscent = tm.tmAscent;
+
+    // Consolas is fixed-pitch, so one character defines the grid size.
+    SIZE charSize{};
+    GetTextExtentPoint32W(hdc, L"0", 1, &charSize);
+
+    m_FontWidth = charSize.cx;
 
     SelectObject(hdc, oldFont);
     ReleaseDC(m_hwnd, hdc);
+
+    //
+    // Layout metrics.
+    //
+    // Reserve enough columns for:
+    // "00 105°C  5200 MHz  100%"
+    //
+    constexpr int labelColumns = 24;
+
+    m_LabelWidth = m_FontWidth * labelColumns;
+
+    // One character of breathing room between text and graph.
+    m_BarLeftMargin = m_FontWidth;
+
+    auto Scale = [dpi](int value)
+    {
+        return MulDiv(value, dpi, USER_DEFAULT_SCREEN_DPI);
+    };
+
+    m_MarginTopBottom = Scale(c_MarginTopBottom);
+    m_MarginLeftRight = Scale(c_MarginLeftRight);
+    m_Spacing = Scale(c_LineSpace);
+    m_OnePxScaled = Scale(1);
+    m_BarHeight = m_FontAscent - m_OnePxScaled;
+    m_MarkerWidth = Scale(2);
 }
 
 int CpuGraphWindow::GetRequiredClientHeight() const
@@ -395,17 +456,20 @@ int CpuGraphWindow::GetRequiredClientHeight() const
         return MulDiv(value, dpi, USER_DEFAULT_SCREEN_DPI);
     };
 
-    const int margin = Scale(20);
-    const int spacing = Scale(8);
+    const int headerSpacing = m_Spacing / 2;
+    const int separatorHeight = m_OnePxScaled;
 
-    const int headerSpacing = spacing / 2;
-    const int separatorHeight = Scale(1);
+    const int headerHeight = m_FontHeight + headerSpacing + separatorHeight + m_Spacing;
 
-    const int headerHeight = m_FontHeight + headerSpacing + separatorHeight + spacing;
+    int coreHeight = 0;
 
-    const int coreHeight = static_cast<int>(cpu.cores.size()) * (m_FontHeight + spacing);
+    if (!cpu.cores.empty())
+    {
+        coreHeight = static_cast<int>(cpu.cores.size()) * m_FontHeight;
+        coreHeight += static_cast<int>(cpu.cores.size() - 1) * m_Spacing;
+    }
 
-    return margin + headerHeight + coreHeight + margin;
+    return m_MarginTopBottom + headerHeight + coreHeight + m_MarginTopBottom;
 }
 
 void CpuGraphWindow::UpdateWindowSize()
@@ -423,4 +487,71 @@ void CpuGraphWindow::UpdateWindowSize()
     AdjustWindowRectExForDpi(&adjust, GetWindowLong(m_hwnd, GWL_STYLE), FALSE, GetWindowLong(m_hwnd, GWL_EXSTYLE), GetDpiForWindow(m_hwnd));
 
     SetWindowPos(m_hwnd, nullptr, 0, 0, adjust.right - adjust.left, adjust.bottom - adjust.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+bool CpuGraphWindow::SaveSettings()
+{
+    LOG_DEBUG("[CPU] Saving Settings");
+
+    wchar_t path[MAX_PATH];
+    GetModuleFileNameW(nullptr, path, MAX_PATH);
+
+    wchar_t *lastSlash = wcsrchr(path, L'\\');
+    if (lastSlash)
+        *(lastSlash + 1) = L'\0';
+
+    wcscat_s(path, SETTINGS_FILE);
+
+    RECT rc{};
+    if (!GetWindowRect(m_hwnd, &rc))
+        return false;
+
+    int x = rc.left;
+    int y = rc.top;
+    int width = rc.right - rc.left;
+    int height = rc.bottom - rc.top;
+
+    wchar_t buffer[32];
+
+    swprintf_s(buffer, L"%d", x);
+    WritePrivateProfileStringW(L"CPU", L"X", buffer, path);
+
+    swprintf_s(buffer, L"%d", y);
+    WritePrivateProfileStringW(L"CPU", L"Y", buffer, path);
+
+    swprintf_s(buffer, L"%d", width);
+    WritePrivateProfileStringW(L"CPU", L"Width", buffer, path);
+
+    swprintf_s(buffer, L"%d", height);
+    WritePrivateProfileStringW(L"CPU", L"Height", buffer, path);
+
+    UINT dpi = GetDpiForWindow(m_hwnd);
+    swprintf_s(buffer, L"%d", dpi);
+    WritePrivateProfileStringW(L"CPU", L"DPI", buffer, path);
+
+    return true;
+}
+
+bool CpuGraphWindow::LoadSettings()
+{
+    LOG_DEBUG("[CPU] Loading Settings");
+
+    wchar_t path[MAX_PATH];
+    GetModuleFileNameW(nullptr, path, MAX_PATH);
+
+    wchar_t *lastSlash = wcsrchr(path, L'\\');
+    if (lastSlash)
+        *(lastSlash + 1) = L'\0';
+
+    wcscat_s(path, SETTINGS_FILE);
+
+    m_x = GetPrivateProfileIntW(L"CPU", L"X", -1, path);
+    m_y = GetPrivateProfileIntW(L"CPU", L"Y", -1, path);
+
+    m_width = GetPrivateProfileIntW(L"CPU", L"Width", 400, path);
+    m_height = GetPrivateProfileIntW(L"CPU", L"Height", 300, path);
+
+    m_savedDpi = GetPrivateProfileIntW(L"CPU", L"DPI", 96, path);
+
+    return true;
 }

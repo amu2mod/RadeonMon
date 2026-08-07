@@ -32,6 +32,8 @@ private:
     void CreateUIFont();
     int GetRequiredClientHeight() const;
     void UpdateWindowSize();
+    bool SaveSettings();
+    bool LoadSettings();
 
 private:
     HWND m_hwnd = nullptr;
@@ -39,14 +41,26 @@ private:
     HFONT m_hFont = nullptr;
     int m_FontHeight = 16;
     int m_FontAscent = 0;
+    int m_FontWidth = 0;
+    int m_LabelWidth = 0;
+    int m_BarLeftMargin = 0;
+    int m_MarginTopBottom = 0;
+    int m_MarginLeftRight = 0;
+    int m_BarHeight = 16;
+    int m_Spacing = 0;
+    int m_OnePxScaled = 1;
+    int m_MarkerWidth = 2;
 
-    // HBRUSH chartBgBrush = CreateSolidBrush(RGB(28, 27, 31));
-    // HBRUSH barBrush = CreateSolidBrush(RGB(255, 122, 89));
-    // HBRUSH markerBrush = CreateSolidBrush(RGB(74, 71, 78));
+    // window related
+    int m_x = -1;
+    int m_y = -1;
+    int m_width, m_height;
+    UINT m_savedDpi;
 
-    // HBRUSH chartBgBrush = CreateSolidBrush(RGB(15, 23, 42)); // Dark Slate / Navy background
-    // HBRUSH barBrush = CreateSolidBrush(RGB(59, 130, 246));   // Vibrant Electric Blue (primary highlight)
-    // HBRUSH markerBrush = CreateSolidBrush(RGB(51, 65, 85));  // Muted Blue-Grey markers
+    // Spacing constants
+    const int c_MarginTopBottom = 9;
+    const int c_MarginLeftRight = 14;
+    const int c_LineSpace = 7;
 
     HBRUSH chartBgBrush = CreateSolidBrush(RGB(28, 27, 31)); // Original Dark Charcoal background
     HBRUSH barBrush = CreateSolidBrush(RGB(56, 189, 248));   // Sky Blue (high contrast against charcoal)
