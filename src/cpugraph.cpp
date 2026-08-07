@@ -9,7 +9,6 @@
 
 bool CpuGraphWindow::Create(HWND hParent)
 {
-
     if (m_hwnd)
     {
         ShowWindow(m_hwnd, SW_SHOW);
@@ -37,37 +36,47 @@ bool CpuGraphWindow::Create(HWND hParent)
         m_savedDpi = 96;
     }
 
-    UINT dpiX = 96;
-    UINT dpiY = 96;
-
     bool validSize = m_width >= 100 && m_width <= 10000 && m_height >= 100 && m_height <= 10000;
     bool validDpi = m_savedDpi >= 72 && m_savedDpi <= 1000;
 
-    POINT pt1 = {m_x, m_y};
-    POINT pt2 = {m_x + m_width, m_y + m_height};
+    RECT windowRect{m_x, m_y, m_x + m_width, m_y + m_height};
+    HMONITOR monitor = MonitorFromRect(&windowRect, MONITOR_DEFAULTTONULL);
 
-    bool validPosition = isPointValid(pt1) && isPointValid(pt2);
+    bool validPosition = (monitor != nullptr);
+
+    UINT dpiX = 96;
+    UINT dpiY = 96;
+
+    if (validPosition && validDpi)
+    {
+        GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+    }
 
     if (validSize && validDpi && validPosition)
     {
-        HMONITOR monitor = MonitorFromPoint(pt1, MONITOR_DEFAULTTONEAREST);
-        GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
         m_width = MulDiv(m_width, dpiX, m_savedDpi);
         m_height = MulDiv(m_height, dpiY, m_savedDpi);
     }
-    else
+    else if (!validSize || !validDpi)
     {
-        LOG_ERROR("[CPU] Invalid settings, resetting window position/size");
+        LOG_ERROR("[CPU] Invalid size/dpi settings, resetting window size");
+
+        HMONITOR fallbackMonitor = validPosition ? monitor : MonitorFromPoint(POINT{m_x, m_y}, MONITOR_DEFAULTTONEAREST);
+        GetDpiForMonitor(fallbackMonitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+
+        m_width = MulDiv(400, dpiX, 96);
+        m_height = MulDiv(300, dpiY, 96);
+    }
+
+    if (!validPosition)
+    {
+        LOG_ERROR("[CPU] Invalid position settings, resetting window position");
 
         POINT cursor;
         GetCursorPos(&cursor);
 
-        HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
-
-        GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-
-        m_width = MulDiv(400, dpiX, 96);
-        m_height = MulDiv(300, dpiY, 96);
+        HMONITOR cursorMonitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+        GetDpiForMonitor(cursorMonitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
 
         int xScale = MulDiv(60, dpiX, 96);
         int yScale = MulDiv(15, dpiY, 96);
@@ -474,19 +483,15 @@ int CpuGraphWindow::GetRequiredClientHeight() const
 
 void CpuGraphWindow::UpdateWindowSize()
 {
-    RECT rc{};
-    GetWindowRect(m_hwnd, &rc);
-
-    RECT client{};
-    GetClientRect(m_hwnd, &client);
-
     int desiredClientHeight = GetRequiredClientHeight();
 
-    RECT adjust{0, 0, client.right, desiredClientHeight};
+    RECT adjust{0, 0, 0, desiredClientHeight};
 
     AdjustWindowRectExForDpi(&adjust, GetWindowLong(m_hwnd, GWL_STYLE), FALSE, GetWindowLong(m_hwnd, GWL_EXSTYLE), GetDpiForWindow(m_hwnd));
 
-    SetWindowPos(m_hwnd, nullptr, 0, 0, adjust.right - adjust.left, adjust.bottom - adjust.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    int newHeight = adjust.bottom - adjust.top;
+
+    SetWindowPos(m_hwnd, nullptr, 0, 0, m_width, newHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 bool CpuGraphWindow::SaveSettings()
