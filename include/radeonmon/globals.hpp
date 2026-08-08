@@ -15,7 +15,7 @@
 #include "radeonmon/webserver.hpp"
 #include "radeonmon/processwatcher.hpp"
 #include "radeonmon/cpugraph.hpp"
-#include "radeonmon/gpugraph.hpp"
+// #include "radeonmon/gpugraph.hpp"
 
 inline UINT g_dpi = 96;
 inline GdiBackBuffer g_backBuffer;
