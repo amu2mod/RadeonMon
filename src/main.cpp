@@ -590,11 +590,6 @@ void PaintProperties(HDC hdc)
     SelectObject(hdc, oldPen);
 }
 
-void SetAlwaysOnTop(HWND hWnd, bool enable)
-{
-    SetWindowPos(hWnd, enable ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-}
-
 void OnResizeWindow(HWND hwnd, bool grow)
 {
     UINT oldFontSize = g_fontSize;
@@ -985,10 +980,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             {
                 InvalidateRect(hwnd, nullptr, FALSE);
 
-                if (g_cpuGraph.GetHwnd())
+                if (g_cpuGraph.isActive())
                 {
                     g_cpuGraph.Update();
                 }
+
+                // TODO
+                // if (g_gpuGraph.isActive())
+                //     g_gpuGraph.Update();
             }
         }
         else if (wParam == NETWORK_TIMER_ID)
@@ -1114,7 +1113,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case IDM_ALWAYS_ON_TOP:
         {
             g_alwaysOnTop = !g_alwaysOnTop;
-            SetWindowPos(hwnd, g_alwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            SetAlwaysOnTop(hwnd, g_alwaysOnTop);
             break;
         }
 
@@ -1348,10 +1347,28 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             // if (!g_cpuGraph.GetHwnd())
             //     LOG_ERROR("Create failed");
 
+            if (g_cpuGraph.isActive()) // already exists
+            {
+                g_cpuGraph.Close();
+                return 0;
+            }
+
             g_cpuGraph.Create(hwnd);
             g_cpuGraph.Show();
+            SetAlwaysOnTop(hwnd, g_alwaysOnTop);
 
             LOG_DEBUG("Showing CPU Graph");
+            return 0;
+        }
+
+        else if (PtInRect(&g_props[MetricsIndex::Temp].textLabelRc, pt) && g_AdlxGPUTelemetry.isInitialized) // gpu
+        {
+            // if (g_gpuGraph.isActive())
+            //     return 0;
+            // g_gpuGraph.Create(hwnd);
+            // g_gpuGraph.Show();
+
+            // LOG_DEBUG("Showing GPU Graph");
             return 0;
         }
 
@@ -1396,6 +1413,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             if (g_cpu.IsInitialized() && PtInRect(&g_props[MetricsIndex::Cpu].textLabelRc, pt)) // cpu
                 SetCursor(LoadCursor(nullptr, IDC_HAND));
+            // else if (g_AdlxGPUTelemetry.isInitialized && PtInRect(&g_props[MetricsIndex::Temp].textLabelRc, pt)) // gpu temp
+            //     SetCursor(LoadCursor(nullptr, IDC_HAND));
             else if (PtInRect(&g_clickableUrlRect, pt) && g_webServer.IsRunning()) // web server url
             {
                 SetCursor(LoadCursor(nullptr, IDC_HAND));
@@ -1457,7 +1476,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_DESTROY:
     {
         Cleanup(hwnd);
-
         PostQuitMessage(0);
         return 0;
     }
@@ -1542,6 +1560,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         SetPropertyValueAtIndex(MetricsIndex::Power, static_cast<int>(snapshot.totalBoardPower.value), powerBuffer, 16);
         return 0;
     }
+
+    case WM_APP_APPLY_TOPMOST:
+        SetAlwaysOnTop(hwnd, g_alwaysOnTop);
+        return 0;
+
     default:
         return DefWindowProc(hwnd, msg, wParam, lParam);
     }
@@ -1661,8 +1684,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     CheckVersionAsync(hwnd, false);
 
     ShowWindow(hwnd, nCmdShow);
+    UpdateWindow(hwnd);
+    PostMessage(hwnd, WM_APP_APPLY_TOPMOST, 0, 0);
 
-    SetAlwaysOnTop(hwnd, g_alwaysOnTop);
+    if (g_isCpuGraphEnabled && g_cpu.IsInitialized())
+    {
+        g_cpuGraph.Create(hwnd);
+        g_cpuGraph.Show();
+        SetAlwaysOnTop(hwnd, g_alwaysOnTop);
+    }
 
     LOG_INFO("[Main] Entering Dispatcher loop");
 

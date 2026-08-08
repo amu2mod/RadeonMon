@@ -66,4 +66,6 @@ inline void LoadPreferences()
     g_currentWebTemplate = GetPrivateProfileIntW(L"WebServer", L"Template", IDM_WEBSERVER_TEMPLATE_LIGHT, path);
 
     g_DontShowHttpsWebServerWarning = GetPrivateProfileIntW(L"WebServer", L"WebServerHttpsWarning", 0, path) != 0;
+
+    g_isCpuGraphEnabled = GetPrivateProfileIntW(L"Window", L"CpuGraphActive", 0, path) != 0;
 }

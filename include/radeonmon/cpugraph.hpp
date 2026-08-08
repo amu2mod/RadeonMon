@@ -2,8 +2,11 @@
 
 #include "radeonmon/structures.hpp"
 #include "radeonmon/ryzen.hpp"
+#include "radeonmon/colors.hpp"
 
 #include <Windows.h>
+
+#include <string>
 
 class CpuGraphWindow
 {
@@ -12,18 +15,31 @@ public:
 
     ~CpuGraphWindow()
     {
+        DeleteObject(bgBrush);
         DeleteObject(chartBgBrush);
         DeleteObject(barBrush);
         DeleteObject(markerBrush);
+        DeleteObject(borderBrush);
+        DeleteObject(m_hFont);
+        DeleteObject(m_titleFont);
+    }
+
+    void inline RebuildBrushes()
+    {
+        const auto &colors = Theme::Get(m_currentTheme);
+        bgBrush = CreateSolidBrush(colors.windowBackground);
+        chartBgBrush = CreateSolidBrush(colors.barBackground);
+        barBrush = CreateSolidBrush(colors.bar);
+        markerBrush = CreateSolidBrush(colors.marker);
+        borderBrush = CreateSolidBrush(colors.titlebar);
     }
 
     bool Create(HWND hParent);
     void Show();
     void Close();
-
     void Update(); // Called from the main timer
 
-    HWND GetHwnd() const { return m_hwnd; }
+    inline bool isActive() const { return m_hwnd != nullptr; }
 
 private:
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -34,11 +50,15 @@ private:
     void UpdateWindowSize();
     bool SaveSettings();
     bool LoadSettings();
+    int GetMinRequiredClientWidth() const;
+    void UpdateLayoutRects();
 
 private:
     HWND m_hwnd = nullptr;
     RyzenCpu &m_cpu;
     HFONT m_hFont = nullptr;
+    HFONT m_titleFont = nullptr;
+    bool m_userClose = false;
     int m_FontHeight = 16;
     int m_FontAscent = 0;
     int m_FontWidth = 0;
@@ -50,6 +70,11 @@ private:
     int m_Spacing = 0;
     int m_OnePxScaled = 1;
     int m_MarkerWidth = 2;
+    std::wstring m_title;
+    RECT m_GraphRc{};
+
+    int m_fontSize = 16;
+    int m_titleFontSize = 14;
 
     // window related
     int m_x = -1;
@@ -61,8 +86,15 @@ private:
     const int c_MarginTopBottom = 9;
     const int c_MarginLeftRight = 14;
     const int c_LineSpace = 7;
+    const int c_borderWidth = 1;
+    const int c_TitlePaddingTopBottom = 5;
+    const int c_MinBarGraphWidth = 100;
 
-    HBRUSH chartBgBrush = CreateSolidBrush(RGB(28, 27, 31)); // Original Dark Charcoal background
-    HBRUSH barBrush = CreateSolidBrush(RGB(56, 189, 248));   // Sky Blue (high contrast against charcoal)
-    HBRUSH markerBrush = CreateSolidBrush(RGB(74, 71, 78));  // Original Muted Grey markers
+    Theme::Type m_currentTheme = Theme::Type::SkyBlue;
+
+    HBRUSH bgBrush;
+    HBRUSH chartBgBrush;
+    HBRUSH barBrush;
+    HBRUSH markerBrush;
+    HBRUSH borderBrush;
 };

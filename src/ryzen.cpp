@@ -61,6 +61,7 @@ static void LogEffectiveFreqData(const EffectiveFreqData *pFreqData)
     LOG_DEBUG("=======================================");
 }
 
+[[maybe_unused]]
 static void LogCPUParameters(const CPUParameters *pCPU)
 {
     if (pCPU == NULL)
@@ -166,9 +167,56 @@ bool RyzenCpu::Init()
         return false;
     }
 
+#ifdef TESTMODE
+    static std::mt19937 rng(std::random_device{}());
+
+    std::string str = wcharToUtf8(L"AMD Ryzen 9 9950X3D 16-Core Processor");
+    strcpy_s(m_metrics.name, str.c_str());
+    m_metrics.SetShortName(str.c_str(), static_cast<int>(m_metrics.cores.size()));
+
+    // Simulate 8 cores
+    constexpr size_t coreCount = 16;
+
+    if (m_metrics.cores.size() != coreCount)
+        m_metrics.cores.resize(coreCount);
+
+    std::uniform_real_distribution<double> tempDist(75.0, 105.0);    // hot CPU
+    std::uniform_real_distribution<double> usageDist(85.0, 100.0);   // heavy load
+    std::uniform_real_distribution<double> freqDist(4200.0, 5200.0); // MHz boost
+    std::uniform_real_distribution<double> effFreqDist(3500.0, 4800.0);
+    std::uniform_real_distribution<double> powerDist(85.0, 140.0); // PPT watts
+
+    double totalUsage = 0.0;
+
+    for (auto &core : m_metrics.cores)
+    {
+        core.dTemperature = tempDist(rng);
+        core.dUsage = usageDist(rng);
+        core.dCurrentFreq = freqDist(rng);
+        core.dEffectiveFreq = effFreqDist(rng);
+
+        totalUsage += core.dUsage;
+    }
+
+    m_metrics.usage = m_metrics.cores.empty() ? 0.0 : totalUsage / m_metrics.cores.size();
+    m_metrics.dTemperature = tempDist(rng);
+    m_metrics.dPower = powerDist(rng);
+
+#else
     // Warm-up read: first read after Init() can return stale/garbage values.
     CPUParameters warmup = {};
+
     int ret = m_pCpu->GetCPUParameters(warmup);
+
+    // name
+    std::string str = wcharToUtf8(m_pCpu->GetName());
+
+    // Remove trailing spaces
+    while (!str.empty() && str.back() == ' ')
+        str.pop_back();
+
+    strncpy_s(m_metrics.name, sizeof(m_metrics.name), str.c_str(), _TRUNCATE);
+    m_metrics.SetShortName(str.c_str(), static_cast<int>(m_metrics.cores.size()));
 
     if (ret == -1)
     {
@@ -197,6 +245,7 @@ bool RyzenCpu::Init()
     }
 
     LogCPUParameters(&warmup);
+#endif
 
     // test json
     // char buffer[GPU_JSON_BUFFER_SIZE];
@@ -219,11 +268,6 @@ bool RyzenCpu::Update()
         return false;
     }
 
-    CPUParameters data{};
-    int ret = m_pCpu->GetCPUParameters(data);
-
-    std::lock_guard<std::mutex> lock(m_metricsMutex);
-
 #ifdef TESTMODE
     static std::mt19937 rng(std::random_device{}());
 
@@ -243,20 +287,30 @@ bool RyzenCpu::Update()
     std::uniform_real_distribution<double> effFreqDist(3500.0, 4800.0);
     std::uniform_real_distribution<double> powerDist(85.0, 140.0); // PPT watts
 
+    double totalUsage = 0.0;
+
     for (auto &core : m_metrics.cores)
     {
         core.dTemperature = tempDist(rng);
         core.dUsage = usageDist(rng);
         core.dCurrentFreq = freqDist(rng);
         core.dEffectiveFreq = effFreqDist(rng);
+
+        totalUsage += core.dUsage;
     }
 
+    m_metrics.usage = m_metrics.cores.empty() ? 0.0 : totalUsage / m_metrics.cores.size();
     m_metrics.dTemperature = tempDist(rng);
     m_metrics.dPower = powerDist(rng);
 
     return true;
 
 #else
+
+    CPUParameters data{};
+    int ret = m_pCpu->GetCPUParameters(data);
+
+    std::lock_guard<std::mutex> lock(m_metricsMutex);
 
     switch (ret)
     {

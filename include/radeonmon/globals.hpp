@@ -15,6 +15,7 @@
 #include "radeonmon/webserver.hpp"
 #include "radeonmon/processwatcher.hpp"
 #include "radeonmon/cpugraph.hpp"
+#include "radeonmon/gpugraph.hpp"
 
 inline UINT g_dpi = 96;
 inline GdiBackBuffer g_backBuffer;
@@ -114,3 +115,7 @@ inline AppTitle g_appTitle(APPNAME, APPNAME_LENGTH);
 inline CpuGraphWindow g_cpuGraph(g_cpu);
 
 inline bool g_DontShowHttpsWebServerWarning = false;
+
+// inline GpuGraphWindow g_gpuGraph(g_AdlxGPUTelemetry);
+
+inline bool g_isCpuGraphEnabled;

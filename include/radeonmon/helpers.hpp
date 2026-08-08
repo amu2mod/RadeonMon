@@ -988,3 +988,8 @@ inline std::wstring Utf8ToWide(const std::string &utf8)
     MultiByteToWideChar(CP_UTF8, 0, utf8.data(), static_cast<int>(utf8.size()), &wide[0], required);
     return wide;
 }
+
+inline void SetAlwaysOnTop(HWND hWnd, bool enable)
+{
+    SetWindowPos(hWnd, enable ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+}

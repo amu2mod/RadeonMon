@@ -68,6 +68,7 @@ add_executable(radeonmon WIN32
     src/networking.cpp
     src/webserver.cpp
     src/cpugraph.cpp
+    # src/gpugraph.cpp
     resources/resources.rc
     ${CMAKE_BINARY_DIR}/generated/version.rc
 )
