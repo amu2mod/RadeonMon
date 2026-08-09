@@ -21,24 +21,24 @@ This is an independent personal project and is not affiliated with AMD Corporati
 <table align="center">
     <tr>
           <td align="center">
-            <img width="500" alt="idle state" src="https://github.com/user-attachments/assets/862abc7b-f053-400f-a6cf-629e094a9ee7" />
+            <img height="596" alt="idle state" src="https://github.com/user-attachments/assets/5ceec5cb-60bc-4a6c-ab6a-44f50bcbca43" />
             <br />
              <sub><b>Idle GPU state showing minimal power consumption</b></sub>
           </td>
           <td align="center">
-            <img width="500" alt="Windows Main App" src="https://github.com/user-attachments/assets/f362581a-8627-4b04-b0ee-24113aa52e1a" />
+            <img height="596" alt="while gaming" src="https://github.com/user-attachments/assets/5e9e1b93-7bad-4c04-ab43-26e16cc2c0d8" />
             <br />
-             <sub><b>Normal usage</b></sub>
+             <sub><b>Metrics while gaming</b></sub>
           </td>
           <td align="center">
-            <img width="500" alt="Warning and alert triggered" src="https://github.com/user-attachments/assets/1dba23ea-a731-408d-af93-2778db80c18a" />
+            <img height="596" alt="Warning and alert triggered" src="https://github.com/user-attachments/assets/0653da69-feb9-4119-aa86-9014999624b1" />
             <br />
             <sub><b>Warning and alert triggered</b></sub>
           </td>
     </tr>
     <tr>
       <td colspan="3" align="center">
-        <img height="300" alt="CPU bar graph" src="https://github.com/user-attachments/assets/36849a05-7690-4eac-9fc2-5a38e3fa77b7" />
+        <img width="661" alt="CPU Graph Window" src="https://github.com/user-attachments/assets/840cac86-8270-4b6b-a0a4-7baa608f4ecc" />
         <br />
         <sub><b>CPU graph after clicking the CPU label</b></sub>
       </td>
