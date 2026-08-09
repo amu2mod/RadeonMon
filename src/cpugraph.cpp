@@ -7,6 +7,8 @@
 #include <windowsx.h>
 
 #include <string>
+#include <array>
+#include <random>
 
 bool CpuGraphWindow::Create(HWND hParent)
 {
@@ -75,6 +77,8 @@ bool CpuGraphWindow::Create(HWND hParent)
         m_y = cursor.y - yScale;
     }
 
+    // init font sizes
+    m_titleFontSize = GetScaledTitleFontSize();
     CreateUIFont(dpiX);
 
     int minWidth = GetMinRequiredClientWidth(dpiX);
@@ -82,8 +86,6 @@ bool CpuGraphWindow::Create(HWND hParent)
 
     if (sizeNotSet)
     {
-        // No prior width/height: use the real computed layout minimum
-        // instead of a guessed constant.
         m_width = minWidth;
         m_height = minHeight;
     }
@@ -104,8 +106,6 @@ bool CpuGraphWindow::Create(HWND hParent)
             m_height = MulDiv(m_height, dpiY, m_savedDpi);
         }
 
-        // Always clamp after rescale — loaded settings can be stale/too-small
-        // if layout metrics (label width, margins, fonts) changed since save.
         m_width = max(m_width, minWidth);
         m_height = max(m_height, minHeight);
     }
@@ -177,7 +177,11 @@ void CpuGraphWindow::Update()
 {
     if (m_hwnd)
     {
-        InvalidateRect(m_hwnd, &m_GraphRc, FALSE);
+        if (m_showProcesses)
+            InvalidateRect(m_hwnd, nullptr, FALSE);
+        else
+            InvalidateRect(m_hwnd, &m_GraphRc, FALSE);
+
         UpdateWindow(m_hwnd);
     }
 }
@@ -227,12 +231,49 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
 
     case WM_LBUTTONDOWN:
+    {
+        POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+
+        if (PtInRect(&m_processRC, pt))
+        {
+            OnProcessesClicked();
+            return 0;
+        }
+
         ReleaseCapture();
         SendMessage(m_hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
         return 0;
+    }
+
+    case WM_KEYDOWN:
+    {
+        const bool ctrlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+        const bool isRepeat = (lParam & (1u << 30)) != 0;
+
+        if (ctrlDown && !isRepeat)
+        {
+            switch (wParam)
+            {
+            case VK_ADD:      // Ctrl + Numpad +
+            case VK_OEM_PLUS: // Ctrl + main keyboard +
+                OnResizeWindow(true);
+                return 0;
+
+            case VK_SUBTRACT:  // Ctrl + Numpad -
+            case VK_OEM_MINUS: // Ctrl + main keyboard - (QWERTY)
+            case '6':          // Ctrl + main keyboard - (AZERTY)
+                OnResizeWindow(false);
+                return 0;
+            }
+        }
+
+        break;
+    }
 
     case WM_SIZE:
     {
+        m_width = LOWORD(lParam);
+        m_height = HIWORD(lParam);
         UpdateLayoutRects();
         InvalidateRect(m_hwnd, nullptr, TRUE);
         return 0;
@@ -256,8 +297,6 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         RECT rc;
         GetClientRect(m_hwnd, &rc);
 
-        FillRect(hdc, &rc, bgBrush);
-
         const UINT dpi = GetDpiForWindow(m_hwnd);
 
         auto Scale = [dpi](int value)
@@ -269,32 +308,61 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         const int titlePadding = Scale(c_TitlePaddingTopBottom);
         const int titleBarHeight = m_FontHeight + titlePadding * 2;
 
+        const auto &colors = Theme::Get(m_currentTheme);
+
+        // The region Windows is asking us to repaint.
+        const RECT &paintRc = ps.rcPaint;
+
+        auto Intersects = [](const RECT &a, const RECT &b)
+        {
+            RECT intersection;
+            return IntersectRect(&intersection, &a, &b);
+        };
+
+        // Background.
+        // Only paint the portion that is actually invalid.
+        {
+            RECT dirtyRc;
+            if (IntersectRect(&dirtyRc, &rc, &paintRc))
+            {
+                FillRect(hdc, &dirtyRc, bgBrush);
+            }
+        }
+
+        // Borders.
         RECT topEdge{rc.left, rc.top, rc.right, rc.top + borderWidth};
         RECT bottomEdge{rc.left, rc.bottom - borderWidth, rc.right, rc.bottom};
         RECT leftEdge{rc.left, rc.top, rc.left + borderWidth, rc.bottom};
         RECT rightEdge{rc.right - borderWidth, rc.top, rc.right, rc.bottom};
 
-        FillRect(hdc, &topEdge, borderBrush);
-        FillRect(hdc, &bottomEdge, borderBrush);
-        FillRect(hdc, &leftEdge, borderBrush);
-        FillRect(hdc, &rightEdge, borderBrush);
+        if (Intersects(topEdge, paintRc))
+            FillRect(hdc, &topEdge, borderBrush);
 
-        const auto &colors = Theme::Get(m_currentTheme);
+        if (Intersects(bottomEdge, paintRc))
+            FillRect(hdc, &bottomEdge, borderBrush);
+
+        if (Intersects(leftEdge, paintRc))
+            FillRect(hdc, &leftEdge, borderBrush);
+
+        if (Intersects(rightEdge, paintRc))
+            FillRect(hdc, &rightEdge, borderBrush);
 
         // Title bar.
         RECT titleRc{borderWidth, borderWidth, rc.right - borderWidth, borderWidth + titleBarHeight};
 
-        FillRect(hdc, &titleRc, borderBrush);
+        if (Intersects(titleRc, paintRc))
+        {
+            FillRect(hdc, &titleRc, borderBrush);
 
-        SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, colors.text);
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, colors.text);
 
-        int titleTextY = borderWidth + titlePadding;
+            const int titleTextY = borderWidth + titlePadding;
 
-        TextOutW(hdc, m_MarginLeftRight, titleTextY, m_title.c_str(), static_cast<int>(m_title.size()));
+            TextOutW(hdc, m_MarginLeftRight, titleTextY, m_title.c_str(), static_cast<int>(m_title.size()));
+        }
 
         // Graph area starts below the title bar.
-        SelectObject(hdc, m_hFont);
         RECT graphRc = rc;
 
         graphRc.left += borderWidth;
@@ -302,7 +370,12 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         graphRc.top = rc.top + borderWidth + titleBarHeight;
         graphRc.bottom = rc.bottom - borderWidth;
 
-        DrawCoreBarGraph(hdc, graphRc);
+        // Only invoke the graph drawing code when the graph was invalidated.
+        if (Intersects(graphRc, paintRc))
+        {
+            SelectObject(hdc, m_hFont);
+            DrawCoreBarGraph(hdc, graphRc);
+        }
 
         EndPaint(m_hwnd, &ps);
         return 0;
@@ -322,8 +395,8 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
     }
 
     case WM_EXITSIZEMOVE:
-        InvalidateRect(m_hwnd, NULL, TRUE); // request repaint
-        UpdateWindow(m_hwnd);               // force immediate WM_PAINT
+        InvalidateRect(m_hwnd, &m_GraphRc, TRUE); // request repaint
+        UpdateWindow(m_hwnd);                     // force immediate WM_PAINT
         return 0;
 
     case WM_CONTEXTMENU:
@@ -396,6 +469,21 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         mmi->ptMinTrackSize.x = GetMinRequiredClientWidth(GetDpiForWindow(m_hwnd));
         return 0;
     }
+
+    case WM_SETCURSOR:
+    {
+        POINT pt;
+        GetCursorPos(&pt);
+        ScreenToClient(m_hwnd, &pt);
+
+        if (PtInRect(&m_processRC, pt))
+        {
+            SetCursor(LoadCursor(nullptr, IDC_HAND));
+            return TRUE;
+        }
+
+        break;
+    }
     }
 
     return DefWindowProc(m_hwnd, msg, wParam, lParam);
@@ -421,6 +509,13 @@ void CpuGraphWindow::DrawCoreBarGraph(HDC hdc, const RECT &rc)
     SelectObject(hdc, m_hFont);
 
     const auto &colors = Theme::Get(m_currentTheme);
+
+    constexpr std::array<const wchar_t *, 5> processNames{
+        L"process 1",
+        L"process 2",
+        L"process 3",
+        L"process 4",
+        L"process 5"};
 
     // Header line.
     {
@@ -467,6 +562,22 @@ void CpuGraphWindow::DrawCoreBarGraph(HDC hdc, const RECT &rc)
         // Horizontal separator.
         HPEN separatorPen = CreatePen(PS_SOLID, Scale(1), colors.separator);
         HPEN oldPen = (HPEN)SelectObject(hdc, separatorPen);
+
+        // Processes show/hide control.
+        {
+            constexpr wchar_t showText[] = L"Show processes";
+            constexpr wchar_t hideText[] = L"Hide processes";
+
+            SetTextColor(hdc, colors.dim);
+
+            auto &text = m_showProcesses ? hideText : showText;
+
+            HFONT oldFont = (HFONT)SelectObject(hdc, m_titleFont);
+            const int text_Y = m_processRC.top + (m_processRC.bottom - m_processRC.top - m_TitleFontHeight) / 2;
+
+            TextOutW(hdc, m_processRC.left, text_Y, text, ARRAYSIZE(text) - 1);
+            SelectObject(hdc, oldFont);
+        }
 
         MoveToEx(hdc, m_MarginLeftRight, y, nullptr);
         LineTo(hdc, rc.right - m_MarginLeftRight, y);
@@ -550,6 +661,82 @@ void CpuGraphWindow::DrawCoreBarGraph(HDC hdc, const RECT &rc)
         else
             y += m_FontHeight;
     }
+
+    // Horizontal separator.
+    if (m_showProcesses)
+    {
+        // Spacing above the separator.
+        y += m_Spacing;
+
+        HPEN separatorPen =
+            CreatePen(PS_SOLID, Scale(1), colors.separator);
+
+        HPEN oldPen =
+            static_cast<HPEN>(SelectObject(hdc, separatorPen));
+
+        MoveToEx(hdc, m_MarginLeftRight, y, nullptr);
+        LineTo(hdc, rc.right - m_MarginLeftRight, y);
+
+        SelectObject(hdc, oldPen);
+        DeleteObject(separatorPen);
+
+        // Spacing below the separator.
+        y += m_Spacing;
+    }
+
+    // ------------------------------------------------------------
+    // Processes.
+    // ------------------------------------------------------------
+    if (m_showProcesses)
+    {
+        const int processBarLeft = m_MarginLeftRight;
+        const int processBarRight = rc.right - m_MarginLeftRight;
+        const int processBarWidth = processBarRight - processBarLeft;
+        const int processBarHeight = Scale(2);
+        const int processBarSpacing = Scale(1);
+        const int processRowHeight = m_FontHeight + processBarSpacing + processBarHeight;
+
+        for (size_t i = 0; i < m_processWatcher.GetProcessList().size(); ++i)
+        {
+            wchar_t usageText[16];
+            swprintf_s(usageText, L"%0.1f%%", m_processWatcher.GetProcessList()[i].cpu);
+
+            // Process name.
+            SetTextColor(hdc, colors.text);
+
+            std::string name = m_processWatcher.GetProcessList()[i].name;
+            int len = MultiByteToWideChar(CP_UTF8, 0, name.c_str(), -1, nullptr, 0);
+            std::wstring wname(len, L'\0');
+            MultiByteToWideChar(CP_UTF8, 0, name.c_str(), -1, wname.data(), len);
+            TextOutW(hdc, m_MarginLeftRight, y, wname.c_str(), static_cast<int>(wname.size()));
+
+            // Usage, right aligned.
+            SIZE usageSize{};
+            GetTextExtentPoint32W(hdc, usageText, lstrlenW(usageText), &usageSize);
+            SetTextColor(hdc, colors.header);
+            TextOutW(hdc, processBarRight - usageSize.cx, y, usageText, lstrlenW(usageText));
+
+            // Thin background bar.
+            const int barY = y + m_FontHeight + processBarSpacing;
+
+            RECT background{processBarLeft, barY, processBarRight, barY + processBarHeight};
+
+            FillRect(hdc, &background, chartBgBrush);
+
+            // Usage bar.
+            const int barWidth = static_cast<int>(processBarWidth * m_processWatcher.GetProcessList()[i].cpu / 100);
+
+            RECT bar{processBarLeft, barY, processBarLeft + barWidth, barY + processBarHeight};
+
+            FillRect(hdc, &bar, barBrush);
+
+            // Space before next process.
+            if (i + 1 != processNames.size())
+                y += processRowHeight + m_Spacing;
+            else
+                y += processRowHeight;
+        }
+    }
 }
 
 void CpuGraphWindow::CreateUIFont(UINT dpi)
@@ -626,6 +813,11 @@ void CpuGraphWindow::CreateUIFont(UINT dpi)
     m_TitleFontHeight = titleTm.tmHeight;
     m_TitleFontAscent = titleTm.tmAscent;
 
+    SIZE titleCharSize{};
+    GetTextExtentPoint32W(hdc, L"0", 1, &titleCharSize);
+
+    m_TitleFontWidth = titleCharSize.cx;
+
     SelectObject(hdc, oldFont);
     ReleaseDC(m_hwnd, hdc); // ReleaseDC ignores a null HWND correctly
 
@@ -664,24 +856,51 @@ int CpuGraphWindow::GetRequiredClientHeight(UINT dpi) const
         return MulDiv(value, dpi, USER_DEFAULT_SCREEN_DPI);
     };
 
-    const int borderWidth = Scale(1);
+    const int borderWidth = Scale(c_borderWidth);
     const int titlePadding = Scale(c_TitlePaddingTopBottom);
-    const int titleBarHeight = m_FontHeight + titlePadding * 2;
+    const int titleBarHeight =
+        m_FontHeight + titlePadding * 2;
 
-    const int headerSpacing = m_Spacing / 2;
     const int separatorHeight = m_OnePxScaled;
 
-    const int headerHeight = m_FontHeight + headerSpacing + separatorHeight + m_Spacing;
+    int graphHeight = m_MarginTopBottom;
 
-    int coreHeight = 0;
+    // Header.
+    graphHeight += m_FontHeight;
+    graphHeight += m_Spacing / 2;
+    graphHeight += separatorHeight;
+    graphHeight += m_Spacing;
 
+    // CPU cores.
     if (!cpu.cores.empty())
     {
-        coreHeight = static_cast<int>(cpu.cores.size()) * m_FontHeight;
-        coreHeight += static_cast<int>(cpu.cores.size() - 1) * m_Spacing;
+        graphHeight +=
+            static_cast<int>(cpu.cores.size()) * m_FontHeight;
+
+        graphHeight +=
+            static_cast<int>(cpu.cores.size() - 1) * m_Spacing;
     }
 
-    const int graphHeight = m_MarginTopBottom + headerHeight + coreHeight + m_MarginTopBottom;
+    if (m_showProcesses)
+    {
+        constexpr int processCount = 5;
+
+        const int processBarSpacing = Scale(1);
+        const int processBarHeight = Scale(2);
+
+        const int processRowHeight = m_FontHeight + processBarSpacing + processBarHeight;
+
+        graphHeight += m_Spacing;
+        graphHeight += separatorHeight;
+        graphHeight += m_Spacing;
+
+        graphHeight += processCount * processRowHeight;
+
+        graphHeight += (processCount - 1) * m_Spacing;
+    }
+
+    // Bottom margin.
+    graphHeight += m_MarginTopBottom;
 
     return borderWidth + titleBarHeight + graphHeight + borderWidth;
 }
@@ -738,6 +957,12 @@ bool CpuGraphWindow::SaveSettings()
     swprintf_s(buffer, L"%d", m_currentTheme);
     WritePrivateProfileStringW(L"CPU", L"Theme", buffer, path);
 
+    swprintf_s(buffer, L"%d", m_fontSize);
+    WritePrivateProfileStringW(L"CPU", L"FontSize", buffer, path);
+
+    swprintf_s(buffer, L"%d", m_showProcesses);
+    WritePrivateProfileStringW(L"CPU", L"ShowProcesses", buffer, path);
+
     return true;
 }
 
@@ -768,6 +993,10 @@ bool CpuGraphWindow::LoadSettings()
     else
         m_currentTheme = Theme::Type::SkyBlue;
 
+    m_fontSize = GetPrivateProfileIntW(L"CPU", L"FontSize", c_defaultFontSize, path);
+
+    m_showProcesses = GetPrivateProfileIntW(L"CPU", L"ShowProcesses", 0, path) != 0;
+
     return true;
 }
 
@@ -778,10 +1007,21 @@ int CpuGraphWindow::GetMinRequiredClientWidth(UINT dpi) const
         return MulDiv(value, dpi, USER_DEFAULT_SCREEN_DPI);
     };
 
-    const int borderWidth = Scale(1);
+    const int borderWidth = Scale(c_borderWidth);
     const int minBarWidth = Scale(c_MinBarGraphWidth);
+    const int processPadding = Scale(c_ProcessPadding);
 
-    return borderWidth + m_MarginLeftRight + m_LabelWidth + m_BarLeftMargin + minBarWidth + m_MarginLeftRight + borderWidth;
+    constexpr int processTextLength = ARRAYSIZE(L"Show processes") - 1;
+
+    const int processWidth = m_TitleFontWidth * processTextLength + processPadding * 2;
+    const int graphWidth = m_MarginLeftRight + m_LabelWidth + m_BarLeftMargin + minBarWidth + m_MarginLeftRight;
+
+    // Header width:
+    // CPU  <header values>       Show processes
+    const int cpuHeaderWidth = m_MarginLeftRight + m_FontWidth * 3 + m_BarLeftMargin + m_LabelWidth;
+    const int headerWidth = cpuHeaderWidth + m_MarginLeftRight + processWidth + m_MarginLeftRight;
+
+    return borderWidth + (std::max)(graphWidth, headerWidth) + borderWidth;
 }
 
 void CpuGraphWindow::UpdateLayoutRects()
@@ -790,8 +1030,11 @@ void CpuGraphWindow::UpdateLayoutRects()
     GetClientRect(m_hwnd, &rc);
 
     const UINT dpi = GetDpiForWindow(m_hwnd);
+
     auto Scale = [dpi](int value)
-    { return MulDiv(value, dpi, USER_DEFAULT_SCREEN_DPI); };
+    {
+        return MulDiv(value, dpi, USER_DEFAULT_SCREEN_DPI);
+    };
 
     const int borderWidth = Scale(c_borderWidth);
     const int titlePadding = Scale(c_TitlePaddingTopBottom);
@@ -802,4 +1045,64 @@ void CpuGraphWindow::UpdateLayoutRects()
     m_GraphRc.right -= borderWidth;
     m_GraphRc.top = rc.top + borderWidth + titleBarHeight;
     m_GraphRc.bottom -= borderWidth;
+
+    // Header "Processes" control.
+    const int processPadding = Scale(c_ProcessPadding);
+    constexpr wchar_t processText[] = L"Show processes";
+    const int processWidth = m_TitleFontWidth * (ARRAYSIZE(processText) - 1) + processPadding * 2;
+    const int headerY = m_GraphRc.top + m_MarginTopBottom;
+
+    m_processRC = {m_GraphRc.right - m_MarginLeftRight - processWidth, headerY - processPadding, m_GraphRc.right - m_MarginLeftRight, headerY + m_TitleFontHeight + processPadding};
+}
+
+void CpuGraphWindow::OnResizeWindow(bool grow)
+{
+    int oldFontSize = m_fontSize;
+
+    RECT rc{};
+    GetClientRect(m_hwnd, &rc);
+    int width = rc.right - rc.left;
+    int height = rc.bottom - rc.top;
+    float oldRatio = static_cast<float>(width) / height;
+
+    if (grow)
+        m_fontSize = min(m_fontSize + 2, c_MaxFontSize);
+    else
+        m_fontSize = max(m_fontSize - 2, c_MinFontSize);
+
+    // Already at min/max
+    if (m_fontSize == oldFontSize)
+        return;
+
+    m_titleFontSize = GetScaledTitleFontSize();
+
+    const UINT dpi = GetDpiForWindow(m_hwnd);
+
+    CreateUIFont(dpi);
+    UpdateLayoutRects();
+
+    int desiredClientHeight = GetRequiredClientHeight(dpi);
+
+    int minWidth = GetMinRequiredClientWidth(dpi);
+    int newWidth = static_cast<int>(desiredClientHeight * oldRatio);
+
+    SetWindowPos(m_hwnd, nullptr, 0, 0, max(minWidth, newWidth), desiredClientHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+    InvalidateRect(m_hwnd, nullptr, TRUE);
+
+    // LOG_DEBUG("new window: %dx%d, font@%dpx", rc.right - rc.left, rc.bottom - rc.top, g_fontSize);
+}
+
+void CpuGraphWindow::OnProcessesClicked()
+{
+    LOG_DEBUG("Toggling Processes");
+    m_showProcesses = !m_showProcesses;
+
+    UINT dpi = GetDpiForWindow(m_hwnd);
+
+    int newHeight = GetRequiredClientHeight(dpi);
+
+    SetWindowPos(m_hwnd, nullptr, 0, 0, m_width, newHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+    InvalidateRect(m_hwnd, &m_processRC, FALSE);
 }

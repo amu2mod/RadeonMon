@@ -13,7 +13,8 @@ constexpr COLORREF ALERTCOLOR = rgb(221, 0, 0);
 constexpr COLORREF SEPARATORCOLOR = rgb(60, 60, 60);
 constexpr COLORREF BORDERCOLOR = rgb(200, 35, 35);
 constexpr COLORREF NOTIFICATIONCOLOR = rgb(241, 215, 5);
-constexpr COLORREF SERVERSTATUSCOLOR = rgb(0, 134, 223);
+// constexpr COLORREF SERVERSTATUSCOLOR = rgb(0, 134, 223);
+constexpr COLORREF SERVERSTATUSCOLOR = rgb(255, 193, 7);
 
 constexpr COLORREF colorMapping[] = {
     VALUECOLOR,

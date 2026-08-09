@@ -3,15 +3,20 @@
 #include "radeonmon/structures.hpp"
 #include "radeonmon/ryzen.hpp"
 #include "radeonmon/colors.hpp"
+#include "radeonmon/processwatcher.hpp"
 
 #include <Windows.h>
 
 #include <string>
+#include <algorithm>
+#include <array>
+
+class ProcessWatcher;
 
 class CpuGraphWindow
 {
 public:
-    CpuGraphWindow(RyzenCpu &cpu) : m_cpu(cpu) {}
+    CpuGraphWindow(RyzenCpu &cpu, ProcessWatcher &processWatcher) : m_cpu(cpu), m_processWatcher(processWatcher) {}
 
     ~CpuGraphWindow()
     {
@@ -38,6 +43,7 @@ public:
     void Show();
     void Close();
     void Update(); // Called from the main timer
+    bool isViewProcessesEnabled() { return m_showProcesses; }
 
     inline bool isActive() const { return m_hwnd != nullptr; }
 
@@ -52,6 +58,16 @@ private:
     bool LoadSettings();
     int GetMinRequiredClientWidth(UINT dpi) const;
     void UpdateLayoutRects();
+    void OnResizeWindow(bool grow);
+    void OnProcessesClicked();
+
+    // Helper to be called after loading the default font size from preferences
+    inline int GetScaledTitleFontSize() const
+    {
+        const int scaled = static_cast<int>(std::lround(m_fontSize * static_cast<float>(c_defaultTileFontSize) / c_defaultFontSize));
+
+        return std::clamp(scaled, c_minTitleFontSize, c_maxTitleFontSize);
+    }
 
 private:
     HWND m_hwnd = nullptr;
@@ -62,6 +78,7 @@ private:
     int m_FontHeight = 16;
     int m_FontAscent = 0;
     int m_FontWidth = 0;
+    int m_TitleFontWidth = 0;
     int m_LabelWidth = 0;
     int m_BarLeftMargin = 0;
     int m_MarginTopBottom = 0;
@@ -73,8 +90,11 @@ private:
     std::wstring m_title;
     RECT m_GraphRc{};
 
-    int m_fontSize = 16;
-    int m_titleFontSize = 14;
+    const int c_defaultFontSize = 16;
+    const int c_defaultTileFontSize = 14;
+
+    int m_fontSize = c_defaultFontSize;
+    int m_titleFontSize = c_defaultTileFontSize;
     int m_TitleFontHeight;
     int m_TitleFontAscent;
 
@@ -91,6 +111,11 @@ private:
     const int c_borderWidth = 1;
     const int c_TitlePaddingTopBottom = 5;
     const int c_MinBarGraphWidth = 100;
+    const int c_MaxFontSize = 24;
+    const int c_MinFontSize = 10;
+    const int c_minTitleFontSize = 8;
+    const int c_maxTitleFontSize = 22;
+    const int c_ProcessPadding = 0;
 
     Theme::Type m_currentTheme = Theme::Type::SkyBlue;
 
@@ -99,4 +124,10 @@ private:
     HBRUSH barBrush;
     HBRUSH markerBrush;
     HBRUSH borderBrush;
+
+    // Header / process toggle.
+    RECT m_processRC{};
+    bool m_showProcesses = false;
+
+    ProcessWatcher &m_processWatcher;
 };

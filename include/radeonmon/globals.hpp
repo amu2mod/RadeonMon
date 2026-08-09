@@ -108,13 +108,13 @@ inline int g_currentDisplayIndex = 0;
 
 inline int g_currentWebTemplate = IDM_WEBSERVER_TEMPLATE_LIGHT;
 
-inline ProcessWatcher g_processWatcher{g_cpu, g_webServer};
+inline ProcessWatcher g_processWatcher{g_cpu};
 
 inline AppTitle g_appTitle(APPNAME, APPNAME_LENGTH);
 
-inline CpuGraphWindow g_cpuGraph(g_cpu);
-
 inline bool g_DontShowHttpsWebServerWarning = false;
+
+inline CpuGraphWindow g_cpuGraph(g_cpu, g_processWatcher);
 
 // inline GpuGraphWindow g_gpuGraph(g_AdlxGPUTelemetry);
 

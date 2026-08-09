@@ -70,6 +70,7 @@ add_executable(radeonmon WIN32
     src/cpugraph.cpp
     # src/gpugraph.cpp
     resources/resources.rc
+    src/processwatcher.cpp
     ${CMAKE_BINARY_DIR}/generated/version.rc
 )
 

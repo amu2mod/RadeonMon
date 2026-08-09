@@ -858,7 +858,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             // START_CHRONO(adlx);
             g_AdlxGPUTelemetry.Tick();
             GpuMetricsSnapshot snapshot = g_AdlxGPUTelemetry.Get();
-            g_processWatcher.Poll();
+            if (g_webServer.IsRunning() || (g_cpu.IsInitialized() && g_cpuGraph.isActive() && g_cpuGraph.isViewProcessesEnabled()))
+                g_processWatcher.Poll();
             // END_CHRONO(adlx, "ADLX");
 
             if (!snapshot.valid)
