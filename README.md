@@ -38,7 +38,7 @@ This is an independent personal project and is not affiliated with AMD Corporati
     </tr>
     <tr>
       <td colspan="3" align="center">
-        <img width="661" alt="CPU Graph Window" src="https://github.com/user-attachments/assets/840cac86-8270-4b6b-a0a4-7baa608f4ecc" />
+          <img width="525" alt="CPU graph" src="https://github.com/user-attachments/assets/93038c93-7c75-4a01-ad35-2c76000803c4" />
         <br />
         <sub><b>CPU graph after clicking the CPU label</b></sub>
       </td>
