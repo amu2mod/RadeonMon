@@ -10,6 +10,8 @@
 #include "radeonmon/structures.hpp"
 #include "radeonmon/globals.hpp"
 
+#include <cstdint>
+
 #pragma comment(lib, "Comctl32.lib")
 
 extern UINT g_dpi;
@@ -992,4 +994,62 @@ inline std::wstring Utf8ToWide(const std::string &utf8)
 inline void SetAlwaysOnTop(HWND hWnd, bool enable)
 {
     SetWindowPos(hWnd, enable ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
+// bytes -> "1.1GB" / "200MB" / "15MB" / "1.1MB"
+inline void FormatRam(uint64_t bytes, wchar_t *out, int len)
+{
+    constexpr uint64_t MB = 1024ULL * 1024ULL;
+    constexpr uint64_t GB = 1024ULL * 1024ULL * 1024ULL;
+
+    const bool isGB = bytes >= GB;
+    const uint64_t unitSize = isGB ? GB : MB;
+
+    // scaled = round(value * 10) in tenths of the unit
+    const uint64_t scaled = (bytes * 10 + unitSize / 2) / unitSize;
+    uint32_t whole = static_cast<uint32_t>(scaled / 10);
+    uint32_t frac = static_cast<uint32_t>(scaled % 10);
+
+    const bool useDecimal = whole < 10;
+    if (!useDecimal)
+    {
+        // re-round without the decimal so e.g. 9.96 -> 10, not "9.10"->"9"
+        whole = static_cast<uint32_t>((bytes + unitSize / 2) / unitSize);
+    }
+
+    wchar_t *p = out;
+
+    // write 'whole' digits (no leading zeros, whole may be 0)
+    {
+        wchar_t tmp[10];
+        int n = 0;
+        uint32_t v = whole;
+        if (v == 0)
+        {
+            tmp[n++] = L'0';
+        }
+        else
+        {
+            while (v)
+            {
+                tmp[n++] = L'0' + (v % 10);
+                v /= 10;
+            }
+        }
+        while (n)
+            *p++ = tmp[--n];
+    }
+
+    if (useDecimal)
+    {
+        *p++ = L'.';
+        *p++ = L'0' + static_cast<wchar_t>(frac);
+    }
+
+    *p++ = ' ';
+    *p++ = isGB ? L'G' : L'M';
+    *p++ = L'B';
+    *p = L'\0';
+
+    (void)len; // max output "18446GB" fits comfortably in any reasonable buffer
 }

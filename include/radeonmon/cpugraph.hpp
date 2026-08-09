@@ -130,4 +130,5 @@ private:
     bool m_showProcesses = false;
 
     ProcessWatcher &m_processWatcher;
+    int m_maxProcess = 5;
 };

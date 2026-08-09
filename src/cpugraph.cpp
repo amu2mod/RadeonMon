@@ -9,6 +9,7 @@
 #include <string>
 #include <array>
 #include <random>
+#include <algorithm>
 
 bool CpuGraphWindow::Create(HWND hParent)
 {
@@ -405,10 +406,19 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
         // Theme submenu
         HMENU themeMenu = CreatePopupMenu();
-        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == Theme::Type::SkyBlue ? MF_CHECKED : NULL), 2, L"Sky Blue (Intel)");
-        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == Theme::Type::RyzenOrange ? MF_CHECKED : NULL), 3, L"Orange (Ryzen)");
+        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == Theme::Type::SkyBlue ? MF_CHECKED : 0), 2, L"Sky Blue (Intel)");
+        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == Theme::Type::RyzenOrange ? MF_CHECKED : 0), 3, L"Orange (Ryzen)");
 
         AppendMenu(menu, MF_POPUP, (UINT_PTR)themeMenu, L"Theme");
+
+        // Process Limit submenu
+        HMENU processLimitMenu = CreatePopupMenu();
+        AppendMenu(processLimitMenu, MF_STRING | (m_maxProcess == 3 ? MF_CHECKED : 0), 4, L"3");
+        AppendMenu(processLimitMenu, MF_STRING | (m_maxProcess == 4 ? MF_CHECKED : 0), 5, L"4");
+        AppendMenu(processLimitMenu, MF_STRING | (m_maxProcess == 5 ? MF_CHECKED : 0), 6, L"5");
+
+        AppendMenu(menu, MF_POPUP, (UINT_PTR)processLimitMenu, L"Process Limit");
+
         AppendMenu(menu, MF_SEPARATOR, 0, nullptr);
         AppendMenu(menu, MF_STRING, 1, L"Close");
 
@@ -438,6 +448,21 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
             m_currentTheme = Theme::Type::RyzenOrange;
             RebuildBrushes();
             InvalidateRect(m_hwnd, nullptr, TRUE);
+            break;
+
+        case 4:
+            m_maxProcess = 3;
+            UpdateWindowHeight();
+            break;
+
+        case 5:
+            m_maxProcess = 4;
+            UpdateWindowHeight();
+            break;
+
+        case 6:
+            m_maxProcess = 5;
+            UpdateWindowHeight();
             break;
         }
 
@@ -696,42 +721,89 @@ void CpuGraphWindow::DrawCoreBarGraph(HDC hdc, const RECT &rc)
         const int processBarSpacing = Scale(1);
         const int processRowHeight = m_FontHeight + processBarSpacing + processBarHeight;
 
-        for (size_t i = 0; i < m_processWatcher.GetProcessList().size(); ++i)
-        {
-            wchar_t usageText[16];
-            swprintf_s(usageText, L"%0.1f%%", m_processWatcher.GetProcessList()[i].cpu);
+        const auto &processList = m_processWatcher.GetProcessList();
+        const size_t processCount = std::min<size_t>(m_maxProcess, processList.size());
 
+        for (size_t i = 0; i < processCount; ++i)
+        {
+            const auto &process = processList[i];
+
+            // ----------------------------------------------------
             // Process name.
+            // ----------------------------------------------------
             SetTextColor(hdc, colors.text);
 
-            std::string name = m_processWatcher.GetProcessList()[i].name;
+            std::string name = process.name;
+
             int len = MultiByteToWideChar(CP_UTF8, 0, name.c_str(), -1, nullptr, 0);
             std::wstring wname(len, L'\0');
             MultiByteToWideChar(CP_UTF8, 0, name.c_str(), -1, wname.data(), len);
-            TextOutW(hdc, m_MarginLeftRight, y, wname.c_str(), static_cast<int>(wname.size()));
 
-            // Usage, right aligned.
+            TextOutW(hdc, m_MarginLeftRight, y, wname.c_str(), static_cast<int>(wname.size()) - 1);
+
+            // ----------------------------------------------------
+            // CPU usage text.
+            // ----------------------------------------------------
+            wchar_t usageText[16];
+
+            swprintf_s(usageText, L"%0.1f%%", process.cpu);
+
             SIZE usageSize{};
-            GetTextExtentPoint32W(hdc, usageText, lstrlenW(usageText), &usageSize);
-            SetTextColor(hdc, colors.header);
-            TextOutW(hdc, processBarRight - usageSize.cx, y, usageText, lstrlenW(usageText));
 
+            GetTextExtentPoint32W(hdc, usageText, lstrlenW(usageText), &usageSize);
+
+            // ----------------------------------------------------
+            // RAM usage text.
+            // ----------------------------------------------------
+            wchar_t ramText[32];
+
+            FormatRam(process.ramUsage, ramText, 32);
+
+            SIZE ramSize{};
+            GetTextExtentPoint32W(hdc, ramText, lstrlenW(ramText), &ramSize);
+
+            // ----------------------------------------------------
+            // Right-aligned CPU percentage.
+            // ----------------------------------------------------
+            const int usageX = processBarRight - usageSize.cx;
+
+            SetTextColor(hdc, colors.header);
+
+            TextOutW(hdc, usageX, y, usageText, lstrlenW(usageText));
+
+            // ----------------------------------------------------
+            // Right-aligned RAM, immediately before CPU.
+            // ----------------------------------------------------
+            constexpr int ramCpuSpacing = 10;
+
+            const int ramX = usageX - ramCpuSpacing - ramSize.cx;
+
+            SetTextColor(hdc, colors.dim);
+
+            TextOutW(hdc, ramX, y, ramText, lstrlenW(ramText));
+
+            // ----------------------------------------------------
             // Thin background bar.
+            // ----------------------------------------------------
             const int barY = y + m_FontHeight + processBarSpacing;
 
             RECT background{processBarLeft, barY, processBarRight, barY + processBarHeight};
 
             FillRect(hdc, &background, chartBgBrush);
 
+            // ----------------------------------------------------
             // Usage bar.
-            const int barWidth = static_cast<int>(processBarWidth * m_processWatcher.GetProcessList()[i].cpu / 100);
+            // ----------------------------------------------------
+            const int barWidth = static_cast<int>(processBarWidth * process.cpu / 100.0);
 
             RECT bar{processBarLeft, barY, processBarLeft + barWidth, barY + processBarHeight};
 
             FillRect(hdc, &bar, barBrush);
 
+            // ----------------------------------------------------
             // Space before next process.
-            if (i + 1 != processNames.size())
+            // ----------------------------------------------------
+            if (i + 1 != processCount)
                 y += processRowHeight + m_Spacing;
             else
                 y += processRowHeight;
@@ -874,29 +946,21 @@ int CpuGraphWindow::GetRequiredClientHeight(UINT dpi) const
     // CPU cores.
     if (!cpu.cores.empty())
     {
-        graphHeight +=
-            static_cast<int>(cpu.cores.size()) * m_FontHeight;
-
-        graphHeight +=
-            static_cast<int>(cpu.cores.size() - 1) * m_Spacing;
+        graphHeight += static_cast<int>(cpu.cores.size()) * m_FontHeight;
+        graphHeight += static_cast<int>(cpu.cores.size() - 1) * m_Spacing;
     }
 
     if (m_showProcesses)
     {
-        constexpr int processCount = 5;
-
         const int processBarSpacing = Scale(1);
         const int processBarHeight = Scale(2);
-
         const int processRowHeight = m_FontHeight + processBarSpacing + processBarHeight;
 
         graphHeight += m_Spacing;
         graphHeight += separatorHeight;
         graphHeight += m_Spacing;
-
-        graphHeight += processCount * processRowHeight;
-
-        graphHeight += (processCount - 1) * m_Spacing;
+        graphHeight += m_maxProcess * processRowHeight;
+        graphHeight += (m_maxProcess - 1) * m_Spacing;
     }
 
     // Bottom margin.
@@ -963,6 +1027,9 @@ bool CpuGraphWindow::SaveSettings()
     swprintf_s(buffer, L"%d", m_showProcesses);
     WritePrivateProfileStringW(L"CPU", L"ShowProcesses", buffer, path);
 
+    swprintf_s(buffer, L"%d", m_maxProcess);
+    WritePrivateProfileStringW(L"CPU", L"MaxProcess", buffer, path);
+
     return true;
 }
 
@@ -996,6 +1063,8 @@ bool CpuGraphWindow::LoadSettings()
     m_fontSize = GetPrivateProfileIntW(L"CPU", L"FontSize", c_defaultFontSize, path);
 
     m_showProcesses = GetPrivateProfileIntW(L"CPU", L"ShowProcesses", 0, path) != 0;
+
+    m_maxProcess = std::clamp(static_cast<int>(GetPrivateProfileIntW(L"CPU", L"MaxProcess", 5, path)), 3, 5);
 
     return true;
 }

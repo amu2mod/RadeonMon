@@ -69,6 +69,7 @@ std::vector<ProcessInfo> ProcessWatcher::Poll()
         USHORT nameLen;
         DWORD pid;
         double cpu;
+        uint64_t ramUsage;
     };
 
     std::vector<Entry> usage;
@@ -105,7 +106,7 @@ std::vector<ProcessInfo> ProcessWatcher::Poll()
 
         m_ProcessTimes[pid] = procTime;
 
-        usage.push_back({spi->ImageName.Buffer, spi->ImageName.Length, pid, cpu});
+        usage.push_back({spi->ImageName.Buffer, spi->ImageName.Length, pid, cpu, static_cast<uint64_t>(spi->WorkingSetSize)});
 
         if (spi->NextEntryOffset == 0)
             break;
@@ -186,7 +187,7 @@ std::vector<ProcessInfo> ProcessWatcher::Poll()
         else
             name = "<unknown>";
 
-        result.push_back({std::move(name), usage[i].cpu});
+        result.push_back({std::move(name), usage[i].cpu, usage[i].ramUsage});
     }
 
     m_LastTop = result;
@@ -198,7 +199,8 @@ void ProcessWatcher::Log() const
 {
     for (const auto &process : m_LastTop)
     {
-        LOG_DEBUG("%s (%.1f%%)", process.name.c_str(), process.cpu);
+        double ramMB = static_cast<double>(process.ramUsage) / (1024.0 * 1024.0);
+        LOG_DEBUG("%s, %.1fMB (%.1f%%)", process.name.c_str(), ramMB, process.cpu);
     }
 }
 #endif
