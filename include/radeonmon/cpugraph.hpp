@@ -45,12 +45,12 @@ private:
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
     LRESULT HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam);
     void DrawCoreBarGraph(HDC hdc, const RECT &rc);
-    void CreateUIFont();
-    int GetRequiredClientHeight() const;
-    void UpdateWindowSize();
+    void CreateUIFont(UINT dpi);
+    int GetRequiredClientHeight(UINT dpi) const;
+    void UpdateWindowHeight();
     bool SaveSettings();
     bool LoadSettings();
-    int GetMinRequiredClientWidth() const;
+    int GetMinRequiredClientWidth(UINT dpi) const;
     void UpdateLayoutRects();
 
 private:
@@ -75,6 +75,8 @@ private:
 
     int m_fontSize = 16;
     int m_titleFontSize = 14;
+    int m_TitleFontHeight;
+    int m_TitleFontAscent;
 
     // window related
     int m_x = -1;

@@ -26,23 +26,26 @@ bool CpuGraphWindow::Create(HWND hParent)
 
     RegisterClassEx(&wc);
 
+    bool sizeNotSet = false;
+
     if (!LoadSettings())
     {
         LOG_ERROR("[CPU] Failed to load settings");
 
         m_x = -1;
         m_y = -1;
-        m_width = 400;
-        m_height = 300;
+        sizeNotSet = true;
         m_savedDpi = 96;
     }
 
+    if (m_width == -1 || m_height == -1)
+        sizeNotSet = true;
+
     RebuildBrushes();
 
-    bool validSize = m_width >= 100 && m_width <= 10000 && m_height >= 100 && m_height <= 10000;
     bool validDpi = m_savedDpi >= 72 && m_savedDpi <= 1000;
 
-    RECT windowRect{m_x, m_y, m_x + m_width, m_y + m_height};
+    RECT windowRect{m_x, m_y, m_x + max(m_width, 0), m_y + max(m_height, 0)};
     HMONITOR monitor = MonitorFromRect(&windowRect, MONITOR_DEFAULTTONULL);
 
     bool validPosition = (monitor != nullptr);
@@ -53,22 +56,6 @@ bool CpuGraphWindow::Create(HWND hParent)
     if (validPosition && validDpi)
     {
         GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-    }
-
-    if (validSize && validDpi && validPosition)
-    {
-        m_width = MulDiv(m_width, dpiX, m_savedDpi);
-        m_height = MulDiv(m_height, dpiY, m_savedDpi);
-    }
-    else if (!validSize || !validDpi)
-    {
-        LOG_ERROR("[CPU] Invalid size/dpi settings, resetting window size");
-
-        HMONITOR fallbackMonitor = validPosition ? monitor : MonitorFromPoint(POINT{m_x, m_y}, MONITOR_DEFAULTTONEAREST);
-        GetDpiForMonitor(fallbackMonitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
-
-        m_width = MulDiv(400, dpiX, 96);
-        m_height = MulDiv(300, dpiY, 96);
     }
 
     if (!validPosition)
@@ -88,14 +75,49 @@ bool CpuGraphWindow::Create(HWND hParent)
         m_y = cursor.y - yScale;
     }
 
+    CreateUIFont(dpiX);
+
+    int minWidth = GetMinRequiredClientWidth(dpiX);
+    int minHeight = GetRequiredClientHeight(dpiX);
+
+    if (sizeNotSet)
+    {
+        // No prior width/height: use the real computed layout minimum
+        // instead of a guessed constant.
+        m_width = minWidth;
+        m_height = minHeight;
+    }
+    else
+    {
+        bool validSize = m_width >= 100 && m_width <= 10000 && m_height >= 100 && m_height <= 10000;
+
+        if (!validSize)
+        {
+            LOG_ERROR("[CPU] Invalid size settings, resetting window size");
+
+            m_width = minWidth;
+            m_height = minHeight;
+        }
+        else if (validDpi && validPosition)
+        {
+            m_width = MulDiv(m_width, dpiX, m_savedDpi);
+            m_height = MulDiv(m_height, dpiY, m_savedDpi);
+        }
+
+        // Always clamp after rescale — loaded settings can be stale/too-small
+        // if layout metrics (label width, margins, fonts) changed since save.
+        m_width = max(m_width, minWidth);
+        m_height = max(m_height, minHeight);
+    }
+
     const char *name = m_cpu.GetMetrics().name;
     LOG_DEBUG("[CPU] Setting title");
-    m_title = std::wstring(name, name + std::strlen(name));
+    m_title = Utf8ToWide(name);
 
     m_hwnd = CreateWindowEx(
         0,
         L"CpuGraphWindow",
-        Utf8ToWide(m_cpu.GetMetrics().name).c_str(),
+        m_title.c_str(),
         WS_POPUP,
         m_x,
         m_y,
@@ -111,6 +133,25 @@ bool CpuGraphWindow::Create(HWND hParent)
         LOG_ERROR("CreateWindowEx failed: {%d}", GetLastError());
         return false;
     }
+
+    m_userClose = false;
+
+    const UINT actualDpi = GetDpiForWindow(m_hwnd);
+
+    if (actualDpi != dpiX)
+    {
+        CreateUIFont(actualDpi);
+
+        minWidth = GetMinRequiredClientWidth(actualDpi);
+        minHeight = GetRequiredClientHeight(actualDpi);
+
+        m_width = max(MulDiv(m_width, actualDpi, dpiX), minWidth);
+        m_height = max(MulDiv(m_height, actualDpi, dpiX), minHeight);
+
+        SetWindowPos(m_hwnd, nullptr, 0, 0, m_width, m_height, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
+    UpdateLayoutRects();
 
     SetWindowPos(m_hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE);
     UpdateWindow(m_hwnd);
@@ -168,14 +209,15 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
     switch (msg)
     {
     case WM_CREATE:
-        CreateUIFont();
-        UpdateWindowSize();
+        CreateUIFont(GetDpiForWindow(m_hwnd));
         UpdateLayoutRects();
+        UpdateWindowHeight();
         return 0;
 
     case WM_CLOSE:
         m_userClose = true;
         DestroyWindow(m_hwnd);
+        m_hwnd = nullptr;
         return 0;
 
     case WM_DESTROY:
@@ -188,6 +230,13 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         ReleaseCapture();
         SendMessage(m_hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
         return 0;
+
+    case WM_SIZE:
+    {
+        UpdateLayoutRects();
+        InvalidateRect(m_hwnd, nullptr, TRUE);
+        return 0;
+    }
 
     case WM_PAINT:
     {
@@ -261,12 +310,12 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_DPICHANGED:
     {
-        CreateUIFont();
-        UpdateWindowSize();
+        UINT dpi = HIWORD(wParam);
+        CreateUIFont(dpi);
         UpdateLayoutRects();
 
-        const RECT *rc = reinterpret_cast<RECT *>(lParam);
-        SetWindowPos(m_hwnd, nullptr, rc->left, rc->top, rc->right - rc->left, rc->bottom - rc->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        RECT *suggestedRect = reinterpret_cast<RECT *>(lParam);
+        SetWindowPos(m_hwnd, nullptr, suggestedRect->left, suggestedRect->top, suggestedRect->right - suggestedRect->left, suggestedRect->bottom - suggestedRect->top, SWP_NOZORDER | SWP_NOACTIVATE);
 
         InvalidateRect(m_hwnd, nullptr, TRUE);
         return 0;
@@ -344,7 +393,7 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_GETMINMAXINFO:
     {
         MINMAXINFO *mmi = reinterpret_cast<MINMAXINFO *>(lParam);
-        mmi->ptMinTrackSize.x = GetMinRequiredClientWidth();
+        mmi->ptMinTrackSize.x = GetMinRequiredClientWidth(GetDpiForWindow(m_hwnd));
         return 0;
     }
     }
@@ -503,7 +552,7 @@ void CpuGraphWindow::DrawCoreBarGraph(HDC hdc, const RECT &rc)
     }
 }
 
-void CpuGraphWindow::CreateUIFont()
+void CpuGraphWindow::CreateUIFont(UINT dpi)
 {
     if (m_hFont)
     {
@@ -511,7 +560,11 @@ void CpuGraphWindow::CreateUIFont()
         m_hFont = nullptr;
     }
 
-    const UINT dpi = GetDpiForWindow(m_hwnd);
+    if (m_titleFont)
+    {
+        DeleteObject(m_titleFont);
+        m_titleFont = nullptr;
+    }
 
     const int height = -MulDiv(m_fontSize, dpi, USER_DEFAULT_SCREEN_DPI);
     const int titleHeight = -MulDiv(m_titleFontSize, dpi, USER_DEFAULT_SCREEN_DPI);
@@ -548,7 +601,8 @@ void CpuGraphWindow::CreateUIFont()
         FIXED_PITCH | FF_MODERN,
         L"Consolas");
 
-    HDC hdc = GetDC(m_hwnd);
+    HDC hdc = m_hwnd ? GetDC(m_hwnd) : GetDC(nullptr);
+
     HFONT oldFont = (HFONT)SelectObject(hdc, m_hFont);
 
     TEXTMETRIC tm{};
@@ -563,8 +617,17 @@ void CpuGraphWindow::CreateUIFont()
 
     m_FontWidth = charSize.cx;
 
+    // Title font metrics, used to size the title bar itself.
+    SelectObject(hdc, m_titleFont);
+
+    TEXTMETRIC titleTm{};
+    GetTextMetrics(hdc, &titleTm);
+
+    m_TitleFontHeight = titleTm.tmHeight;
+    m_TitleFontAscent = titleTm.tmAscent;
+
     SelectObject(hdc, oldFont);
-    ReleaseDC(m_hwnd, hdc);
+    ReleaseDC(m_hwnd, hdc); // ReleaseDC ignores a null HWND correctly
 
     //
     // Layout metrics.
@@ -592,11 +655,9 @@ void CpuGraphWindow::CreateUIFont()
     m_MarkerWidth = Scale(2);
 }
 
-int CpuGraphWindow::GetRequiredClientHeight() const
+int CpuGraphWindow::GetRequiredClientHeight(UINT dpi) const
 {
     auto cpu = m_cpu.GetMetrics();
-
-    const UINT dpi = GetDpiForWindow(m_hwnd);
 
     auto Scale = [dpi](int value)
     {
@@ -625,17 +686,10 @@ int CpuGraphWindow::GetRequiredClientHeight() const
     return borderWidth + titleBarHeight + graphHeight + borderWidth;
 }
 
-void CpuGraphWindow::UpdateWindowSize()
+void CpuGraphWindow::UpdateWindowHeight()
 {
-    int desiredClientHeight = GetRequiredClientHeight();
-
-    RECT adjust{0, 0, 0, desiredClientHeight};
-
-    AdjustWindowRectExForDpi(&adjust, GetWindowLong(m_hwnd, GWL_STYLE), FALSE, GetWindowLong(m_hwnd, GWL_EXSTYLE), GetDpiForWindow(m_hwnd));
-
-    int newHeight = adjust.bottom - adjust.top;
-
-    SetWindowPos(m_hwnd, nullptr, 0, 0, m_width, newHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    int desiredClientHeight = GetRequiredClientHeight(GetDpiForWindow(m_hwnd));
+    SetWindowPos(m_hwnd, nullptr, 0, 0, m_width, desiredClientHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 bool CpuGraphWindow::SaveSettings()
@@ -703,8 +757,8 @@ bool CpuGraphWindow::LoadSettings()
     m_x = GetPrivateProfileIntW(L"CPU", L"X", -1, path);
     m_y = GetPrivateProfileIntW(L"CPU", L"Y", -1, path);
 
-    m_width = GetPrivateProfileIntW(L"CPU", L"Width", 400, path);
-    m_height = GetPrivateProfileIntW(L"CPU", L"Height", 300, path);
+    m_width = GetPrivateProfileIntW(L"CPU", L"Width", -1, path);
+    m_height = GetPrivateProfileIntW(L"CPU", L"Height", -1, path);
 
     m_savedDpi = GetPrivateProfileIntW(L"CPU", L"DPI", 96, path);
 
@@ -717,10 +771,8 @@ bool CpuGraphWindow::LoadSettings()
     return true;
 }
 
-int CpuGraphWindow::GetMinRequiredClientWidth() const
+int CpuGraphWindow::GetMinRequiredClientWidth(UINT dpi) const
 {
-    const UINT dpi = GetDpiForWindow(m_hwnd);
-
     auto Scale = [dpi](int value)
     {
         return MulDiv(value, dpi, USER_DEFAULT_SCREEN_DPI);
@@ -729,15 +781,7 @@ int CpuGraphWindow::GetMinRequiredClientWidth() const
     const int borderWidth = Scale(1);
     const int minBarWidth = Scale(c_MinBarGraphWidth);
 
-    // Same layout as DrawCoreBarGraph: left margin, label column,
-    // bar-left margin, minimum bar width, right margin, borders.
-    return borderWidth +
-           m_MarginLeftRight +
-           m_LabelWidth +
-           m_BarLeftMargin +
-           minBarWidth +
-           m_MarginLeftRight +
-           borderWidth;
+    return borderWidth + m_MarginLeftRight + m_LabelWidth + m_BarLeftMargin + minBarWidth + m_MarginLeftRight + borderWidth;
 }
 
 void CpuGraphWindow::UpdateLayoutRects()

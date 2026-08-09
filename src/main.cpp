@@ -1344,12 +1344,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         if (PtInRect(&g_props[MetricsIndex::Cpu].textLabelRc, pt) && g_cpu.IsInitialized()) // cpu
         {
-            // if (!g_cpuGraph.GetHwnd())
-            //     LOG_ERROR("Create failed");
-
             if (g_cpuGraph.isActive()) // already exists
             {
                 g_cpuGraph.Close();
+                LOG_DEBUG("Closing CPU Graph");
                 return 0;
             }
 
