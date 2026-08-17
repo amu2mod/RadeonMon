@@ -28,12 +28,52 @@ void ADLXGpuTelemetry::Init(HWND hwnd)
     res = ADLXHelp.Initialize();
     if (!ADLX_SUCCEEDED(res))
     {
-        LOG_ERROR("ADLX initialization failed");
-        g_cardName.SetValue(L"ADLX init failed");
+        LOG_ERROR("[ADLX] initialization failed");
+        g_cardName.SetValue(m_hwnd, g_cardFont, L"ADLX init failed");
         return;
     }
 
-    LOG_DEBUG("ADLX Init succeeded");
+    // Check
+
+    const adlx_version version = ParseADLXVersion(ADLXHelp.QueryVersion());
+    // const adlx_version version = ParseADLXVersion("1.3");
+
+    if (!version.valid)
+    {
+        LOG_ERROR("[ADLX] Error parsing version");
+
+        TaskDialog(
+            m_hwnd,
+            nullptr,
+            L"ADLX Version Error",
+            L"Unable to determine the ADLX version",
+            L"The ADLX version could not be detected. "
+            L"Metrics cannot be initialized.",
+            TDCBF_OK_BUTTON,
+            TD_ERROR_ICON,
+            nullptr);
+
+        g_cardName.SetValue(m_hwnd, g_cardFont, L"ADLX Version Error");
+
+        return;
+    }
+
+    if (version < adlx_version{1, 5})
+    {
+        wchar_t message[256]{};
+
+        swprintf_s(
+            message,
+            L"The ADLX version detected is %d.%d.\n\n"
+            L"The app requires ADLX 1.5 or newer to display metrics correctly.\n\n"
+            L"Please update to the latest AMD drivers.",
+            version.major,
+            version.minor);
+
+        TaskDialog(m_hwnd, nullptr, L"ADLX Version Outdated", L"ADLX version is outdated", message, TDCBF_OK_BUTTON, TD_WARNING_ICON, nullptr);
+    }
+
+    LOG_DEBUG("[ADLX] Init succeeded");
 
     // Create block event
     m_blockEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
@@ -41,23 +81,23 @@ void ADLXGpuTelemetry::Init(HWND hwnd)
     res = ADLXHelp.GetSystemServices()->GetPerformanceMonitoringServices(&perfMonitoringService);
     if (!ADLX_SUCCEEDED(res) || !perfMonitoringService)
     {
-        LOG_ERROR("Get performance monitoring services failed");
-        g_cardName.SetValue(L"ADLX perf services failed");
+        LOG_ERROR("[ADLX] Get performance monitoring services failed");
+        g_cardName.SetValue(m_hwnd, g_cardFont, L"ADLX perf services failed");
         return;
     }
 
-    LOG_DEBUG("ADLX GetPerformanceMonitoringServices succeeded");
+    LOG_DEBUG("[ADLX] GetPerformanceMonitoringServices succeeded");
 
     IADLXGPUListPtr gpus;
     res = ADLXHelp.GetSystemServices()->GetGPUs(&gpus);
     if (!ADLX_SUCCEEDED(res) || !gpus || gpus->Empty())
     {
-        LOG_ERROR("Failed to get the GPU list");
-        g_cardName.SetValue(L"No GPU found");
+        LOG_ERROR("[ADLX] Failed to get the GPU list");
+        g_cardName.SetValue(m_hwnd, g_cardFont, L"No GPU found");
         return;
     }
 
-    LOG_DEBUG("ADLX Traversing GPU list");
+    LOG_DEBUG("[ADLX] Traversing GPU list");
 
     adlx_uint count = gpus->Size();
 
@@ -98,30 +138,30 @@ void ADLXGpuTelemetry::Init(HWND hwnd)
     if (!selectedGPU && amdGpuFallback)
     {
         selectedGPU = amdGpuFallback;
-        LOG_WARN("No discrete Radeon GPU found, falling back to integrated/embedded AMD GPU");
+        LOG_WARN("[ADLX] No discrete Radeon GPU found, falling back to integrated/embedded AMD GPU");
     }
 
     if (!selectedGPU)
     {
-        LOG_WARN("No AMD GPU found");
-        g_cardName.SetValue(L"No AMD GPU found");
+        LOG_WARN("[ADLX] No AMD GPU found");
+        g_cardName.SetValue(m_hwnd, g_cardFont, L"No AMD GPU found");
         return;
     }
 
     PopulateGPUInfo(selectedGPU);
     gpuInfo.Log();
 
-    g_cardName.SetValue(gpuInfo.name.empty() ? L"Unknown AMD GPU" : gpuInfo.name.c_str());
-    g_cardName.textLength = static_cast<UINT>(gpuInfo.name.size());
+    g_cardName.SetValue(m_hwnd, g_cardFont, gpuInfo.name.empty() ? L"Unknown AMD GPU" : gpuInfo.name.c_str());
+    // g_cardName.textLength = static_cast<UINT>(gpuInfo.name.size());
 
-    LOG_INFO("Selected AMD GPU: %ls", gpuInfo.name.empty() ? L"Unknown" : gpuInfo.name.c_str());
-    LOG_INFO("Vendor ID: %ls", gpuInfo.vendorId.empty() ? L"Unknown" : gpuInfo.vendorId.c_str());
+    LOG_INFO("[ADLX] Selected AMD GPU: %ls", gpuInfo.name.empty() ? L"Unknown" : gpuInfo.name.c_str());
+    LOG_INFO("[ADLX] Vendor ID: %ls", gpuInfo.vendorId.empty() ? L"Unknown" : gpuInfo.vendorId.c_str());
 
     res = perfMonitoringService->GetSupportedGPUMetrics(selectedGPU, &gpuMetricsSupport);
     if (!ADLX_SUCCEEDED(res) || !gpuMetricsSupport)
     {
-        LOG_ERROR("gpuMetricsSupport failed");
-        g_cardName.SetValue(L"GPU metrics not supported");
+        LOG_ERROR("[ADLX] gpuMetricsSupport failed");
+        g_cardName.SetValue(m_hwnd, g_cardFont, L"GPU metrics not supported");
         gpuMetricsSupport = nullptr;
         return;
     }
@@ -160,7 +200,7 @@ void ADLXGpuTelemetry::Discover()
 {
     if (!gpuMetricsSupport)
     {
-        LOG_INFO("GPU Metrics Support not initialized");
+        LOG_INFO("[ADLX] GPU Metrics Support not initialized");
         return;
     }
 
@@ -386,7 +426,7 @@ void ADLXGpuTelemetry::Destroy()
     ADLX_RESULT res = ADLXHelp.Terminate();
     if (ADLX_FAILED(res))
     {
-        LOG_ERROR("Failed to terminate ADLX Helper: %d", res);
+        LOG_ERROR("[ADLX] Failed to terminate ADLX Helper: %d", res);
     }
 }
 
@@ -399,7 +439,7 @@ int ADLXGpuTelemetry::ReadMetric(const char *name, MetricFn metricFn, IADLXGPUMe
 
     if (!ADLX_SUCCEEDED(res))
     {
-        LOG_ERROR("%s query failed: %d", name, res);
+        LOG_ERROR("[ADLX] %s query failed: %d", name, res);
         return AdlxStates::Error;
     }
 
@@ -427,7 +467,7 @@ int ADLXGpuTelemetry::ReadMetricV1(const char *name, MetricFn metricFn, IADLXGPU
 
     if (!ADLX_SUCCEEDED(res))
     {
-        LOG_ERROR("%s query failed: %d", name, res);
+        LOG_ERROR("[ADLX] %s query failed: %d", name, res);
         return AdlxStates::Error;
     }
 
@@ -444,7 +484,7 @@ int ADLXGpuTelemetry::ReadMetricV3(const char *name, MetricFn metricFn, IADLXGPU
 
     if (!gpuMetricsSupport3 || !metrics3)
     {
-        LOG_WARN("%s v3 interface unavailable", name);
+        LOG_WARN("[ADLX] %s v3 interface unavailable", name);
         return AdlxStates::Error;
     }
 
@@ -454,7 +494,7 @@ int ADLXGpuTelemetry::ReadMetricV3(const char *name, MetricFn metricFn, IADLXGPU
 
     if (!ADLX_SUCCEEDED(res))
     {
-        LOG_ERROR("%s query failed: %d", name, res);
+        LOG_ERROR("[ADLX] %s query failed: %d", name, res);
         return AdlxStates::Error;
     }
 
@@ -525,7 +565,7 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
         m.max = max;
     };
 
-    snapshot.powerLimitWatts = 334;
+    snapshot.powerLimitWatts.value = 334;
 
     setDouble(snapshot.usage, randDouble(92.0, 100.0), 0, 100);
 
@@ -576,8 +616,19 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
             if (!IsEnabled(cap))
                 return;
 
-            metric.isSupported = true;
             metric.value = ReadMetric<adlx_double>(name, fn, gpuMetrics);
+
+            if (!metric.isSupported)
+            {
+                metric.minValue = metric.value;
+                metric.maxValue = metric.value;
+                metric.isSupported = true;
+            }
+            else
+            {
+                metric.minValue = min(metric.minValue, metric.value);
+                metric.maxValue = max(metric.maxValue, metric.value);
+            }
 
             anyMetricRead = true;
         };
@@ -587,8 +638,19 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
             if (!IsEnabled(cap))
                 return;
 
-            metric.isSupported = true;
             metric.value = ReadMetric<adlx_int>(name, fn, gpuMetrics);
+
+            if (!metric.isSupported)
+            {
+                metric.minValue = metric.value;
+                metric.maxValue = metric.value;
+                metric.isSupported = true;
+            }
+            else
+            {
+                metric.minValue = min(metric.minValue, metric.value);
+                metric.maxValue = max(metric.maxValue, metric.value);
+            }
 
             anyMetricRead = true;
         };
@@ -598,8 +660,19 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
             if (!IsEnabled(cap))
                 return;
 
-            metric.isSupported = true;
             metric.value = ReadMetricV1<adlx_double>(name, fn, gpuMetrics);
+
+            if (!metric.isSupported)
+            {
+                metric.minValue = metric.value;
+                metric.maxValue = metric.value;
+                metric.isSupported = true;
+            }
+            else
+            {
+                metric.minValue = min(metric.minValue, metric.value);
+                metric.maxValue = max(metric.maxValue, metric.value);
+            }
 
             anyMetricRead = true;
         };
@@ -609,8 +682,19 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
             if (!IsEnabled(cap))
                 return;
 
-            metric.isSupported = true;
             metric.value = ReadMetricV1<adlx_int>(name, fn, gpuMetrics);
+
+            if (!metric.isSupported)
+            {
+                metric.minValue = metric.value;
+                metric.maxValue = metric.value;
+                metric.isSupported = true;
+            }
+            else
+            {
+                metric.minValue = min(metric.minValue, metric.value);
+                metric.maxValue = max(metric.maxValue, metric.value);
+            }
 
             anyMetricRead = true;
         };
@@ -620,8 +704,19 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
             if (!IsEnabled(cap))
                 return;
 
-            metric.isSupported = true;
             metric.value = ReadMetricV3<adlx_int>(name, fn, gpuMetrics);
+
+            if (!metric.isSupported)
+            {
+                metric.minValue = metric.value;
+                metric.maxValue = metric.value;
+                metric.isSupported = true;
+            }
+            else
+            {
+                metric.minValue = min(metric.minValue, metric.value);
+                metric.maxValue = max(metric.maxValue, metric.value);
+            }
 
             anyMetricRead = true;
         };
@@ -730,7 +825,7 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
     {
         snapshot.valid = false;
         LOG_ERROR("GetCurrentGPUMetrics failed");
-        g_cardName.SetValue(L"Current metrics failed");
+        g_cardName.SetValue(m_hwnd, g_cardFont, L"Current metrics failed");
     }
 
     return snapshot;
@@ -853,7 +948,7 @@ adlx_bool ADLX_STD_CALL ADLXGpuTelemetry::OnGPUTuningChanged(IADLXGPUTuningChang
         pGPUTuningChangedEvent->GetGPU(&gpu);
         char uniqueName[128] = "Unknown";
         GPUUniqueName(gpu, uniqueName);
-        LOG_DEBUG("GPU: %s Get sync event, update required", uniqueName);
+        LOG_DEBUG("[ADLX] GPU: %s Get sync event, update required", uniqueName);
 
         if (pGPUTuningChangedEvent->IsAutomaticTuningChanged())
         {
@@ -896,10 +991,10 @@ void ADLXGpuTelemetry::UpdateManualPowerTuning()
     adlx_bool supported = false;
     ADLX_RESULT res = gpuTuningService->IsSupportedManualPowerTuning(selectedGPU, &supported);
     if (ADLX_FAILED(res) || supported == false)
-        LOG_INFO("GetManualPowerTuning: NOT SUPPORTED");
+        LOG_INFO("[ADLX] GetManualPowerTuning: NOT SUPPORTED");
     else
     {
-        LOG_INFO("GetManualPowerTuning: OK");
+        LOG_INFO("[ADLX] GetManualPowerTuning: OK");
         gpuCaps |= GPU_CAP_MANUAL_POWER_TUNING;
         m_snapshot.powerLimit.isSupported = true;
         res = gpuTuningService->GetManualPowerTuning(selectedGPU, &manualPowerTuningIfc);
@@ -931,17 +1026,193 @@ void ADLXGpuTelemetry::UpdateManualPowerTuning()
                 res = manualPowerTuning->GetPowerLimit(&powerLimit);
                 if (ADLX_SUCCEEDED(res))
                 {
+                    m_snapshot.powerLimit.isSupported = true;
                     m_snapshot.powerLimit.value = static_cast<int>(powerLimit);
                     LOG_DEBUG("[ADLX] power limit=%d", m_snapshot.powerLimit.value);
-
-                    static int powerBase = static_cast<int>(std::round(m_snapshot.totalBoardPower.max / ((100 + m_snapshot.powerLimit.max) / 100.0)));
-                    m_snapshot.powerLimitWatts = static_cast<int>(std::round(powerBase * (100 + m_snapshot.powerLimit.value) / 100.0));
-
-                    PostMessage(m_hwnd, WM_APP_GPU_PWR_TUNING_CHANGE, 0, 0); // update ui
+                    const int powerBase = static_cast<int>(std::round(m_snapshot.totalBoardPower.max / ((100 + m_snapshot.powerLimit.max) / 100.0)));
+                    m_snapshot.powerLimitWatts.isSupported = true;
+                    m_snapshot.powerLimitWatts.value = static_cast<int>(std::round(powerBase * (100 + m_snapshot.powerLimit.value) / 100.0));
+                    PostMessage(m_hwnd, WM_APP_GPU_PWR_TUNING_CHANGE, 0, 0);
                 }
                 else
+                {
+                    m_snapshot.powerLimit.isSupported = false;
+                    m_snapshot.powerLimitWatts.isSupported = false;
                     LOG_ERROR("[ADLX] GetPowerLimit failed");
+                }
             }
         }
     }
+}
+
+void ADLXGpuTelemetry::Probe()
+{
+    if (perfMonitoringService == nullptr)
+    {
+        LOG_ERROR("perfMonitoringService not initialized");
+        return;
+    }
+
+    IADLXGPUMetricsPtr gpuMetrics;
+    ADLX_RESULT res =
+        perfMonitoringService->GetCurrentGPUMetrics(selectedGPU, &gpuMetrics);
+
+    if (!ADLX_SUCCEEDED(res) || !gpuMetrics)
+    {
+        LOG_ERROR("GetCurrentGPUMetrics failed during Probe");
+        return;
+    }
+
+    auto probeDouble = [&](const char *name, GPU_CAPS cap, MetricDouble &metric, auto fn)
+    {
+        if (!IsEnabled(cap))
+            return;
+
+        metric.value = ReadMetric<adlx_double>(name, fn, gpuMetrics);
+
+        metric.minValue = metric.value;
+        metric.maxValue = metric.value;
+        metric.isSupported = true;
+    };
+
+    auto probeInt = [&](const char *name, GPU_CAPS cap, MetricInt &metric, auto fn)
+    {
+        if (!IsEnabled(cap))
+            return;
+
+        metric.value = ReadMetric<adlx_int>(name, fn, gpuMetrics);
+
+        metric.minValue = metric.value;
+        metric.maxValue = metric.value;
+        metric.isSupported = true;
+    };
+
+    auto probeDoubleV1 = [&](const char *name, GPU_CAPS cap, MetricDouble &metric, auto fn)
+    {
+        if (!IsEnabled(cap))
+            return;
+
+        metric.value = ReadMetricV1<adlx_double>(name, fn, gpuMetrics);
+
+        metric.minValue = metric.value;
+        metric.maxValue = metric.value;
+        metric.isSupported = true;
+    };
+
+    auto probeIntV1 = [&](const char *name, GPU_CAPS cap, MetricInt &metric, auto fn)
+    {
+        if (!IsEnabled(cap))
+            return;
+
+        metric.value = ReadMetricV1<adlx_int>(name, fn, gpuMetrics);
+
+        metric.minValue = metric.value;
+        metric.maxValue = metric.value;
+        metric.isSupported = true;
+    };
+
+    auto probeIntV3 = [&](const char *name, GPU_CAPS cap, MetricInt &metric, auto fn)
+    {
+        if (!IsEnabled(cap))
+            return;
+
+        metric.value = ReadMetricV3<adlx_int>(name, fn, gpuMetrics);
+
+        metric.minValue = metric.value;
+        metric.maxValue = metric.value;
+        metric.isSupported = true;
+    };
+
+    // GPU usage
+    probeDouble("GPUUsage",
+                GPU_CAP_USAGE,
+                m_snapshot.usage,
+                &IADLXGPUMetrics::GPUUsage);
+
+    // GPU clocks
+    probeInt("GPUClockSpeed",
+             GPU_CAP_CLOCK,
+             m_snapshot.clockSpeed,
+             &IADLXGPUMetrics::GPUClockSpeed);
+
+    probeInt("GPUVRAMClockSpeed",
+             GPU_CAP_VRAM_CLOCK,
+             m_snapshot.vramClockSpeed,
+             &IADLXGPUMetrics::GPUVRAMClockSpeed);
+
+    // Temperatures
+    probeDouble("GPUTemperature",
+                GPU_CAP_TEMP,
+                m_snapshot.temperature,
+                &IADLXGPUMetrics::GPUTemperature);
+
+    probeDouble("GPUHotspotTemperature",
+                GPU_CAP_HOTSPOT,
+                m_snapshot.hotspot,
+                &IADLXGPUMetrics::GPUHotspotTemperature);
+
+    probeDoubleV1("GPUMemoryTemperature",
+                  GPU_CAP_MEM_TEMP,
+                  m_snapshot.memoryTemperature,
+                  &IADLXGPUMetrics1::GPUMemoryTemperature);
+
+    probeDouble("GPUIntakeTemperature",
+                GPU_CAP_INTAKE_TEMP,
+                m_snapshot.intakeTemperature,
+                &IADLXGPUMetrics::GPUIntakeTemperature);
+
+    // Power
+    probeDouble("GPUPower",
+                GPU_CAP_POWER,
+                m_snapshot.power,
+                &IADLXGPUMetrics::GPUPower);
+
+    probeDouble("GPUTotalBoardPower",
+                GPU_CAP_BOARD_POWER,
+                m_snapshot.totalBoardPower,
+                &IADLXGPUMetrics::GPUTotalBoardPower);
+
+    // Fan
+    probeInt("GPUFanSpeed",
+             GPU_CAP_FAN_SPEED,
+             m_snapshot.fanSpeed,
+             &IADLXGPUMetrics::GPUFanSpeed);
+
+    probeIntV3("GPUFanDuty",
+               GPU_CAP_FAN_DUTY,
+               m_snapshot.fanDuty,
+               &IADLXGPUMetrics3::GPUFanDuty);
+
+    // Memory
+    probeInt("GPUVRAM",
+             GPU_CAP_VRAM_USAGE,
+             m_snapshot.vram,
+             &IADLXGPUMetrics::GPUVRAM);
+
+    probeIntV3("GPUSharedMemory",
+               GPU_CAP_SHARED_MEMORY,
+               m_snapshot.sharedMemory,
+               &IADLXGPUMetrics3::GPUSharedMemory);
+
+    // Voltage
+    probeInt("GPUVoltage",
+             GPU_CAP_VOLTAGE,
+             m_snapshot.voltage,
+             &IADLXGPUMetrics::GPUVoltage);
+
+    // NPU
+    probeIntV1("NPUFrequency",
+               GPU_CAP_NPU_FREQ,
+               m_snapshot.npuFrequency,
+               &IADLXGPUMetrics1::NPUFrequency);
+
+    probeIntV1("NPUActivityLevel",
+               GPU_CAP_NPU_ACTIVITY,
+               m_snapshot.npuActivityLevel,
+               &IADLXGPUMetrics1::NPUActivityLevel);
+
+    if (gpuMetrics)
+        gpuMetrics->TimeStamp(&m_snapshot.timestampMs);
+
+    m_snapshot.valid = true;
 }

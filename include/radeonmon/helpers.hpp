@@ -1053,3 +1053,62 @@ inline void FormatRam(uint64_t bytes, wchar_t *out, int len)
 
     (void)len; // max output "18446GB" fits comfortably in any reasonable buffer
 }
+
+inline int Scale(int value, UINT dpi)
+{
+    return MulDiv(value, dpi, USER_DEFAULT_SCREEN_DPI);
+};
+
+inline adlx_version ParseADLXVersion(const char *version)
+{
+    adlx_version result{};
+
+    if (!version)
+        return result;
+
+    int major = 0;
+    int minor = 0;
+
+    if (::sscanf_s(version, "%d.%d", &major, &minor) == 2)
+    {
+        result.major = major;
+        result.minor = minor;
+        result.valid = true;
+    }
+
+    return result;
+}
+
+inline void ShowADLXVersionWarning(HWND hwnd, const adlx_version &version)
+{
+    wchar_t message[256]{};
+
+    if (version.valid)
+    {
+        swprintf_s(
+            message,
+            L"The ADLX version detected is %d.%d.\n\n"
+            L"The app requires ADLX 1.5 or newer to display metrics correctly.\n\n"
+            L"Please update to the latest AMD drivers.",
+            version.major,
+            version.minor);
+    }
+    else
+    {
+        wcscpy_s(
+            message,
+            L"The ADLX version could not be detected.\n\n"
+            L"The app requires ADLX 1.5 or newer to display metrics correctly.\n\n"
+            L"Please update to the latest AMD drivers.");
+    }
+
+    TaskDialog(
+        hwnd,
+        nullptr,
+        L"ADLX Version Outdated",
+        L"ADLX version is not supported",
+        message,
+        TDCBF_OK_BUTTON,
+        TD_WARNING_ICON,
+        nullptr);
+}

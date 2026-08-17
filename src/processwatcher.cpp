@@ -43,6 +43,10 @@ std::vector<ProcessInfo> ProcessWatcher::Poll()
     if (!pNtQuerySystemInformation)
         return m_LastTop;
 
+    // START_CHRONO(gpusampler);
+    // auto map = m_gpuSampler.Sample();
+    // END_CHRONO(gpusampler, "gpusampler");
+
     ULONG returnLength = 0;
     NTSTATUS status = pNtQuerySystemInformation(SystemProcessInformation, m_Buffer.data(), (ULONG)m_Buffer.size(), &returnLength);
 

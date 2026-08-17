@@ -68,14 +68,17 @@ add_executable(radeonmon WIN32
     src/networking.cpp
     src/webserver.cpp
     src/cpugraph.cpp
-    # src/gpugraph.cpp
+    src/gpugraph.cpp
     resources/resources.rc
     src/processwatcher.cpp
+    src/ProgressRing.cpp
+    src/gpuusagesampler.cpp
     ${CMAKE_BINARY_DIR}/generated/version.rc
 )
 
 option(ENABLE_TESTMODE "Enable TEST preprocessor define" OFF)
 option(ENABLE_LOCALFILES "Enable LOCALFILES preprocessor define" OFF)
+option(ENABLE_GPUGRAPHRECT "Enable ENABLE_GPUGRAPHRECT preprocessor define" OFF)
 
 if(ENABLE_TESTMODE)
     target_compile_definitions(radeonmon PRIVATE TESTMODE)
@@ -87,6 +90,10 @@ endif()
 
 if(ENABLE_GDIDRAW)
     target_compile_definitions(radeonmon PRIVATE GDIDRAW)
+endif()
+
+if(ENABLE_GPUGRAPHRECT)
+    target_compile_definitions(radeonmon PRIVATE GPUGRAPHRECT)
 endif()
 
 configure_file(

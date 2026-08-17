@@ -576,6 +576,7 @@ void PaintProperties(HDC hdc)
 
         HFONT oldFont = (HFONT)SelectObject(hdc, g_cardFont);
         // ExtTextOutW(hdc, g_cardName.textX, g_cardName.textY, ETO_CLIPPED, &rc, g_cardName.textValue, g_cardName.textLength, nullptr);
+        LOG_DEBUG("[Main] g_cardName.textLength=%u", g_cardName.textLength);
         ExtTextOutW(hdc, g_cardName.textX, g_cardName.textY, ETO_CLIPPED, &g_cardName.textRc, g_cardName.textValue, g_cardName.textLength, nullptr);
 
         SelectObject(hdc, oldFont);
@@ -846,12 +847,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             // END_CHRONO(process, "process Poll()");
             // g_processWatcher.Log();
 
-            if (!g_AdlxGPUTelemetry.isInitialized)
-            {
-                LOG_WARN("adlx not init");
-                g_AdlxGPUTelemetry.Init(hwnd); // retry
-                return 0;
-            }
+            // if (!g_AdlxGPUTelemetry.isInitialized)
+            // {
+            //     LOG_WARN("adlx not init");
+            //     g_AdlxGPUTelemetry.Init(hwnd); // retry
+            //     return 0;
+            // }
 
             bool dirty = false;
 
@@ -929,7 +930,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value));
                 else
                 {
-                    int percent = static_cast<int>(static_cast<int>(snapshot.totalBoardPower.value) * 100.0 / snapshot.powerLimitWatts);
+                    int percent = static_cast<int>(static_cast<int>(snapshot.totalBoardPower.value) * 100.0 / snapshot.powerLimitWatts.value);
                     FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value), percent);
                 }
                 SetPropertyValueAtIndex(MetricsIndex::Power, static_cast<int>(snapshot.totalBoardPower.value), powerBuffer, 16);
@@ -985,13 +986,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 InvalidateRect(hwnd, nullptr, FALSE);
 
                 if (g_cpuGraph.isActive())
-                {
                     g_cpuGraph.Update();
-                }
 
-                // TODO
-                // if (g_gpuGraph.isActive())
-                //     g_gpuGraph.Update();
+                if (g_gpuGraph.isActive())
+                    g_gpuGraph.Update();
             }
         }
         else if (wParam == NETWORK_TIMER_ID)
@@ -1365,10 +1363,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         else if (PtInRect(&g_props[MetricsIndex::Temp].textLabelRc, pt) && g_AdlxGPUTelemetry.isInitialized) // gpu
         {
-            // if (g_gpuGraph.isActive())
-            //     return 0;
-            // g_gpuGraph.Create(hwnd);
-            // g_gpuGraph.Show();
+            if (g_gpuGraph.isActive())
+            {
+                g_gpuGraph.Close();
+                return 0;
+            }
+
+            g_gpuGraph.Create(hwnd);
+            g_gpuGraph.Show();
 
             // LOG_DEBUG("Showing GPU Graph");
             return 0;
@@ -1415,8 +1417,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             if (g_cpu.IsInitialized() && PtInRect(&g_props[MetricsIndex::Cpu].textLabelRc, pt)) // cpu
                 SetCursor(LoadCursor(nullptr, IDC_HAND));
-            // else if (g_AdlxGPUTelemetry.isInitialized && PtInRect(&g_props[MetricsIndex::Temp].textLabelRc, pt)) // gpu temp
-            //     SetCursor(LoadCursor(nullptr, IDC_HAND));
+            else if (g_AdlxGPUTelemetry.isInitialized && PtInRect(&g_props[MetricsIndex::Temp].textLabelRc, pt)) // gpu temp
+                SetCursor(LoadCursor(nullptr, IDC_HAND));
             else if (PtInRect(&g_clickableUrlRect, pt) && g_webServer.IsRunning()) // web server url
             {
                 SetCursor(LoadCursor(nullptr, IDC_HAND));
@@ -1556,7 +1558,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value));
         else
         {
-            int percent = static_cast<int>(static_cast<int>(snapshot.totalBoardPower.value) * 100.0 / snapshot.powerLimitWatts);
+            int percent = static_cast<int>(static_cast<int>(snapshot.totalBoardPower.value) * 100.0 / snapshot.powerLimitWatts.value);
             FormatPowerConsumption(powerBuffer, static_cast<int>(snapshot.totalBoardPower.value), percent);
         }
         SetPropertyValueAtIndex(MetricsIndex::Power, static_cast<int>(snapshot.totalBoardPower.value), powerBuffer, 16);
@@ -1644,6 +1646,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 
     g_AdlxGPUTelemetry.Init(hwnd);
     g_AdlxGPUTelemetry.Discover();
+    g_AdlxGPUTelemetry.Probe();
 
     g_displayManager.Discover();
 
@@ -1693,6 +1696,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     {
         g_cpuGraph.Create(hwnd);
         g_cpuGraph.Show();
+        SetAlwaysOnTop(hwnd, g_alwaysOnTop);
+    }
+
+    if (g_isGpuGraphEnabled && g_AdlxGPUTelemetry.isInitialized)
+    {
+        g_gpuGraph.Create(hwnd);
+        g_gpuGraph.Show();
         SetAlwaysOnTop(hwnd, g_alwaysOnTop);
     }
 

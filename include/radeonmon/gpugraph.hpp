@@ -1,9 +1,9 @@
 #pragma once
 
 #include "radeonmon/structures.hpp"
-#include "radeonmon/ryzen.hpp"
+#include "radeonmon/adlx.hpp"
 #include "radeonmon/colors.hpp"
-#include "radeonmon/processwatcher.hpp"
+#include "radeonmon/ProgressRing.hpp"
 
 #include <Windows.h>
 
@@ -11,14 +11,12 @@
 #include <algorithm>
 #include <array>
 
-class ProcessWatcher;
-
-class CpuGraphWindow
+class GpuGraphWindow
 {
 public:
-    CpuGraphWindow(RyzenCpu &cpu, ProcessWatcher &processWatcher) : m_cpu(cpu), m_processWatcher(processWatcher) {}
+    GpuGraphWindow(ADLXGpuTelemetry &adlx) : m_adlx(adlx) {}
 
-    ~CpuGraphWindow()
+    ~GpuGraphWindow()
     {
         DeleteObject(bgBrush);
         DeleteObject(chartBgBrush);
@@ -27,11 +25,12 @@ public:
         DeleteObject(borderBrush);
         DeleteObject(m_hFont);
         DeleteObject(m_titleFont);
+        Gdiplus::GdiplusShutdown(m_gdiplusToken);
     }
 
     void inline RebuildBrushes()
     {
-        const auto &colors = Theme::Get(m_currentTheme);
+        const auto &colors = GpuTheme::Get(m_currentTheme);
         bgBrush = CreateSolidBrush(colors.windowBackground);
         chartBgBrush = CreateSolidBrush(colors.barBackground);
         barBrush = CreateSolidBrush(colors.bar);
@@ -43,14 +42,12 @@ public:
     void Show();
     void Close();
     void Update(); // Called from the main timer
-    bool isViewProcessesEnabled() { return m_showProcesses; }
 
     inline bool isActive() const { return m_hwnd != nullptr; }
 
 private:
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
     LRESULT HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam);
-    void DrawCoreBarGraph(HDC hdc, const RECT &rc);
     void CreateUIFont(UINT dpi);
     int GetRequiredClientHeight(UINT dpi) const;
     void UpdateWindowHeight();
@@ -59,22 +56,16 @@ private:
     int GetMinRequiredClientWidth(UINT dpi) const;
     void UpdateLayoutRects();
     void OnResizeWindow(bool grow);
-    void OnProcessesClicked();
-
-    // Helper to be called after loading the default font size from preferences
-    inline int GetScaledTitleFontSize() const
-    {
-        const int scaled = static_cast<int>(std::lround(m_fontSize * static_cast<float>(c_defaultTileFontSize) / c_defaultFontSize));
-
-        return std::clamp(scaled, c_minTitleFontSize, c_maxTitleFontSize);
-    }
+    int GetScaledTitleFontSize() const; // Helper to be called after loading the default font size from preferences
+    int CountSupportedMetrics() const;
 
 private:
     HWND m_hwnd = nullptr;
     UINT m_dpi;
-    RyzenCpu &m_cpu;
+    ADLXGpuTelemetry &m_adlx;
     HFONT m_hFont = nullptr;
     HFONT m_titleFont = nullptr;
+    HFONT m_ringFont = nullptr;
     bool m_userClose = false;
     int m_FontHeight = 16;
     int m_FontAscent = 0;
@@ -89,13 +80,28 @@ private:
     int m_OnePxScaled = 1;
     int m_MarkerWidth = 2;
     std::wstring m_title;
-    RECT m_GraphRc{};
+    int m_metricsCount;
+    int m_ringSize;
+    int m_borderSize;
+    int m_SeparatorMargin = 0;
+    int m_Column2Width;
+    int m_Colmun2LabelWidth;
+
+    GPU_CAPS m_selected = GPU_CAP_USAGE;
+
+    RECT m_ContentRc{}; // borders + margins + body
+    RECT m_BodyRc{};    // labels/value + inner gap + ring
+    RECT m_Column1Rc{}; // ring + min/max values
+    RECT m_Column2Rc{}; // ring + min/max values
+    RECT m_ringRc{};
 
     const int c_defaultFontSize = 16;
     const int c_defaultTileFontSize = 14;
+    const int c_defaultRingFontSize = 14;
 
     int m_fontSize = c_defaultFontSize;
     int m_titleFontSize = c_defaultTileFontSize;
+    int m_ringFontSize = c_defaultRingFontSize;
     int m_TitleFontHeight;
     int m_TitleFontAscent;
 
@@ -108,7 +114,7 @@ private:
     // Spacing constants
     const int c_MarginTopBottom = 9;
     const int c_MarginLeftRight = 14;
-    const int c_LineSpace = 7;
+    const int c_LineSpace = 5;
     const int c_borderWidth = 1;
     const int c_TitlePaddingTopBottom = 5;
     const int c_MinBarGraphWidth = 100;
@@ -116,9 +122,17 @@ private:
     const int c_MinFontSize = 10;
     const int c_minTitleFontSize = 8;
     const int c_maxTitleFontSize = 22;
-    const int c_ProcessPadding = 0;
+    const int c_ringSize = 150;
+    const int c_SeparatorMargin = 15;
+    inline static constexpr wchar_t COLUMN1_MAXTEXT[] = L"Memory Temperature: 9999 Mhz";
+    inline static constexpr int GPU_COLUMN1_LENGTH = _countof(COLUMN1_MAXTEXT) - 1;
+    inline static constexpr wchar_t COLUMN2_MAXTEXT[] = L"Range: 0 - 9999 Mhz";
+    inline static constexpr int GPU_COLUMN2_MAXTEXT_LENGTH = _countof(COLUMN2_MAXTEXT) - 1;
+    inline static constexpr wchar_t COLUMN2_MAXLABEL[] = L"Range: ";
+    inline static constexpr int GPU_COLUMN2_MAXLABEL_LENGTH = _countof(COLUMN2_MAXLABEL) - 1;
+    inline static constexpr int GPU_COLUMN2_MAXVALUE_LENGTH = GPU_COLUMN2_MAXTEXT_LENGTH - GPU_COLUMN2_MAXLABEL_LENGTH;
 
-    Theme::Type m_currentTheme = Theme::Type::SkyBlue;
+    GpuTheme::Type m_currentTheme = GpuTheme::Type::RadeonRed;
 
     HBRUSH bgBrush;
     HBRUSH chartBgBrush;
@@ -126,10 +140,6 @@ private:
     HBRUSH markerBrush;
     HBRUSH borderBrush;
 
-    // Header / process toggle.
-    RECT m_processRC{};
-    bool m_showProcesses = false;
-
-    ProcessWatcher &m_processWatcher;
-    int m_maxProcess = 5;
+    ProgressRing m_ring;
+    ULONG_PTR m_gdiplusToken;
 };

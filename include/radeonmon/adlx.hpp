@@ -20,6 +20,7 @@ public:
 
     void Init(HWND hwnd);
     void Discover(); // Discover all supported metrics functions
+    void Probe();    // initizalize min/max values
     void Destroy();
 
     inline void Tick() { m_snapshot = Query(); }

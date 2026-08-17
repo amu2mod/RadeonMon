@@ -68,4 +68,5 @@ inline void LoadPreferences()
     g_DontShowHttpsWebServerWarning = GetPrivateProfileIntW(L"WebServer", L"WebServerHttpsWarning", 0, path) != 0;
 
     g_isCpuGraphEnabled = GetPrivateProfileIntW(L"Window", L"CpuGraphActive", 0, path) != 0;
+    g_isGpuGraphEnabled = GetPrivateProfileIntW(L"Window", L"GpuGraphActive", 0, path) != 0;
 }

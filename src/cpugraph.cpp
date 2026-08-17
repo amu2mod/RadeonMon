@@ -137,7 +137,7 @@ bool CpuGraphWindow::Create(HWND hParent)
 
     m_userClose = false;
 
-    const UINT actualDpi = GetDpiForWindow(m_hwnd);
+    const UINT actualDpi = m_dpi;
 
     if (actualDpi != dpiX)
     {
@@ -214,7 +214,8 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
     switch (msg)
     {
     case WM_CREATE:
-        CreateUIFont(GetDpiForWindow(m_hwnd));
+        m_dpi = GetDpiForWindow(m_hwnd);
+        CreateUIFont(m_dpi);
         UpdateLayoutRects();
         UpdateWindowHeight();
         return 0;
@@ -224,6 +225,17 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         DestroyWindow(m_hwnd);
         m_hwnd = nullptr;
         return 0;
+
+    case WM_QUERYENDSESSION:
+        return TRUE;
+
+    case WM_ENDSESSION:
+    {
+        if (wParam) // Session is actually ending.
+            SaveSettings();
+        m_hwnd = nullptr;
+        return 0;
+    }
 
     case WM_DESTROY:
         if (!SaveSettings())
@@ -298,7 +310,7 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         RECT rc;
         GetClientRect(m_hwnd, &rc);
 
-        const UINT dpi = GetDpiForWindow(m_hwnd);
+        const UINT dpi = m_dpi;
 
         auto Scale = [dpi](int value)
         {
@@ -384,8 +396,8 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_DPICHANGED:
     {
-        UINT dpi = HIWORD(wParam);
-        CreateUIFont(dpi);
+        m_dpi = HIWORD(wParam);
+        CreateUIFont(m_dpi);
         UpdateLayoutRects();
 
         RECT *suggestedRect = reinterpret_cast<RECT *>(lParam);
@@ -477,7 +489,7 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         RECT rc;
         GetWindowRect(m_hwnd, &rc);
 
-        const int resizeBorder = MulDiv(6, GetDpiForWindow(m_hwnd), USER_DEFAULT_SCREEN_DPI);
+        const int resizeBorder = MulDiv(6, m_dpi, USER_DEFAULT_SCREEN_DPI);
 
         if (pt.x >= rc.left && pt.x < rc.left + resizeBorder)
             return HTLEFT;
@@ -491,7 +503,7 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_GETMINMAXINFO:
     {
         MINMAXINFO *mmi = reinterpret_cast<MINMAXINFO *>(lParam);
-        mmi->ptMinTrackSize.x = GetMinRequiredClientWidth(GetDpiForWindow(m_hwnd));
+        mmi->ptMinTrackSize.x = GetMinRequiredClientWidth(m_dpi);
         return 0;
     }
 
@@ -518,7 +530,7 @@ void CpuGraphWindow::DrawCoreBarGraph(HDC hdc, const RECT &rc)
 {
     auto cpu = m_cpu.GetMetrics();
 
-    const UINT dpi = GetDpiForWindow(m_hwnd);
+    const UINT dpi = m_dpi;
 
     auto Scale = [dpi](int value)
     {
@@ -971,7 +983,7 @@ int CpuGraphWindow::GetRequiredClientHeight(UINT dpi) const
 
 void CpuGraphWindow::UpdateWindowHeight()
 {
-    int desiredClientHeight = GetRequiredClientHeight(GetDpiForWindow(m_hwnd));
+    int desiredClientHeight = GetRequiredClientHeight(m_dpi);
     SetWindowPos(m_hwnd, nullptr, 0, 0, m_width, desiredClientHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
@@ -1011,7 +1023,7 @@ bool CpuGraphWindow::SaveSettings()
     swprintf_s(buffer, L"%d", height);
     WritePrivateProfileStringW(L"CPU", L"Height", buffer, path);
 
-    UINT dpi = GetDpiForWindow(m_hwnd);
+    UINT dpi = m_dpi;
     swprintf_s(buffer, L"%d", dpi);
     WritePrivateProfileStringW(L"CPU", L"DPI", buffer, path);
 
@@ -1098,7 +1110,7 @@ void CpuGraphWindow::UpdateLayoutRects()
     RECT rc;
     GetClientRect(m_hwnd, &rc);
 
-    const UINT dpi = GetDpiForWindow(m_hwnd);
+    const UINT dpi = m_dpi;
 
     auto Scale = [dpi](int value)
     {
@@ -1145,7 +1157,7 @@ void CpuGraphWindow::OnResizeWindow(bool grow)
 
     m_titleFontSize = GetScaledTitleFontSize();
 
-    const UINT dpi = GetDpiForWindow(m_hwnd);
+    const UINT dpi = m_dpi;
 
     CreateUIFont(dpi);
     UpdateLayoutRects();
@@ -1167,7 +1179,7 @@ void CpuGraphWindow::OnProcessesClicked()
     LOG_DEBUG("Toggling Processes");
     m_showProcesses = !m_showProcesses;
 
-    UINT dpi = GetDpiForWindow(m_hwnd);
+    UINT dpi = m_dpi;
 
     int newHeight = GetRequiredClientHeight(dpi);
 

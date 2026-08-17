@@ -90,6 +90,45 @@ struct PropertyItem
         dirty = true;
     }
 
+    void SetValue(HWND hwnd, HFONT font, const wchar_t *src)
+    {
+        if (src)
+        {
+            wcsncpy_s(textValue, _countof(textValue), src, _TRUNCATE);
+        }
+        else
+        {
+            textValue[0] = L'\0';
+        }
+
+        HDC hdc = GetDC(hwnd);
+        HFONT oldFont = (HFONT)SelectObject(hdc, font);
+        UpdateTextLayout(hdc);
+        SelectObject(hdc, oldFont);
+        ReleaseDC(hwnd, hdc);
+
+        dirty = true;
+    }
+
+    void UpdateTextLayout(HDC hdc)
+    {
+        SIZE size{};
+
+        if (hdc && textValue[0] != L'\0')
+        {
+            GetTextExtentPoint32W(hdc, textValue, static_cast<int>(wcslen(textValue)), &size);
+        }
+
+        // Pixel width of the text.
+        textLength = static_cast<UINT>(wcslen(textValue));
+
+        // Horizontally centered inside valueRc.
+        textX = valueRc.left + ((valueRc.right - valueRc.left) - size.cx) / 2;
+
+        // Vertically centered inside valueRc.
+        textY = valueRc.top + ((valueRc.bottom - valueRc.top) - size.cy) / 2;
+    }
+
     void DrawTextValue(HDC hdc, COLORREF color, HFONT font)
     {
         HFONT oldFont = (HFONT)SelectObject(hdc, font);
@@ -590,6 +629,9 @@ namespace RadeonMon::Hardware
         int min = 0;
         int max = 0;
 
+        double minValue = 0.0;
+        double maxValue = 0.0;
+
         int RoundedValue() const { return static_cast<int>(std::lround(value)); }
     };
 
@@ -599,6 +641,9 @@ namespace RadeonMon::Hardware
         int value = 0;
         int min = 0;
         int max = 0;
+
+        int minValue = 0;
+        int maxValue = 0;
     };
 
     struct FPSMetrics
@@ -670,7 +715,7 @@ namespace RadeonMon::Hardware
         MetricDouble totalBoardPower;
         MetricInt voltage;
         MetricInt powerLimit; // Tuning setting
-        int powerLimitWatts;
+        MetricInt powerLimitWatts;
 
         MetricInt fanSpeed;
         MetricInt fanDuty;
@@ -1387,4 +1432,22 @@ struct VersionCheckResult
     std::wstring latestVersion;
     bool updateAvailable;
     bool showDialogs;
+};
+
+struct adlx_version
+{
+    int major = 0;
+    int minor = 0;
+    bool valid = false;
+
+    constexpr bool operator<(const adlx_version &other) const
+    {
+        return major < other.major ||
+               (major == other.major && minor < other.minor);
+    }
+
+    constexpr bool operator>=(const adlx_version &other) const
+    {
+        return !(*this < other);
+    }
 };

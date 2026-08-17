@@ -99,13 +99,88 @@ namespace Theme
 // GPU Chart
 /////////////
 
-constexpr COLORREF GPUCHART_WINDOW_BACKGROUND = BACKGROUNDCOLOR;
-constexpr COLORREF GPUCHART_SEPARATOR = rgb(80, 80, 80);
+namespace GpuTheme
+{
+    enum class Type : int
+    {
+        RadeonRed = 0,
+        GeForceGreen,
+        ArcBlue,
+        COUNT
+    };
 
-constexpr COLORREF GPUCHART_BARBACKGROUND = rgb(28, 27, 31);
-constexpr COLORREF GPUCHART_BAR = rgb(56, 189, 248);
-constexpr COLORREF GPUCHART_MARKER = GPUCHART_SEPARATOR;
+    struct Colors
+    {
+        COLORREF windowBackground;
+        COLORREF separator;
 
-constexpr COLORREF GPUCHART_DIM = RGB(136, 136, 136);
-constexpr COLORREF GPUCHART_TEXT = RGB(225, 228, 234);
-constexpr COLORREF GPUCHART_HEADER = GPUCHART_BAR;
+        COLORREF barBackground;
+        COLORREF bar;
+        COLORREF marker;
+
+        COLORREF dim;
+        COLORREF text;
+        COLORREF header;
+
+        COLORREF titlebar;
+    };
+
+    constexpr Colors RadeonRed{
+        .windowBackground = BACKGROUNDCOLOR,
+        .separator = rgb(80, 80, 80),
+
+        .barBackground = rgb(28, 24, 25),
+        .bar = rgb(227, 24, 55),
+        .marker = rgb(75, 65, 68),
+
+        .dim = rgb(136, 136, 136),
+        .text = rgb(238, 232, 233),
+        .header = rgb(227, 24, 55),
+
+        .titlebar = rgb(48, 32, 35)};
+
+    constexpr Colors GeForceGreen{
+        .windowBackground = BACKGROUNDCOLOR,
+        .separator = rgb(80, 80, 80),
+
+        .barBackground = rgb(23, 28, 23),
+        .bar = rgb(118, 185, 0),
+        .marker = rgb(65, 75, 65),
+
+        .dim = rgb(136, 136, 136),
+        .text = rgb(230, 235, 230),
+        .header = rgb(118, 185, 0),
+
+        .titlebar = rgb(32, 45, 32)};
+
+    constexpr Colors ArcBlue{
+        .windowBackground = BACKGROUNDCOLOR,
+        .separator = rgb(80, 80, 80),
+
+        .barBackground = rgb(22, 26, 35),
+        .bar = rgb(0, 199, 255),
+        .marker = rgb(60, 70, 85),
+
+        .dim = rgb(136, 136, 136),
+        .text = rgb(230, 235, 242),
+        .header = rgb(0, 199, 255),
+
+        .titlebar = rgb(28, 38, 55)};
+
+    constexpr const Colors &Get(Type type)
+    {
+        switch (type)
+        {
+        case Type::RadeonRed:
+            return RadeonRed;
+
+        case Type::GeForceGreen:
+            return GeForceGreen;
+
+        case Type::ArcBlue:
+            return ArcBlue;
+        }
+
+        return GeForceGreen;
+    }
+}

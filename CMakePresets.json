@@ -18,7 +18,8 @@
             "cacheVariables": {
                 "ENABLE_LOCALFILES": "ON",
                 "ENABLE_GDIDRAW": "OFF",
-                "ENABLE_TESTMODE": "OFF"
+                "ENABLE_TESTMODE": "OFF",
+                "ENABLE_GPUGRAPHRECT": "OFF"
             }
         },
         {
