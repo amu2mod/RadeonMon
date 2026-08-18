@@ -89,31 +89,8 @@ bool GpuGraphWindow::Create(HWND hParent)
     int minWidth = GetMinRequiredClientWidth(dpiX);
     int minHeight = GetRequiredClientHeight(dpiX);
 
-    if (sizeNotSet)
-    {
-        m_width = minWidth;
-        m_height = minHeight;
-    }
-    else
-    {
-        bool validSize = m_width >= 100 && m_width <= 10000 && m_height >= 100 && m_height <= 10000;
-
-        if (!validSize)
-        {
-            LOG_ERROR("[GPU] Invalid size settings, resetting window size");
-
-            m_width = minWidth;
-            m_height = minHeight;
-        }
-        else if (validDpi && validPosition)
-        {
-            m_width = MulDiv(m_width, dpiX, m_savedDpi);
-            m_height = MulDiv(m_height, dpiY, m_savedDpi);
-        }
-
-        m_width = min(m_width, minWidth);
-        m_height = max(m_height, minHeight);
-    }
+    m_width = minWidth;
+    m_height = minHeight;
 
     m_title = m_adlx.GetGpuInfo().name;
 
@@ -138,21 +115,6 @@ bool GpuGraphWindow::Create(HWND hParent)
     }
 
     m_userClose = false;
-
-    const UINT actualDpi = m_dpi;
-
-    if (actualDpi != dpiX)
-    {
-        CreateUIFont(actualDpi);
-
-        minWidth = GetMinRequiredClientWidth(actualDpi);
-        minHeight = GetRequiredClientHeight(actualDpi);
-
-        m_width = max(MulDiv(m_width, actualDpi, dpiX), minWidth);
-        m_height = max(MulDiv(m_height, actualDpi, dpiX), minHeight);
-
-        SetWindowPos(m_hwnd, nullptr, 0, 0, m_width, m_height, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-    }
 
     UpdateLayoutRects();
 
