@@ -46,6 +46,9 @@ inline int FormatValue(wchar_t *buffer, int value, const wchar_t *unit)
         *end-- = tmp;
     }
 
+    *p = ' ';
+    *p++;
+
     // Append unit string
     while (*unit)
         *p++ = *unit++;
@@ -83,6 +86,8 @@ public:
     void Draw(HDC hdc, int value);
     void Log() const;
     void UpdateColors(COLORREF ringColor, COLORREF ringBgColor, COLORREF bgColor, COLORREF textColor);
+    inline void UpdateMaxValue(int max) { m_maxValue = max; }
+    inline void UpdateUnit(const wchar_t *unit) { wcscpy_s(m_unit, unit); };
 
 private:
     RECT m_r{};

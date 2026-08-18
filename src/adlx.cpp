@@ -259,6 +259,11 @@ void ADLXGpuTelemetry::Discover()
             metric.min = min;
             metric.max = max;
         }
+        else
+        {
+            metric.min = -1;
+            metric.max = -1;
+        }
     };
 
     auto discoverV3 = [&](const char *name, auto isSupportedFn, auto getRangeFn, uint32_t cap, auto &metric)
@@ -387,6 +392,13 @@ void ADLXGpuTelemetry::Discover()
                &IADLXGPUMetricsSupport1::GetGPUMemoryTemperatureRange,
                GPU_CAP_MEM_TEMP,
                discoveredMetrics.memoryTemperature);
+
+    // Hardcoded Fallback
+    if (discoveredMetrics.memoryTemperature.min == -1 && discoveredMetrics.memoryTemperature.max == -1)
+    {
+        discoveredMetrics.memoryTemperature.min = 0;
+        discoveredMetrics.memoryTemperature.max = 110;
+    }
 
     discoverV1("NPU Frequency",
                &IADLXGPUMetricsSupport1::IsSupportedNPUFrequency,
@@ -616,7 +628,10 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
             if (!IsEnabled(cap))
                 return;
 
-            metric.value = ReadMetric<adlx_double>(name, fn, gpuMetrics);
+            const auto value = ReadMetric<adlx_double>(name, fn, gpuMetrics);
+
+            metric.hasChanged = !metric.isSupported || metric.value != value;
+            metric.value = value;
 
             if (!metric.isSupported)
             {
@@ -638,7 +653,10 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
             if (!IsEnabled(cap))
                 return;
 
-            metric.value = ReadMetric<adlx_int>(name, fn, gpuMetrics);
+            const auto value = ReadMetric<adlx_int>(name, fn, gpuMetrics);
+
+            metric.hasChanged = !metric.isSupported || metric.value != value;
+            metric.value = value;
 
             if (!metric.isSupported)
             {
@@ -660,7 +678,10 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
             if (!IsEnabled(cap))
                 return;
 
-            metric.value = ReadMetricV1<adlx_double>(name, fn, gpuMetrics);
+            const auto value = ReadMetricV1<adlx_double>(name, fn, gpuMetrics);
+
+            metric.hasChanged = !metric.isSupported || metric.value != value;
+            metric.value = value;
 
             if (!metric.isSupported)
             {
@@ -682,7 +703,10 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
             if (!IsEnabled(cap))
                 return;
 
-            metric.value = ReadMetricV1<adlx_int>(name, fn, gpuMetrics);
+            const auto value = ReadMetricV1<adlx_int>(name, fn, gpuMetrics);
+
+            metric.hasChanged = !metric.isSupported || metric.value != value;
+            metric.value = value;
 
             if (!metric.isSupported)
             {
@@ -704,7 +728,10 @@ GpuMetricsSnapshot ADLXGpuTelemetry::Query()
             if (!IsEnabled(cap))
                 return;
 
-            metric.value = ReadMetricV3<adlx_int>(name, fn, gpuMetrics);
+            const auto value = ReadMetricV3<adlx_int>(name, fn, gpuMetrics);
+
+            metric.hasChanged = !metric.isSupported || metric.value != value;
+            metric.value = value;
 
             if (!metric.isSupported)
             {
@@ -1028,10 +1055,12 @@ void ADLXGpuTelemetry::UpdateManualPowerTuning()
                 {
                     m_snapshot.powerLimit.isSupported = true;
                     m_snapshot.powerLimit.value = static_cast<int>(powerLimit);
+                    m_snapshot.powerLimit.hasChanged = true;
                     LOG_DEBUG("[ADLX] power limit=%d", m_snapshot.powerLimit.value);
                     const int powerBase = static_cast<int>(std::round(m_snapshot.totalBoardPower.max / ((100 + m_snapshot.powerLimit.max) / 100.0)));
                     m_snapshot.powerLimitWatts.isSupported = true;
                     m_snapshot.powerLimitWatts.value = static_cast<int>(std::round(powerBase * (100 + m_snapshot.powerLimit.value) / 100.0));
+                    m_snapshot.powerLimitWatts.hasChanged = true;
                     PostMessage(m_hwnd, WM_APP_GPU_PWR_TUNING_CHANGE, 0, 0);
                 }
                 else

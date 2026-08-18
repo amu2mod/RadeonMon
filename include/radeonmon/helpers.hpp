@@ -1112,3 +1112,9 @@ inline void ShowADLXVersionWarning(HWND hwnd, const adlx_version &version)
         TD_WARNING_ICON,
         nullptr);
 }
+
+inline bool Intersects(const RECT &a, const RECT &b)
+{
+    RECT intersection;
+    return IntersectRect(&intersection, &a, &b);
+};

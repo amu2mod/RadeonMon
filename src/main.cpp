@@ -1371,8 +1371,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
             g_gpuGraph.Create(hwnd);
             g_gpuGraph.Show();
+            SetAlwaysOnTop(hwnd, g_alwaysOnTop);
 
-            // LOG_DEBUG("Showing GPU Graph");
+            LOG_DEBUG("Showing GPU Graph");
             return 0;
         }
 

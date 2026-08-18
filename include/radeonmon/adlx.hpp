@@ -32,6 +32,9 @@ public:
     inline const RadeonMon::Hardware::GPUInfo GetGpuInfo() const { return gpuInfo; }
     inline int GetSnapshotFPS() const { return m_snapshot.fps; }
 
+    template <typename MetricT>
+    inline void ClearChanged(MetricT RadeonMon::Hardware::GpuMetricsSnapshot::*member) { (m_snapshot.*member).hasChanged = false; }
+
 private:
     ADLXHelper ADLXHelp;
     IADLXGPUPtr selectedGPU;

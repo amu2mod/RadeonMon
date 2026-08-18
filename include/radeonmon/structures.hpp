@@ -632,6 +632,8 @@ namespace RadeonMon::Hardware
         double minValue = 0.0;
         double maxValue = 0.0;
 
+        bool hasChanged = true;
+
         int RoundedValue() const { return static_cast<int>(std::lround(value)); }
     };
 
@@ -644,6 +646,8 @@ namespace RadeonMon::Hardware
 
         int minValue = 0;
         int maxValue = 0;
+
+        bool hasChanged = true;
     };
 
     struct FPSMetrics
