@@ -90,6 +90,7 @@ private:
     int m_MarkerWidth = 2;
     std::wstring m_title;
     RECT m_GraphRc{};
+    bool m_pendingDpiResize = false;
 
     const int c_defaultFontSize = 16;
     const int c_defaultTileFontSize = 14;

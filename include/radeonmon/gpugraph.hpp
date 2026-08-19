@@ -112,6 +112,7 @@ private:
     void PaintFrame(HDC hdc);
     void PaintSeparator(HDC hdc);
     void ApplyTheme(GpuTheme::Type theme);
+    void PaintLabelLines(HDC);
 
     static const RadeonMon::Hardware::MetricDouble &GetUsage(const GpuMetricsSnapshot &s) { return s.usage; }
     static const RadeonMon::Hardware::MetricDouble &GetTemperature(const GpuMetricsSnapshot &s) { return s.temperature; }
@@ -160,7 +161,8 @@ private:
     int m_MarginTopBottom = 0;
     int m_MarginLeftRight = 0;
     int m_BarHeight = 16;
-    int m_Spacing = 0;
+    int m_LineGap1 = 0;
+    int m_LineGap2 = 0;
     int m_OnePxScaled = 1;
     int m_MarkerWidth = 2;
     std::wstring m_title;
@@ -179,6 +181,8 @@ private:
     bool m_forceFullRedraw = true;
     UINT m_pendingDpi;
     RECT m_pendingSuggestedRect;
+    int m_RingTopMargin;
+    bool m_pendingDpiResize = false;
 
     GPU_ROW_ID m_selected = GPU_ROW_ID::ClockSpeed;
 
@@ -213,7 +217,8 @@ private:
     // Spacing constants
     const int c_MarginTopBottom = 9;
     const int c_MarginLeftRight = 14;
-    const int c_LineSpace = 5;
+    const int c_LineGap1 = 2;
+    const int c_LineGap2 = 5;
     const int c_borderWidth = 1;
     const int c_TitlePaddingTopBottom = 5;
     const int c_MinBarGraphWidth = 100;
@@ -223,6 +228,7 @@ private:
     const int c_maxTitleFontSize = 22;
     const int c_ringSize = 150;
     const int c_SeparatorMargin = 15;
+    const int c_RingTopMargin = 10;
     inline static constexpr wchar_t COLUMN1_MAXTEXT[] = L"Memory Temperature: 99999 Mhz";
     inline static constexpr int GPU_COLUMN1_LENGTH = _countof(COLUMN1_MAXTEXT) - 1;
     inline static constexpr wchar_t COLUMN1_LABEL[] = L"Memory Temperature:";

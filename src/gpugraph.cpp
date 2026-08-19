@@ -188,13 +188,17 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
     }
 
     case WM_CLOSE:
+    {
         m_userClose = true;
         DestroyWindow(m_hwnd);
         m_hwnd = nullptr;
         return 0;
+    }
 
     case WM_QUERYENDSESSION:
+    {
         return TRUE;
+    }
 
     case WM_ENDSESSION:
     {
@@ -205,10 +209,12 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
     }
 
     case WM_DESTROY:
+    {
         if (!SaveSettings())
             LOG_ERROR("[GPU] Failed to save settings");
         m_hwnd = nullptr;
         return 0;
+    }
 
     case WM_LBUTTONDOWN:
     {
@@ -238,8 +244,19 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
             InvalidateRect(m_hwnd, &rc, false);
         }
 
-        ReleaseCapture();
-        SendMessage(m_hwnd, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+        return 0;
+    }
+
+    case WM_NCHITTEST:
+    {
+        return HTCAPTION; // whole window is draggable caption
+    }
+
+    case WM_NCRBUTTONUP:
+    {
+        // custom right click to allow context menu anywhere in a caption area
+        POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        SendMessage(m_hwnd, WM_CONTEXTMENU, reinterpret_cast<WPARAM>(m_hwnd), MAKELPARAM(pt.x, pt.y));
         return 0;
     }
 
@@ -332,9 +349,13 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
             PaintLabels(m_backDC);
             PaintSeparator(m_backDC);
             PaintValues(m_backDC);
+            PaintLabelLines(m_backDC);
         }
         else if (Intersects(m_Column1ValuesRc, ps.rcPaint))
+        {
             PaintValues(m_backDC);
+            PaintLabelLines(m_backDC);
+        }
 
         BitBlt(hdc, ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right - ps.rcPaint.left, ps.rcPaint.bottom - ps.rcPaint.top, m_backDC, ps.rcPaint.left, ps.rcPaint.top, SRCCOPY);
 
@@ -353,21 +374,28 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         m_dpi = HIWORD(wParam);
         CreateUIFont(m_dpi);
         UpdateLayoutRects();
-
-        RECT *suggestedRect = reinterpret_cast<RECT *>(lParam);
-
-        SetWindowPos(m_hwnd, nullptr, suggestedRect->left, suggestedRect->top, GetMinRequiredClientWidth(m_dpi), GetRequiredClientHeight(m_dpi), SWP_NOZORDER | SWP_NOACTIVATE);
-
-        m_forceFullRedraw = true;
-
-        InvalidateRect(m_hwnd, nullptr, FALSE);
+        const RECT *r = reinterpret_cast<const RECT *>(lParam);
+        SetWindowPos(m_hwnd, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
+        m_pendingDpiResize = true;
         return 0;
     }
 
     case WM_EXITSIZEMOVE:
-        InvalidateRect(m_hwnd, &m_ContentRc, FALSE); // request repaint
-        UpdateWindow(m_hwnd);                        // force immediate WM_PAINT
-        return 0;
+    {
+        if (m_pendingDpiResize)
+        {
+            m_pendingDpiResize = false;
+            RECT rc;
+            GetWindowRect(m_hwnd, &rc);
+            SetWindowPos(m_hwnd, nullptr, rc.left, rc.top, GetMinRequiredClientWidth(m_dpi), GetRequiredClientHeight(m_dpi), SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        else
+        {
+            InvalidateRect(m_hwnd, &m_BodyRc, FALSE); // request repaint
+            UpdateWindow(m_hwnd);                     // force immediate WM_PAINT
+        }
+        break;
+    }
 
     case WM_CONTEXTMENU:
     {
@@ -581,21 +609,23 @@ void GpuGraphWindow::CreateUIFont(UINT dpi)
 
     m_MarginTopBottom = scaleFont(c_MarginTopBottom);
     m_MarginLeftRight = scaleFont(c_MarginLeftRight);
-    m_Spacing = scaleFont(c_LineSpace);
+    m_LineGap1 = scaleFont(c_LineGap1);
+    m_LineGap2 = scaleFont(c_LineGap2);
     m_OnePxScaled = scale(1.0);
     m_BarHeight = m_FontAscent - m_OnePxScaled;
     m_MarkerWidth = scale(2.0);
     m_SeparatorMargin = scaleFont(c_SeparatorMargin);
     m_LabelValueOffset = m_FontWidth * GPU_COLUMN1_LABEL_MAXLENGTH;
+    m_RingTopMargin = scaleFont(c_RingTopMargin);
 }
 
 int GpuGraphWindow::GetRequiredClientHeight(UINT dpi) const
 {
     const int titlePadding = Scale(c_TitlePaddingTopBottom, dpi);
     const int titleBarHeight = m_FontHeight + titlePadding * 2;
-    const int contentHeight = m_metricsCount * m_FontHeight + m_MarginTopBottom * 2;
+    const int contentHeight = (m_metricsCount - 1) * (m_FontHeight + m_LineGap1 * 2 + 1) + m_FontHeight + m_MarginTopBottom * 2;
     const int column1Height = titleBarHeight + contentHeight + m_borderSize;
-    const int column2Height = m_ringRc.bottom + m_SeparatorMargin + m_FontHeight * 3 + m_Spacing * 2 + m_MarginTopBottom;
+    const int column2Height = m_ringRc.bottom + m_SeparatorMargin + m_FontHeight * 3 + m_LineGap2 * 2 + m_MarginTopBottom;
 
     return max(column1Height, column2Height);
 }
@@ -737,14 +767,14 @@ void GpuGraphWindow::UpdateLayoutRects()
 
     m_ringRc.left = m_Column2Rc.left + ((m_Column2Rc.right - m_Column2Rc.left) - m_ringSize) / 2;
     m_ringRc.right = m_ringRc.left + m_ringSize;
-    m_ringRc.top = m_Column2Rc.top;
+    m_ringRc.top = m_Column2Rc.top + m_RingTopMargin;
     m_ringRc.bottom = m_ringRc.top + m_ringSize;
 
     m_ring.Update(GetDC(m_hwnd), m_ringRc, m_ringFont);
 
-    m_MinLabelY = m_ringRc.bottom + m_FontHeight + m_Spacing;
-    m_MaxLabelY = m_MinLabelY + m_FontHeight + m_Spacing;
-    m_RangeLabelY = m_MaxLabelY + m_FontHeight + m_Spacing;
+    m_MinLabelY = m_ringRc.bottom + m_FontHeight + m_LineGap2;
+    m_MaxLabelY = m_MinLabelY + m_FontHeight + m_LineGap2;
+    m_RangeLabelY = m_MaxLabelY + m_FontHeight + m_LineGap2;
 }
 
 void GpuGraphWindow::OnResizeWindow(bool grow)
@@ -952,13 +982,13 @@ void GpuGraphWindow::BuildStatRows()
     auto AddDouble = [&](GPU_ROW_ID id, GPU_CAPS cap, const wchar_t *name, const wchar_t *unit, DoubleGetter getter, RadeonMon::Hardware::MetricDouble GpuMetricsSnapshot::*member)
     {
         m_statRows.push_back({id, cap, name, unit, false, y, getter, nullptr, member, nullptr});
-        y += lineHeight;
+        y += lineHeight + m_LineGap1 * 2 + 1;
     };
 
     auto AddInt = [&](GPU_ROW_ID id, GPU_CAPS cap, const wchar_t *name, const wchar_t *unit, IntGetter getter, RadeonMon::Hardware::MetricInt GpuMetricsSnapshot::*member)
     {
         m_statRows.push_back({id, cap, name, unit, true, y, nullptr, getter, nullptr, member});
-        y += lineHeight;
+        y += lineHeight + m_LineGap1 * 2 + 1;
     };
 
     if (snapshot.usage.isSupported)
@@ -1077,7 +1107,7 @@ void GpuGraphWindow::FormatLabel(wchar_t *dst, const wchar_t *name, int length)
     for (; i < length; ++i)
         dst[i] = L' ';
 
-    dst[length] = L':';
+    dst[length] = L' ';
     dst[length + 1] = L'\0';
 }
 
@@ -1351,4 +1381,31 @@ void GpuGraphWindow::DestroyBackBuffer()
     }
 
     m_backBufferSize = {};
+}
+
+void GpuGraphWindow::PaintLabelLines(HDC hdc)
+{
+
+    const auto &colors = GpuTheme::Get(m_currentTheme);
+    const int left = m_Column1Rc.left;
+    const int right = m_Column1Rc.right;
+    HPEN pen = CreatePen(PS_SOLID, 1, colors.dimSeparator);
+    HGDIOBJ oldPen = SelectObject(hdc, pen);
+
+    int count = 1;
+    const int max = static_cast<int>(m_statRows.size());
+
+    for (const auto &row : m_statRows)
+    {
+        if (count++ == max)
+            break;
+
+        const int y = row.y + m_FontHeight + m_LineGap1;
+        MoveToEx(hdc, left, y, nullptr);
+        LineTo(hdc, right, y);
+    }
+    GDI_COUNT_N(this, static_cast<int>(m_statRows.size()));
+
+    SelectObject(hdc, oldPen);
+    DeleteObject(pen);
 }

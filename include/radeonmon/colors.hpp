@@ -113,6 +113,7 @@ namespace GpuTheme
     {
         COLORREF windowBackground;
         COLORREF separator;
+        COLORREF dimSeparator;
 
         COLORREF barBackground;
         COLORREF bar;
@@ -128,6 +129,7 @@ namespace GpuTheme
     constexpr Colors RadeonRed{
         .windowBackground = BACKGROUNDCOLOR,
         .separator = rgb(80, 80, 80),
+        .dimSeparator = rgb(39, 39, 39),
 
         .barBackground = rgb(28, 24, 25),
         .bar = rgb(227, 24, 55),
@@ -142,6 +144,7 @@ namespace GpuTheme
     constexpr Colors GeForceGreen{
         .windowBackground = BACKGROUNDCOLOR,
         .separator = rgb(80, 80, 80),
+        .dimSeparator = rgb(39, 39, 39),
 
         .barBackground = rgb(23, 28, 23),
         .bar = rgb(118, 185, 0),
@@ -156,6 +159,7 @@ namespace GpuTheme
     constexpr Colors ArcBlue{
         .windowBackground = BACKGROUNDCOLOR,
         .separator = rgb(80, 80, 80),
+        .dimSeparator = rgb(39, 39, 39),
 
         .barBackground = rgb(22, 26, 35),
         .bar = rgb(0, 199, 255),

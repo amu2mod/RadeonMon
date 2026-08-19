@@ -399,18 +399,29 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         m_dpi = HIWORD(wParam);
         CreateUIFont(m_dpi);
         UpdateLayoutRects();
-
         RECT *suggestedRect = reinterpret_cast<RECT *>(lParam);
         SetWindowPos(m_hwnd, nullptr, suggestedRect->left, suggestedRect->top, suggestedRect->right - suggestedRect->left, suggestedRect->bottom - suggestedRect->top, SWP_NOZORDER | SWP_NOACTIVATE);
-
+        m_pendingDpiResize = true;
         InvalidateRect(m_hwnd, nullptr, TRUE);
         return 0;
     }
 
     case WM_EXITSIZEMOVE:
-        InvalidateRect(m_hwnd, &m_GraphRc, TRUE); // request repaint
-        UpdateWindow(m_hwnd);                     // force immediate WM_PAINT
-        return 0;
+    {
+        if (m_pendingDpiResize)
+        {
+            m_pendingDpiResize = false;
+            RECT rc;
+            GetWindowRect(m_hwnd, &rc);
+            SetWindowPos(m_hwnd, nullptr, rc.left, rc.top, GetMinRequiredClientWidth(m_dpi), GetRequiredClientHeight(m_dpi), SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        else
+        {
+            InvalidateRect(m_hwnd, &m_GraphRc, TRUE); // request repaint
+            UpdateWindow(m_hwnd);                     // force immediate WM_PAINT
+        }
+        break;
+    }
 
     case WM_CONTEXTMENU:
     {
