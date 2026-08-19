@@ -249,7 +249,14 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_NCHITTEST:
     {
-        return HTCAPTION; // whole window is draggable caption
+        POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        ScreenToClient(m_hwnd, &pt);
+        GPU_ROW_ID rowId = HitTestRow(pt);
+
+        if (rowId != GpuGraphWindow::GPU_ROW_ID::Count)
+            return HTCLIENT;
+
+        return HTCAPTION;
     }
 
     case WM_NCRBUTTONUP:
