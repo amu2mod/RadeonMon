@@ -329,7 +329,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
             colors.windowBackground,
             colors.separator,     // border
             colors.bar,           // fill
-            100,                  // max value
+            maxRange,             // max value
             c_chartHistoryPeriod, // 60 seconds of history
             APP_REFRESH_TIMER     // sample every 500 ms
         );
