@@ -413,7 +413,7 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
             m_pendingDpiResize = false;
             RECT rc;
             GetWindowRect(m_hwnd, &rc);
-            SetWindowPos(m_hwnd, nullptr, rc.left, rc.top, GetMinRequiredClientWidth(m_dpi), GetRequiredClientHeight(m_dpi), SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(m_hwnd, nullptr, rc.left, rc.top, rc.right - rc.left, GetRequiredClientHeight(m_dpi), SWP_NOZORDER | SWP_NOACTIVATE);
         }
         else
         {

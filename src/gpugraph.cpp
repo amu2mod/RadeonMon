@@ -148,6 +148,7 @@ void GpuGraphWindow::Update()
     {
         InvalidateRect(m_hwnd, &m_Column1ValuesRc, FALSE);
         InvalidateRect(m_hwnd, &m_Column2Rc, FALSE);
+        InvalidateRect(m_hwnd, &m_chartRc, FALSE);
         UpdateWindow(m_hwnd);
     }
 }
@@ -180,6 +181,9 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
     {
     case WM_CREATE:
     {
+#ifdef LOGWM
+        LOG_TRACE("WM_CREATE");
+#endif
         m_dpi = GetDpiForWindow(m_hwnd);
         CreateUIFont(m_dpi);
         UpdateLayoutRects();
@@ -236,6 +240,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
                     maxValue = static_cast<int>(selectedRow->getDouble(m_adlx.Get()).max);
 
                 m_ring.UpdateMaxValue(maxValue);
+                m_chart.updatemaxvalue(maxValue);
                 LOG_DEBUG("[GPUGRAGH] Setting max range = %d", maxValue);
                 m_ring.UpdateUnit(selectedRow->unit);
             }
@@ -294,22 +299,21 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_SIZE:
     {
+#ifdef LOGWM
+        LOG_TRACE("WM_SIZE");
+#endif
+
         m_width = LOWORD(lParam);
         m_height = HIWORD(lParam);
-        UpdateLayoutRects();
-        BuildStatRows();
 
         HDC hdc = GetDC(m_hwnd);
         if (hdc)
-        {
             EnsureBackBuffer(hdc, m_width, m_height);
-        }
-#ifdef _DEBUG
         else
-        {
             LOG_ERROR("[GPUGRAPH] Failed to get DC for back buffer");
-        }
-#endif
+
+        UpdateLayoutRects();
+        BuildStatRows();
 
         const auto &colors = GpuTheme::Get(m_currentTheme);
         auto snapshot = m_adlx.Get();
@@ -317,6 +321,21 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         int maxRange = row->isInt ? row->getInt(m_adlx.Get()).max : static_cast<int>(row->getDouble(m_adlx.Get()).max);
 
         m_ring.Init(m_backDC, m_ringRc, m_ringFont, row->unit, maxRange, colors.bar, colors.barBackground, colors.windowBackground, colors.text);
+        m_chart.Init(
+            m_chartRc,
+            colors.text,          // line
+            colors.dimSeparator,  // middle
+            colors.barBackground, // background
+            colors.windowBackground,
+            colors.separator,     // border
+            colors.bar,           // fill
+            100,                  // max value
+            c_chartHistoryPeriod, // 60 seconds of history
+            APP_REFRESH_TIMER     // sample every 500 ms
+        );
+        // m_chart.resize(m_chartRc);
+        // m_chart.redraw(hdc);
+
         ReleaseDC(m_hwnd, hdc);
 
         m_forceFullRedraw = true;
@@ -378,6 +397,10 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_DPICHANGED:
     {
+#ifdef LOGWM
+        LOG_TRACE("WM_DPICHANGED");
+#endif
+
         m_dpi = HIWORD(wParam);
         CreateUIFont(m_dpi);
         UpdateLayoutRects();
@@ -410,9 +433,9 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
         // Theme submenu
         HMENU themeMenu = CreatePopupMenu();
-        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == GpuTheme::Type::RadeonRed ? MF_CHECKED : 0), 2, L"Red (AMD)");
-        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == GpuTheme::Type::GeForceGreen ? MF_CHECKED : 0), 3, L"Green (NVIDIA)");
-        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == GpuTheme::Type::ArcBlue ? MF_CHECKED : 0), 4, L"Blue (Intel)");
+        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == GpuTheme::Type::RadeonRed ? MF_CHECKED | MF_DISABLED : 0), 2, L"Red (AMD)");
+        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == GpuTheme::Type::GeForceGreen ? MF_CHECKED | MF_DISABLED : 0), 3, L"Green (NVIDIA)");
+        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == GpuTheme::Type::ArcBlue ? MF_CHECKED | MF_DISABLED : 0), 4, L"Blue (Intel)");
 
         AppendMenu(menu, MF_POPUP, (UINT_PTR)themeMenu, L"Theme");
 
@@ -630,11 +653,39 @@ int GpuGraphWindow::GetRequiredClientHeight(UINT dpi) const
 {
     const int titlePadding = Scale(c_TitlePaddingTopBottom, dpi);
     const int titleBarHeight = m_FontHeight + titlePadding * 2;
-    const int contentHeight = (m_metricsCount - 1) * (m_FontHeight + m_LineGap1 * 2 + 1) + m_FontHeight + m_MarginTopBottom * 2;
-    const int column1Height = titleBarHeight + contentHeight + m_borderSize;
-    const int column2Height = m_ringRc.bottom + m_SeparatorMargin + m_FontHeight * 3 + m_LineGap2 * 2 + m_MarginTopBottom;
 
-    return max(column1Height, column2Height);
+    const int contentHeight =
+        (m_metricsCount - 1) *
+            (m_FontHeight + m_LineGap1 * 2 + 1) +
+        m_FontHeight + m_MarginTopBottom * 2;
+
+    const int column1Height =
+        titleBarHeight + contentHeight + m_borderSize;
+
+    const int column2Height =
+        m_ringRc.bottom + m_SeparatorMargin + m_FontHeight * 3 + m_LineGap2 * 2 + m_MarginTopBottom;
+
+    const int chartHeight = MulDiv(
+        Scale(c_ChartHeight, dpi),
+        m_fontSize,
+        c_defaultFontSize);
+
+    //
+    // Chart is inside the body, below the existing content:
+    //
+    //   existing content
+    //   m_LineGap2
+    //   1px separator
+    //   m_LineGap2
+    //   chart
+    //
+    const int chartColumnHeight =
+        titleBarHeight + contentHeight + m_LineGap2 + 1 + m_LineGap2 + chartHeight + m_MarginTopBottom;
+
+    const int highestColumn =
+        max(column1Height, max(column2Height, chartColumnHeight));
+
+    return highestColumn;
 }
 
 void GpuGraphWindow::UpdateWindowHeight()
@@ -737,41 +788,74 @@ void GpuGraphWindow::UpdateLayoutRects()
 {
     RECT rc;
     GetClientRect(m_hwnd, &rc);
+    // LogRect("rc inside UpdateLayoutRects", rc);
 
     m_titlePadding = Scale(c_TitlePaddingTopBottom, m_dpi);
     m_titleBarHeight = m_FontHeight + m_titlePadding * 2;
 
     m_borderSize = Scale(c_borderWidth, m_dpi);
 
+    //
+    // Title bar
+    //
     m_TitleBarRc = RECT{m_borderSize, m_borderSize, rc.right - m_borderSize, m_borderSize + m_titleBarHeight};
 
+    //
+    // Content
+    //
     m_ContentRc.left = rc.left + m_borderSize;
     m_ContentRc.right = rc.right - m_borderSize;
     m_ContentRc.top = rc.top + m_borderSize + m_titleBarHeight;
     m_ContentRc.bottom = rc.bottom - m_borderSize;
 
+    //
+    // Body
+    //
+    // Body contains everything: existing content + separator + chart.
+    //
     m_BodyRc.left = m_ContentRc.left + m_MarginLeftRight;
     m_BodyRc.right = m_ContentRc.right - m_MarginLeftRight;
     m_BodyRc.top = m_ContentRc.top + m_MarginTopBottom;
     m_BodyRc.bottom = m_ContentRc.bottom - m_MarginTopBottom;
 
+    //
+    // Ring size
+    //
+    m_ringSize = MulDiv(Scale(c_ringSize, m_dpi), m_fontSize, c_defaultFontSize);
+
+    //
+    // Calculate the height needed by the existing content.
+    //
+    const int metricsHeight = (m_metricsCount - 1) * (m_FontHeight + m_LineGap1 * 2 + 1) + m_FontHeight;
+    const int ringContentHeight = m_RingTopMargin + m_ringSize + m_SeparatorMargin + m_FontHeight * 3 + m_LineGap2 * 2;
+    const int existingContentHeight = max(metricsHeight, ringContentHeight);
+
+    //
+    // The existing columns occupy the top of the body.
+    //
+    const int existingContentBottom = m_BodyRc.top + existingContentHeight;
+
     m_Column1Rc.left = m_BodyRc.left;
     m_Column1Rc.right = m_BodyRc.left + GPU_COLUMN1_LENGTH * m_FontWidth;
     m_Column1Rc.top = m_BodyRc.top;
-    m_Column1Rc.bottom = m_BodyRc.bottom;
+    m_Column1Rc.bottom = existingContentBottom;
 
     m_Column1ValuesRc.left = m_BodyRc.left + GPU_COLUMN1_LABEL_MAXLENGTH * m_FontWidth;
     m_Column1ValuesRc.right = m_Column1Rc.right;
     m_Column1ValuesRc.top = m_BodyRc.top;
-    m_Column1ValuesRc.bottom = m_BodyRc.bottom;
+    m_Column1ValuesRc.bottom = existingContentBottom;
 
-    m_ringSize = MulDiv(Scale(c_ringSize, m_dpi), m_fontSize, c_defaultFontSize);
-
+    //
+    // Column 2
+    //
     m_Column2Rc.left = m_Column1Rc.right + m_SeparatorMargin * 2 + 1;
     m_Column2Rc.right = m_Column2Rc.left + max(m_ringSize, m_Column2Width);
     m_Column2Rc.top = m_BodyRc.top;
-    m_Column2Rc.bottom = m_BodyRc.bottom;
+    m_Column2Rc.bottom = existingContentBottom;
 
+    //
+    // Ring
+    //
     m_ringRc.left = m_Column2Rc.left + ((m_Column2Rc.right - m_Column2Rc.left) - m_ringSize) / 2;
     m_ringRc.right = m_ringRc.left + m_ringSize;
     m_ringRc.top = m_Column2Rc.top + m_RingTopMargin;
@@ -782,6 +866,17 @@ void GpuGraphWindow::UpdateLayoutRects()
     m_MinLabelY = m_ringRc.bottom + m_FontHeight + m_LineGap2;
     m_MaxLabelY = m_MinLabelY + m_FontHeight + m_LineGap2;
     m_RangeLabelY = m_MaxLabelY + m_FontHeight + m_LineGap2;
+
+    //
+    // Chart
+    //
+    const int chartHeight = MulDiv(Scale(c_ChartHeight, m_dpi), m_fontSize, c_defaultFontSize);
+    const int separatorY = existingContentBottom + m_LineGap2;
+
+    m_chartRc.left = m_BodyRc.left;
+    m_chartRc.right = m_BodyRc.right;
+    m_chartRc.top = separatorY + 1 + m_LineGap2;
+    m_chartRc.bottom = m_chartRc.top + chartHeight;
 }
 
 void GpuGraphWindow::OnResizeWindow(bool grow)
@@ -951,6 +1046,10 @@ void GpuGraphWindow::PaintValues(HDC hdc)
             minInt = metric.min;
             maxInt = metric.max;
             m_ring.Draw(hdc, metric.value);
+            if (selectedRow->isChartEnabled)
+                m_chart.draw(hdc, metric.value);
+            else
+                m_chart.drawFrame(hdc);
         }
         else
         {
@@ -960,6 +1059,10 @@ void GpuGraphWindow::PaintValues(HDC hdc)
             minInt = metric.min;
             maxInt = metric.max;
             m_ring.Draw(hdc, metric.RoundedValue());
+            if (selectedRow->isChartEnabled)
+                m_chart.draw(hdc, metric.RoundedValue());
+            else
+                m_chart.drawFrame(hdc);
         }
 
         wchar_t minText[32];
@@ -988,13 +1091,15 @@ void GpuGraphWindow::BuildStatRows()
 
     auto AddDouble = [&](GPU_ROW_ID id, GPU_CAPS cap, const wchar_t *name, const wchar_t *unit, DoubleGetter getter, RadeonMon::Hardware::MetricDouble GpuMetricsSnapshot::*member)
     {
-        m_statRows.push_back({id, cap, name, unit, false, y, getter, nullptr, member, nullptr});
+        bool isChartEnabled = (id == GPU_ROW_ID::PowerLimitPercent) || (id == GPU_ROW_ID::PowerLimitWatts) ? false : true;
+        m_statRows.push_back({id, cap, name, unit, false, y, isChartEnabled, getter, nullptr, member, nullptr});
         y += lineHeight + m_LineGap1 * 2 + 1;
     };
 
     auto AddInt = [&](GPU_ROW_ID id, GPU_CAPS cap, const wchar_t *name, const wchar_t *unit, IntGetter getter, RadeonMon::Hardware::MetricInt GpuMetricsSnapshot::*member)
     {
-        m_statRows.push_back({id, cap, name, unit, true, y, nullptr, getter, nullptr, member});
+        bool isChartEnabled = (id == GPU_ROW_ID::PowerLimitPercent) || (id == GPU_ROW_ID::PowerLimitWatts) ? false : true;
+        m_statRows.push_back({id, cap, name, unit, true, y, isChartEnabled, nullptr, getter, nullptr, member});
         y += lineHeight + m_LineGap1 * 2 + 1;
     };
 
@@ -1087,7 +1192,7 @@ void GpuGraphWindow::PaintSeparator(HDC hdc)
     HGDIOBJ oldPen = SelectObject(hdc, pen);
     MoveToEx(hdc, separatorX, m_ContentRc.top + m_MarginTopBottom, nullptr);
     GDI_COUNT(this);
-    LineTo(hdc, separatorX, m_ContentRc.bottom - m_MarginTopBottom);
+    LineTo(hdc, separatorX, max(m_Column1Rc.bottom, m_Column2Rc.bottom));
     SelectObject(hdc, oldPen);
     DeleteObject(pen);
 }
@@ -1097,6 +1202,9 @@ void GpuGraphWindow::ApplyTheme(GpuTheme::Type theme)
     m_currentTheme = theme;
     const auto &colors = GpuTheme::Get(m_currentTheme);
     m_ring.UpdateColors(colors.bar, colors.barBackground, colors.windowBackground, colors.text);
+
+    m_chart.update(colors.text, colors.dimSeparator, colors.barBackground, colors.windowBackground, colors.bar);
+
     RebuildBrushes();
     m_forceFullRedraw = true;
     InvalidateRect(m_hwnd, nullptr, TRUE);
@@ -1334,13 +1442,8 @@ void GpuGraphWindow::EnsureBackBuffer(HDC hdc, int width, int height)
     if (width <= 0 || height <= 0)
         return;
 
-    if (m_backDC &&
-        m_backBitmap &&
-        m_backBufferSize.cx == width &&
-        m_backBufferSize.cy == height)
-    {
+    if (m_backDC && m_backBitmap && m_backBufferSize.cx == width && m_backBufferSize.cy == height) // skipping if existing matches requested
         return;
-    }
 
     DestroyBackBuffer();
 
@@ -1356,11 +1459,11 @@ void GpuGraphWindow::EnsureBackBuffer(HDC hdc, int width, int height)
         return;
     }
 
-    m_backOldBitmap =
-        static_cast<HBITMAP>(SelectObject(m_backDC, m_backBitmap));
-
+    m_backOldBitmap = static_cast<HBITMAP>(SelectObject(m_backDC, m_backBitmap));
     m_backBufferSize.cx = width;
     m_backBufferSize.cy = height;
+
+    LOG_DEBUG("[GPUGRAPH] Back buffer created: %dx%d", width, height);
 
     // Optional but generally useful: initialize the entire buffer.
     RECT rc{0, 0, width, height};

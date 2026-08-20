@@ -4,6 +4,7 @@
 #include "radeonmon/adlx.hpp"
 #include "radeonmon/colors.hpp"
 #include "radeonmon/ProgressRing.hpp"
+#include "radeonmon/linechart.hpp"
 
 #include <Windows.h>
 
@@ -52,6 +53,7 @@ public:
         const wchar_t *unit;
         bool isInt;
         int y; // y position
+        bool isChartEnabled = true;
 
         DoubleGetter getDouble = nullptr;
         IntGetter getInt = nullptr;
@@ -183,8 +185,9 @@ private:
     RECT m_pendingSuggestedRect;
     int m_RingTopMargin;
     bool m_pendingDpiResize = false;
+    int m_ChartHeight;
 
-    GPU_ROW_ID m_selected = GPU_ROW_ID::ClockSpeed;
+    GPU_ROW_ID m_selected = GPU_ROW_ID::Usage;
 
     RECT m_TitleBarRc{};
     RECT m_ContentRc{};       // borders + margins + body
@@ -193,12 +196,12 @@ private:
     RECT m_Column2Rc{};       // ring + min/max values
     RECT m_Column1ValuesRc{}; // values of column 1
     RECT m_ringRc{};
+    RECT m_chartRc{};
 
+    // font variables
     const int c_defaultFontSize = 16;
     const int c_defaultTileFontSize = 14;
     const int c_defaultRingFontSize = 17;
-
-    // font variables
     HFONT m_hFont = nullptr;
     HFONT m_titleFont = nullptr;
     HFONT m_ringFont = nullptr;
@@ -229,6 +232,8 @@ private:
     const int c_ringSize = 150;
     const int c_SeparatorMargin = 15;
     const int c_RingTopMargin = 10;
+    const int c_ChartHeight = 120;
+    const int c_chartHistoryPeriod = 10; // in seconds
     inline static constexpr wchar_t COLUMN1_MAXTEXT[] = L"Memory Temperature: 99999 Mhz";
     inline static constexpr int GPU_COLUMN1_LENGTH = _countof(COLUMN1_MAXTEXT) - 1;
     inline static constexpr wchar_t COLUMN1_LABEL[] = L"Memory Temperature:";
@@ -256,6 +261,8 @@ private:
     HBITMAP m_backBitmap = nullptr;
     HBITMAP m_backOldBitmap = nullptr;
     SIZE m_backBufferSize{};
+
+    LineChart m_chart;
 
 #ifdef GDIDRAW
     int m_GdiCount = 0;
