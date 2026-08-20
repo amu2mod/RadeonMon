@@ -38,9 +38,18 @@ This is an independent personal project and is not affiliated with AMD Corporati
     </tr>
     <tr>
       <td colspan="3" align="center">
-          <img width="525" alt="CPU graph" src="https://github.com/user-attachments/assets/93038c93-7c75-4a01-ad35-2c76000803c4" />
+          <br /> <!-- Top padding -->
+        <img width="600" alt="Advanced CPU metrics" src="https://github.com/user-attachments/assets/1010a7a3-5471-449d-b21d-3ef2b9dc1d09" />
         <br />
         <sub><b>CPU graph after clicking the CPU label</b></sub>
+      </td>
+    </tr>
+    <tr>
+      <td colspan="3" align="center">
+          <br /> <!-- Top padding -->
+        <img width="600" alt="GPU metrics panel showing all GPU statistics" src="https://github.com/user-attachments/assets/aa924e9a-d257-4be2-8dd8-db60a011c55d" />
+        <br />
+       <sub><b>GPU metrics panel displayed after clicking the GPU Temperature label</b></sub>
       </td>
     </tr>
 </table>
