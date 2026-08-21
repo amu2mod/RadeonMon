@@ -155,6 +155,7 @@ private:
     double GetMedian() const;
     void AddCurrentMetricToHistory();
     void PaintChartBorder();
+    void LogMedian() const;
 
 private:
     HWND m_hwnd = nullptr;

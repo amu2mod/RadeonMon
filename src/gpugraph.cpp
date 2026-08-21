@@ -1652,7 +1652,7 @@ void GpuGraphWindow::AddCurrentMetricToHistory()
 
         // double avg = GetAverage();
         m_median = GetMedian();
-        LogMedian();
+        // LogMedian();
 
         // LOG_DEBUG("[GPUGRAPH] %ls: avg=%.1f, median=%0.1f", row.name, avg, m_median);
     }
