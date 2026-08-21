@@ -1600,9 +1600,12 @@ void GpuGraphWindow::ResetHistory()
 
 int GpuGraphWindow::GetHistoryValueAt(int index) const
 {
-    // index 0 = oldest, m_historyCount - 1 = newest
-    int start = (m_historyIndex - m_historyCount + 100) % 100;
-    return m_history[(start + index) % 100];
+    if (index < 0 || index >= m_historyCount)
+        return 0;
+
+    const int start = (m_historyCount < SAMPLE_COUNT) ? 0 : m_historyIndex;
+
+    return m_history[(start + index) % SAMPLE_COUNT];
 }
 
 double GpuGraphWindow::GetAverage() const
@@ -1633,9 +1636,7 @@ double GpuGraphWindow::GetMedian() const
     if (m_historyCount & 1)
         return static_cast<double>(values[m_historyCount / 2]);
 
-    return (static_cast<double>(values[m_historyCount / 2 - 1]) +
-            static_cast<double>(values[m_historyCount / 2])) /
-           2.0;
+    return (static_cast<double>(values[m_historyCount / 2 - 1]) + static_cast<double>(values[m_historyCount / 2])) / 2.0;
 }
 
 void GpuGraphWindow::AddCurrentMetricToHistory()
@@ -1651,6 +1652,7 @@ void GpuGraphWindow::AddCurrentMetricToHistory()
 
         // double avg = GetAverage();
         m_median = GetMedian();
+        LogMedian();
 
         // LOG_DEBUG("[GPUGRAPH] %ls: avg=%.1f, median=%0.1f", row.name, avg, m_median);
     }
@@ -1669,4 +1671,40 @@ void GpuGraphWindow::PaintChartBorder()
     LineTo(m_backDC, m_chartRc.left, m_chartRc.top);
 
     SelectObject(m_backDC, oldPen);
+}
+
+void GpuGraphWindow::LogMedian() const
+{
+    int values[SAMPLE_COUNT];
+
+    for (int i = 0; i < m_historyCount; ++i)
+        values[i] = GetHistoryValueAt(i);
+
+    std::sort(values, values + m_historyCount);
+
+    char samples[256] = {};
+    size_t offset = 0;
+
+    const int count = m_historyCount;
+    const int displayCount = min(count, 10);
+
+    for (int i = 0; i < displayCount; ++i)
+    {
+        if (i > 0)
+            offset += std::snprintf(samples + offset, sizeof(samples) - offset, ", ");
+
+        int index = i;
+
+        if (count > 10 && i >= 5)
+            index = count - 5 + (i - 5);
+
+        offset += std::snprintf(samples + offset, sizeof(samples) - offset, "%d", values[index]);
+
+        if (count > 10 && i == 4)
+        {
+            offset += std::snprintf(samples + offset, sizeof(samples) - offset, ", ...");
+        }
+    }
+
+    LOG_DEBUG("Median: %.2f, Samples: %d, Sorted: [%s]", m_median, m_historyCount, samples);
 }
