@@ -7,7 +7,7 @@ class LineChart
 public:
     // Time to render: T = SAMPLE_COUNT x tick rate
     // for 2s tick, T = SAMPLE_COUNT x 2
-    inline static constexpr int SAMPLE_COUNT = 30; // 1min to fill the chart
+    inline static constexpr int SAMPLE_COUNT = 60; // 1min to fill the chart
 
     LineChart() {};
     ~LineChart();
