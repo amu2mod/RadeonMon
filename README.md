@@ -47,7 +47,7 @@ This is an independent personal project and is not affiliated with AMD Corporati
     <tr>
       <td colspan="3" align="center">
           <br /> <!-- Top padding -->
-        <img width="600" alt="GPU metrics panel showing all GPU statistics" src="https://github.com/user-attachments/assets/aa924e9a-d257-4be2-8dd8-db60a011c55d" />
+          <img width="581" alt="GPU metrics panel showing all GPU statistics" src="https://github.com/user-attachments/assets/0e42c333-51be-43c0-b295-6a8c57056d58" />
         <br />
        <sub><b>GPU metrics panel displayed after clicking the GPU Temperature label</b></sub>
       </td>
