@@ -5,7 +5,9 @@
 class LineChart
 {
 public:
-    static constexpr int SCROLL_PIXELS = 5;
+    // Time to render: T = SAMPLE_COUNT x tick rate
+    // for 2s tick, T = SAMPLE_COUNT x 2
+    inline static constexpr int SAMPLE_COUNT = 30; // 1min to fill the chart
 
     LineChart() {};
     ~LineChart();
@@ -13,23 +15,26 @@ public:
     LineChart(const LineChart &) = delete;
     LineChart &operator=(const LineChart &) = delete;
 
-    void Init(const RECT &rect, COLORREF lineColor, COLORREF middleLineColor, COLORREF backgroundColor, COLORREF windowbackgroundColor, COLORREF borderColor, COLORREF fillColor, int maxValue, int periodSeconds, int intervalMs);
+    void Init(const RECT &rect, COLORREF lineColor, COLORREF middleLineColor, COLORREF backgroundColor, COLORREF windowbackgroundColor, COLORREF fillColor, int maxValue);
 
     // Add a sample and incrementally update the chart.
-    void draw(HDC hdc, int value);
+    void Draw(HDC hdc, const int *history, int currentIndex, int accumulatedCount);
 
     // Change line color.
-    void update(COLORREF line, COLORREF midLine, COLORREF bg, COLORREF windowBg, COLORREF fill);
+    void Update(COLORREF line, COLORREF midLine, COLORREF bg, COLORREF windowBg, COLORREF fill);
 
     // Change maximum value.
-    void updatemaxvalue(int maxvalue);
+    void UpdateMaxValue(int maxvalue);
 
     // Paint background, border and middle line
-    void drawFrame(HDC hdc);
+    void DrawFrame(HDC hdc);
+
+    void Redraw(HDC hdc, const int *history, int index, int count);
+    void Update(RECT &rect);
+    void Reset();
 
 private:
-    void drawBorder(HDC hdc);
-    void drawMiddleLine(HDC hdc);
+    void DrawMiddleLine(HDC hdc);
     int valueToY(int value) const;
 
 private:
@@ -39,15 +44,13 @@ private:
     COLORREF m_middleLineColor{};
     COLORREF m_backgroundColor{};
     COLORREF m_windowBackgroundColor{};
-    COLORREF m_borderColor{};
     COLORREF m_fillColor{};
 
     int m_maxValue{};
-    int m_sampleCount{};
+    int m_scrollPixel = 5;
 
     HPEN m_linePen{nullptr};
     HPEN m_middleLinePen{nullptr};
-    HPEN m_borderPen{nullptr};
 
     HBRUSH m_backgroundBrush{nullptr};
     HBRUSH m_windowBackgroundBrush{nullptr};
@@ -55,4 +58,6 @@ private:
 
     int m_lastY{};
     int m_lastValue{};
+    int m_lastHistoryIndex{};
+    int m_lastAccumulatedCount{};
 };

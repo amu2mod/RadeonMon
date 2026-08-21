@@ -148,6 +148,13 @@ private:
     const StatRow *FindRow(GPU_ROW_ID id) const;
     void EnsureBackBuffer(HDC hdc, int width, int height);
     void DestroyBackBuffer();
+    void AddHistoryValue(int value);
+    void ResetHistory();
+    int GetHistoryValueAt(int index) const;
+    double GetAverage() const;
+    double GetMedian() const;
+    void AddCurrentMetricToHistory();
+    void PaintChartBorder();
 
 private:
     HWND m_hwnd = nullptr;
@@ -186,6 +193,8 @@ private:
     int m_RingTopMargin;
     bool m_pendingDpiResize = false;
     int m_ChartHeight;
+    bool m_RedrawChart = false;
+    int m_MedianLabelY;
 
     GPU_ROW_ID m_selected = GPU_ROW_ID::Usage;
 
@@ -233,14 +242,14 @@ private:
     const int c_SeparatorMargin = 15;
     const int c_RingTopMargin = 10;
     const int c_ChartHeight = 120;
-    const int c_chartHistoryPeriod = 10; // in seconds
+    inline static constexpr int SAMPLE_COUNT = LineChart::SAMPLE_COUNT; // number of samples, period = nb x tick rate
     inline static constexpr wchar_t COLUMN1_MAXTEXT[] = L"Memory Temperature: 99999 Mhz";
     inline static constexpr int GPU_COLUMN1_LENGTH = _countof(COLUMN1_MAXTEXT) - 1;
     inline static constexpr wchar_t COLUMN1_LABEL[] = L"Memory Temperature:";
     inline static constexpr int GPU_COLUMN1_LABEL_MAXLENGTH = _countof(COLUMN1_LABEL) - 1;
-    inline static constexpr wchar_t COLUMN2_MAXTEXT[] = L"Range: -30 - 10123 MHz";
+    inline static constexpr wchar_t COLUMN2_MAXTEXT[] = L"Range : -30 - 10123 MHz";
     inline static constexpr int GPU_COLUMN2_MAXTEXT_LENGTH = _countof(COLUMN2_MAXTEXT) - 1;
-    inline static constexpr wchar_t COLUMN2_MAXLABEL[] = L"Range: ";
+    inline static constexpr wchar_t COLUMN2_MAXLABEL[] = L"Median: ";
     inline static constexpr int GPU_COLUMN2_MAXLABEL_LENGTH = _countof(COLUMN2_MAXLABEL) - 1;
     inline static constexpr int GPU_COLUMN2_MAXVALUE_LENGTH = GPU_COLUMN2_MAXTEXT_LENGTH - GPU_COLUMN2_MAXLABEL_LENGTH;
 
@@ -263,6 +272,12 @@ private:
     SIZE m_backBufferSize{};
 
     LineChart m_chart;
+
+    // History
+    int m_history[SAMPLE_COUNT]; // ring buffer implementation
+    int m_historyIndex = 0;      // Next position to write
+    int m_historyCount = 0;      // Number of valid values
+    double m_median;
 
 #ifdef GDIDRAW
     int m_GdiCount = 0;

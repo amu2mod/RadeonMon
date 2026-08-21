@@ -429,8 +429,8 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
         // Theme submenu
         HMENU themeMenu = CreatePopupMenu();
-        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == Theme::Type::SkyBlue ? MF_CHECKED : 0), 2, L"Sky Blue (Intel)");
-        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == Theme::Type::RyzenOrange ? MF_CHECKED : 0), 3, L"Orange (Ryzen)");
+        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == Theme::Type::SkyBlue ? MF_CHECKED | MF_DISABLED : 0), 2, L"Sky Blue (Intel)");
+        AppendMenu(themeMenu, MF_STRING | (m_currentTheme == Theme::Type::RyzenOrange ? MF_CHECKED | MF_DISABLED : 0), 3, L"Orange (Ryzen)");
 
         AppendMenu(menu, MF_POPUP, (UINT_PTR)themeMenu, L"Theme");
 

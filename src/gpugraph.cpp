@@ -120,6 +120,8 @@ bool GpuGraphWindow::Create(HWND hParent)
 
     BuildStatRows();
 
+    AddCurrentMetricToHistory();
+
     SetWindowPos(m_hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE);
     UpdateWindow(m_hwnd);
 
@@ -146,6 +148,9 @@ void GpuGraphWindow::Update()
 {
     if (m_hwnd)
     {
+        // history
+        AddCurrentMetricToHistory();
+
         InvalidateRect(m_hwnd, &m_Column1ValuesRc, FALSE);
         InvalidateRect(m_hwnd, &m_Column2Rc, FALSE);
         InvalidateRect(m_hwnd, &m_chartRc, FALSE);
@@ -227,11 +232,12 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         GPU_ROW_ID rowId = HitTestRow(pt);
         if (rowId != m_selected && rowId != GpuGraphWindow::GPU_ROW_ID::Count)
         {
-            LOG_DEBUG("[GOUGRAPH] label selected: %d", rowId);
             m_selected = rowId;
             const StatRow *selectedRow = FindRow(m_selected);
             if (selectedRow)
             {
+                LOG_DEBUG("[GPUGRAPH] label selected: %ls (%d)", selectedRow->name, rowId);
+
                 int maxValue;
 
                 if (selectedRow->isInt)
@@ -240,13 +246,24 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
                     maxValue = static_cast<int>(selectedRow->getDouble(m_adlx.Get()).max);
 
                 m_ring.UpdateMaxValue(maxValue);
-                m_chart.updatemaxvalue(maxValue);
+                m_chart.UpdateMaxValue(maxValue);
                 LOG_DEBUG("[GPUGRAGH] Setting max range = %d", maxValue);
                 m_ring.UpdateUnit(selectedRow->unit);
+                ResetHistory();
+                m_chart.Reset();
+                AddCurrentMetricToHistory(); // immediatly add current metric for chart
+
+                if (!selectedRow->isChartEnabled)
+                    m_median = .0;
+
+                m_forceFullRedraw = true;
+                RECT rc{0, 0, m_width, m_height};
+                InvalidateRect(m_hwnd, &rc, false);
             }
-            m_forceFullRedraw = true;
-            RECT rc{0, 0, m_width, m_height};
-            InvalidateRect(m_hwnd, &rc, false);
+            else
+            {
+                LOG_ERROR("[GPUGRAPH] invalid label selection: %d", rowId);
+            }
         }
 
         return 0;
@@ -321,20 +338,19 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         int maxRange = row->isInt ? row->getInt(m_adlx.Get()).max : static_cast<int>(row->getDouble(m_adlx.Get()).max);
 
         m_ring.Init(m_backDC, m_ringRc, m_ringFont, row->unit, maxRange, colors.bar, colors.barBackground, colors.windowBackground, colors.text);
-        m_chart.Init(
-            m_chartRc,
-            colors.text,          // line
-            colors.dimSeparator,  // middle
-            colors.barBackground, // background
-            colors.windowBackground,
-            colors.separator,     // border
-            colors.bar,           // fill
-            maxRange,             // max value
-            c_chartHistoryPeriod, // 60 seconds of history
-            APP_REFRESH_TIMER     // sample every 500 ms
-        );
-        // m_chart.resize(m_chartRc);
-        // m_chart.redraw(hdc);
+
+        if (!m_RedrawChart)
+        {
+            m_chart.Init(
+                m_chartRc,
+                colors.text,          // line
+                colors.dimSeparator,  // middle
+                colors.barBackground, // background
+                colors.windowBackground,
+                colors.bar, // fill
+                maxRange    // max value
+            );
+        }
 
         ReleaseDC(m_hwnd, hdc);
 
@@ -374,6 +390,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
             PaintFrame(m_backDC);
             PaintLabels(m_backDC);
             PaintSeparator(m_backDC);
+            PaintChartBorder();
             PaintValues(m_backDC);
             PaintLabelLines(m_backDC);
         }
@@ -405,6 +422,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         CreateUIFont(m_dpi);
         UpdateLayoutRects();
         const RECT *r = reinterpret_cast<const RECT *>(lParam);
+        m_RedrawChart = true;
         SetWindowPos(m_hwnd, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
         m_pendingDpiResize = true;
         return 0;
@@ -417,6 +435,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
             m_pendingDpiResize = false;
             RECT rc;
             GetWindowRect(m_hwnd, &rc);
+            m_RedrawChart = true;
             SetWindowPos(m_hwnd, nullptr, rc.left, rc.top, GetMinRequiredClientWidth(m_dpi), GetRequiredClientHeight(m_dpi), SWP_NOZORDER | SWP_NOACTIVATE);
         }
         else
@@ -866,6 +885,7 @@ void GpuGraphWindow::UpdateLayoutRects()
     m_MinLabelY = m_ringRc.bottom + m_FontHeight + m_LineGap2;
     m_MaxLabelY = m_MinLabelY + m_FontHeight + m_LineGap2;
     m_RangeLabelY = m_MaxLabelY + m_FontHeight + m_LineGap2;
+    m_MedianLabelY = m_RangeLabelY + m_FontHeight + 1 + m_LineGap2 * 4; // separator included
 
     //
     // Chart
@@ -907,6 +927,8 @@ void GpuGraphWindow::OnResizeWindow(bool grow)
     int desiredClientHeight = GetRequiredClientHeight(dpi);
 
     int minWidth = GetMinRequiredClientWidth(dpi);
+
+    m_RedrawChart = true;
 
     SetWindowPos(m_hwnd, nullptr, 0, 0, minWidth, desiredClientHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 
@@ -970,9 +992,11 @@ void GpuGraphWindow::PaintLabels(HDC hdc)
 
     // Column2 static labels
     SetTextColor(hdc, colors.dim);
-    TextOutW(hdc, m_Column2Rc.left, m_MinLabelY, L"Min  : ", 7);
-    TextOutW(hdc, m_Column2Rc.left, m_MaxLabelY, L"Max  : ", 7);
-    TextOutW(hdc, m_Column2Rc.left, m_RangeLabelY, L"Range: ", 7);
+    TextOutW(hdc, m_Column2Rc.left, m_MinLabelY, L"Min   : ", GPU_COLUMN2_MAXLABEL_LENGTH);
+    TextOutW(hdc, m_Column2Rc.left, m_MaxLabelY, L"Max   : ", GPU_COLUMN2_MAXLABEL_LENGTH);
+    TextOutW(hdc, m_Column2Rc.left, m_RangeLabelY, L"Range : ", GPU_COLUMN2_MAXLABEL_LENGTH);
+    TextOutW(hdc, m_Column2Rc.left, m_MedianLabelY, L"Median: ", GPU_COLUMN2_MAXLABEL_LENGTH);
+
     GDI_COUNT_N(this, 3);
 }
 
@@ -1026,7 +1050,6 @@ void GpuGraphWindow::PaintValues(HDC hdc)
     GDI_COUNT_N(this, 4);
 
     // Min/Max/Range values
-    const auto gpuTemp = snapshot.usage; // matches your original code's variable naming
     SetBkMode(hdc, OPAQUE);
     SetBkColor(hdc, colors.windowBackground);
     SetTextColor(hdc, colors.text);
@@ -1046,10 +1069,20 @@ void GpuGraphWindow::PaintValues(HDC hdc)
             minInt = metric.min;
             maxInt = metric.max;
             m_ring.Draw(hdc, metric.value);
-            if (selectedRow->isChartEnabled)
-                m_chart.draw(hdc, metric.value);
+
+            if (m_RedrawChart)
+            {
+                m_chart.Update(m_chartRc);
+                m_chart.Redraw(m_backDC, m_history, m_historyIndex, m_historyCount);
+                m_RedrawChart = false;
+            }
             else
-                m_chart.drawFrame(hdc);
+            {
+                if (selectedRow->isChartEnabled)
+                    m_chart.Draw(m_backDC, m_history, m_historyIndex, m_historyCount);
+                else
+                    m_chart.DrawFrame(hdc);
+            }
         }
         else
         {
@@ -1059,25 +1092,42 @@ void GpuGraphWindow::PaintValues(HDC hdc)
             minInt = metric.min;
             maxInt = metric.max;
             m_ring.Draw(hdc, metric.RoundedValue());
-            if (selectedRow->isChartEnabled)
-                m_chart.draw(hdc, metric.RoundedValue());
+
+            if (m_RedrawChart)
+            {
+                m_chart.Update(m_chartRc);
+                m_chart.Redraw(m_backDC, m_history, m_historyIndex, m_historyCount);
+                m_RedrawChart = false;
+            }
+
             else
-                m_chart.drawFrame(hdc);
+            {
+                if (selectedRow->isChartEnabled && m_historyCount > 0)
+                    m_chart.Draw(m_backDC, m_history, m_historyIndex, m_historyCount);
+                else
+                    m_chart.DrawFrame(hdc);
+            }
         }
+
+        const int xPos = m_Column2Rc.left + m_Colmun2LabelWidth;
 
         wchar_t minText[32];
         FormatValue2(minText, minValue, unit, GPU_COLUMN2_MAXVALUE_LENGTH);
-        TextOutW(hdc, m_Column2Rc.left + m_Colmun2LabelWidth, m_MinLabelY, minText, GPU_COLUMN2_MAXVALUE_LENGTH);
+        TextOutW(hdc, xPos, m_MinLabelY, minText, GPU_COLUMN2_MAXVALUE_LENGTH);
 
         wchar_t maxText[32];
         FormatValue2(maxText, maxValue, unit, GPU_COLUMN2_MAXVALUE_LENGTH);
-        TextOutW(hdc, m_Column2Rc.left + m_Colmun2LabelWidth, m_MaxLabelY, maxText, GPU_COLUMN2_MAXVALUE_LENGTH);
+        TextOutW(hdc, xPos, m_MaxLabelY, maxText, GPU_COLUMN2_MAXVALUE_LENGTH);
 
         wchar_t rangeText[64];
         FormatRange(rangeText, minInt, maxInt, unit, GPU_COLUMN2_MAXVALUE_LENGTH);
-        TextOutW(hdc, m_Column2Rc.left + m_Colmun2LabelWidth, m_RangeLabelY, rangeText, GPU_COLUMN2_MAXVALUE_LENGTH);
+        TextOutW(hdc, xPos, m_RangeLabelY, rangeText, GPU_COLUMN2_MAXVALUE_LENGTH);
 
-        GDI_COUNT_N(this, 3);
+        wchar_t medianText[32];
+        FormatValue2(medianText, m_median, unit, GPU_COLUMN2_MAXVALUE_LENGTH);
+        TextOutW(hdc, xPos, m_MedianLabelY, medianText, GPU_COLUMN2_MAXVALUE_LENGTH);
+
+        GDI_COUNT_N(this, 4);
     }
 }
 
@@ -1187,12 +1237,22 @@ void GpuGraphWindow::PaintFrame(HDC hdc)
 void GpuGraphWindow::PaintSeparator(HDC hdc)
 {
     const auto &colors = GpuTheme::Get(m_currentTheme);
-    const int separatorX = m_Column1Rc.right + m_SeparatorMargin;
+    int separatorX = m_Column1Rc.right + m_SeparatorMargin;
     HPEN pen = CreatePen(PS_SOLID, 1, colors.separator);
     HGDIOBJ oldPen = SelectObject(hdc, pen);
+
+    // Vertical Separator between column 1 and 2
     MoveToEx(hdc, separatorX, m_ContentRc.top + m_MarginTopBottom, nullptr);
-    GDI_COUNT(this);
     LineTo(hdc, separatorX, max(m_Column1Rc.bottom, m_Column2Rc.bottom));
+
+    // Horizontal separator between range and median
+    separatorX = m_Column2Rc.left + m_Colmun2LabelWidth;
+    const int separatorY = m_RangeLabelY + m_FontHeight + m_LineGap2 * 2;
+    MoveToEx(hdc, m_Column2Rc.left, separatorY, nullptr);
+    LineTo(hdc, m_Column2Rc.right, separatorY);
+
+    GDI_COUNT_N(this, 2);
+
     SelectObject(hdc, oldPen);
     DeleteObject(pen);
 }
@@ -1203,7 +1263,8 @@ void GpuGraphWindow::ApplyTheme(GpuTheme::Type theme)
     const auto &colors = GpuTheme::Get(m_currentTheme);
     m_ring.UpdateColors(colors.bar, colors.barBackground, colors.windowBackground, colors.text);
 
-    m_chart.update(colors.text, colors.dimSeparator, colors.barBackground, colors.windowBackground, colors.bar);
+    m_chart.Update(colors.text, colors.dimSeparator, colors.barBackground, colors.windowBackground, colors.bar);
+    m_RedrawChart = true;
 
     RebuildBrushes();
     m_forceFullRedraw = true;
@@ -1518,4 +1579,94 @@ void GpuGraphWindow::PaintLabelLines(HDC hdc)
 
     SelectObject(hdc, oldPen);
     DeleteObject(pen);
+}
+
+void GpuGraphWindow::AddHistoryValue(int value)
+{
+    m_history[m_historyIndex] = value;
+    m_historyIndex = (m_historyIndex + 1) % SAMPLE_COUNT;
+
+    if (m_historyCount < SAMPLE_COUNT)
+        ++m_historyCount;
+}
+
+void GpuGraphWindow::ResetHistory()
+{
+    std::fill(std::begin(m_history), std::end(m_history), 0);
+
+    m_historyIndex = 0;
+    m_historyCount = 0;
+}
+
+int GpuGraphWindow::GetHistoryValueAt(int index) const
+{
+    // index 0 = oldest, m_historyCount - 1 = newest
+    int start = (m_historyIndex - m_historyCount + 100) % 100;
+    return m_history[(start + index) % 100];
+}
+
+double GpuGraphWindow::GetAverage() const
+{
+    if (m_historyCount == 0)
+        return 0.0;
+
+    long long sum = 0;
+
+    for (int i = 0; i < m_historyCount; ++i)
+        sum += GetHistoryValueAt(i);
+
+    return static_cast<double>(sum) / m_historyCount;
+}
+
+double GpuGraphWindow::GetMedian() const
+{
+    if (m_historyCount <= 0)
+        return 0.0;
+
+    int values[SAMPLE_COUNT];
+
+    for (int i = 0; i < m_historyCount; ++i)
+        values[i] = GetHistoryValueAt(i);
+
+    std::sort(values, values + m_historyCount);
+
+    if (m_historyCount & 1)
+        return static_cast<double>(values[m_historyCount / 2]);
+
+    return (static_cast<double>(values[m_historyCount / 2 - 1]) +
+            static_cast<double>(values[m_historyCount / 2])) /
+           2.0;
+}
+
+void GpuGraphWindow::AddCurrentMetricToHistory()
+{
+    const StatRow &row = *FindRow(m_selected);
+    if (row.isChartEnabled)
+    {
+        auto snapshot = m_adlx.Get();
+        if (row.isInt)
+            AddHistoryValue(row.getInt(snapshot).value);
+        else
+            AddHistoryValue(row.getDouble(snapshot).RoundedValue());
+
+        // double avg = GetAverage();
+        m_median = GetMedian();
+
+        // LOG_DEBUG("[GPUGRAPH] %ls: avg=%.1f, median=%0.1f", row.name, avg, m_median);
+    }
+}
+
+void GpuGraphWindow::PaintChartBorder()
+{
+    const auto &colors = GpuTheme::Get(m_currentTheme);
+    HPEN pen = CreatePen(PS_SOLID, 1, colors.separator);
+    HPEN oldPen = static_cast<HPEN>(SelectObject(m_backDC, pen));
+
+    MoveToEx(m_backDC, m_chartRc.left, m_chartRc.top, nullptr);
+    LineTo(m_backDC, m_chartRc.right - 1, m_chartRc.top);
+    LineTo(m_backDC, m_chartRc.right - 1, m_chartRc.bottom - 1);
+    LineTo(m_backDC, m_chartRc.left, m_chartRc.bottom - 1);
+    LineTo(m_backDC, m_chartRc.left, m_chartRc.top);
+
+    SelectObject(m_backDC, oldPen);
 }
