@@ -102,7 +102,7 @@ private:
     void UpdateWindowHeight();
     bool SaveSettings();
     bool LoadSettings();
-    int GetMinRequiredClientWidth(UINT dpi) const;
+    int GetMinRequiredClientWidth() const;
     void UpdateLayoutRects();
     void OnResizeWindow(bool grow);
     int GetScaledTitleFontSize() const; // Helper to be called after loading the default font size from preferences

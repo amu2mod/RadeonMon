@@ -86,7 +86,7 @@ bool GpuGraphWindow::Create(HWND hParent)
     CreateUIFont(dpiX);
     UpdateLayoutRects();
 
-    int minWidth = GetMinRequiredClientWidth(dpiX);
+    int minWidth = GetMinRequiredClientWidth();
     int minHeight = GetRequiredClientHeight(dpiX);
 
     m_width = minWidth;
@@ -467,7 +467,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
             RECT rc;
             GetWindowRect(m_hwnd, &rc);
             m_RedrawChart = true;
-            SetWindowPos(m_hwnd, nullptr, rc.left, rc.top, GetMinRequiredClientWidth(m_dpi), GetRequiredClientHeight(m_dpi), SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(m_hwnd, nullptr, rc.left, rc.top, GetMinRequiredClientWidth(), GetRequiredClientHeight(m_dpi), SWP_NOZORDER | SWP_NOACTIVATE);
         }
         else
         {
@@ -524,7 +524,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_GETMINMAXINFO:
     {
         MINMAXINFO *mmi = reinterpret_cast<MINMAXINFO *>(lParam);
-        mmi->ptMinTrackSize.x = GetMinRequiredClientWidth(m_dpi);
+        mmi->ptMinTrackSize.x = GetMinRequiredClientWidth();
         return 0;
     }
 
@@ -828,7 +828,7 @@ bool GpuGraphWindow::LoadSettings()
     return true;
 }
 
-int GpuGraphWindow::GetMinRequiredClientWidth(UINT dpi) const
+int GpuGraphWindow::GetMinRequiredClientWidth() const
 {
     return GPU_COLUMN1_LENGTH * m_FontWidth + m_MarginLeftRight * 2 + m_borderSize * 2 + m_Column2Width + m_SeparatorMargin * 2 + 1;
 }
@@ -956,7 +956,7 @@ void GpuGraphWindow::OnResizeWindow(bool grow)
 
     int desiredClientHeight = GetRequiredClientHeight(dpi);
 
-    int minWidth = GetMinRequiredClientWidth(dpi);
+    int minWidth = GetMinRequiredClientWidth();
 
     m_RedrawChart = true;
 
