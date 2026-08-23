@@ -72,7 +72,7 @@ add_executable(radeonmon WIN32
     resources/resources.rc
     src/processwatcher.cpp
     src/ProgressRing.cpp
-    src/gpuusagesampler.cpp
+    # src/gpuusagesampler.cpp
     src/linechart.cpp
     ${CMAKE_BINARY_DIR}/generated/version.rc
 )
