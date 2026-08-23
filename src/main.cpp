@@ -99,6 +99,7 @@ void UpdateToolTipText(HWND hwnd, UINT_PTR toolId, const std::wstring &text, int
 
 void UpdateToolTipRect(HWND hwnd, UINT_PTR toolId, const RECT &rect)
 {
+    LogRect("[App] Tooltip RECT", rect);
     TOOLINFO ti = {};
     ti.cbSize = sizeof(ti);
     ti.hwnd = hwnd;
@@ -108,18 +109,15 @@ void UpdateToolTipRect(HWND hwnd, UINT_PTR toolId, const RECT &rect)
     SendMessage(g_hwndTooltip, TTM_NEWTOOLRECT, 0, reinterpret_cast<LPARAM>(&ti));
 }
 
-void InitTooltips(void)
+void InitTooltips()
 {
     INITCOMMONCONTROLSEX icc = {sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES};
     InitCommonControlsEx(&icc);
 }
 
-LayoutMetrics CalculateLayoutMetrics()
+LayoutMetrics CalculateLayoutMetrics(HDC hdc)
 {
     LayoutMetrics m{};
-
-    HDC hdc = g_backBuffer.memDC;
-    g_backBuffer.Log();
 
     SIZE sz{};
 
@@ -368,7 +366,7 @@ void LayoutFrame(const LayoutMetrics &m)
 
 void LayoutProperties2(const LayoutMetrics &m)
 {
-    // LOG_DEBUG("LayoutProperties2");
+    LOG_TRACE("[App] LayoutProperties2");
 
     if (m.windowWidth <= 0 || m.windowHeight <= 0)
     {
@@ -623,7 +621,7 @@ void PaintFrame(HDC hdc)
     if (!g_forceFrameRedraw && drawn)
         return;
 
-    LOG_DEBUG("Painting FRAME (border+title)");
+    LOG_DEBUG("[App] Painting FRAME (border+title)");
 
     drawn = true;
     g_forceFrameRedraw = false;
@@ -710,35 +708,56 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
     case WM_CREATE:
     {
-        LOG_DEBUG("WM_CREATE");
+        LOG_WM("[App] WM_CREATE");
+
         RecreateFont();
+
+        HDC measureDC = CreateCompatibleDC(nullptr);
+        if (!measureDC)
+        {
+            LOG_ERROR("CreateCompatibleDC failed");
+            return -1;
+        }
+        g_layoutMetrics = CalculateLayoutMetrics(measureDC);
+        DeleteDC(measureDC);
+
+        LayoutProperties2(g_layoutMetrics);
+
+        g_layoutMetrics.Log();
 
         RECT rc{};
         GetClientRect(hwnd, &rc);
 
         HDC hdc = GetDC(hwnd);
-        g_backBuffer.Create(hdc, rc.right - rc.left, rc.bottom - rc.top, BACKGROUNDCOLOR);
+        g_backBuffer.Create(hdc, g_layoutMetrics.windowWidth, g_layoutMetrics.windowHeight, BACKGROUNDCOLOR);
         ReleaseDC(hwnd, hdc);
 
         /////////////////////
         // Gpu Info Tooltip
         g_hwndTooltip = CreateWindowEx(0, TOOLTIPS_CLASS, NULL, WS_POPUP | TTS_ALWAYSTIP, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hwnd, NULL, GetModuleHandle(NULL), NULL);
-        SetWindowPos(g_hwndTooltip, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        if (!g_hwndTooltip)
+            LOG_ERROR("Failed to create tooltip window");
+        else
+        {
+            SetWindowPos(g_hwndTooltip, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
 
-        RECT textRect = {0, 0, 200, 200};
+            RECT textRect = {0, 0, 200, 200};
 
-        TOOLINFO ti = {};
-        ti.cbSize = sizeof(ti);
-        ti.uFlags = TTF_SUBCLASS;
-        ti.hwnd = hwnd;
-        ti.uId = 1;
-        ti.rect = textRect;
+            TOOLINFO ti = {};
+            ti.cbSize = sizeof(ti);
+            ti.uFlags = TTF_SUBCLASS;
+            ti.hwnd = hwnd;
+            ti.uId = TOOLID_GPUINFO;
+            ti.rect = textRect;
+
+            SendMessage(g_hwndTooltip, TTM_ADDTOOL, 0, (LPARAM)&ti);
+            SendMessage(g_hwndTooltip, TTM_SETDELAYTIME, TTDT_INITIAL, 0); // starts immediatly
+            UpdateToolTipRect(hwnd, TOOLID_GPUINFO, g_cardName.valueRc);
+        }
         /////////////////////
 
-        SendMessage(g_hwndTooltip, TTM_ADDTOOL, 0, (LPARAM)&ti);
-        SendMessage(g_hwndTooltip, TTM_SETDELAYTIME, TTDT_INITIAL, 0); // starts immediatly
-
-        PostMessage(hwnd, WM_APP_LAYOUT, 0, 0);
+        // Send new updated size to dispatcher to trigger a WM_SIZE
+        SetWindowPos(hwnd, HWND_TOPMOST, g_xPos, g_yPos, g_layoutMetrics.windowWidth, g_layoutMetrics.windowHeight, SWP_NOACTIVATE);
 
         return 0;
     }
@@ -750,17 +769,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         if (!g_backBuffer.memDC)
         {
+            LOG_ERROR("No back buffer");
             EndPaint(hwnd, &ps);
             return 0;
         }
 
-        // RECT rc{};
-        // GetClientRect(hwnd, &rc);
-
         HDC memDC = g_backBuffer.memDC;
-
-        // Clear backbuffer
-        // FillRect(memDC, &rc, g_backgroundBrush);
 
         SetBkMode(memDC, TRANSPARENT);
 
@@ -796,10 +810,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_SIZE:
     {
+        LOG_WM("[App] WM_SIZE");
+
         int w = LOWORD(lParam);
         int h = HIWORD(lParam);
 
-        LOG_DEBUG("WM_SIZE: received params w=%d, h=%d", w, h);
+        LOG_DEBUG("WM_SIZE: type=%d, w=%d, h=%d", (int)wParam, w, h);
 
         if (w > 0 && h > 0)
         {
@@ -807,13 +823,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             {
                 HDC hdc = GetDC(hwnd);
                 g_backBuffer.Create(hdc, w, h, BACKGROUNDCOLOR);
+                g_width = w;
+                g_height = h;
                 ReleaseDC(hwnd, hdc);
             }
 
             ResetDirty();
         }
 
-        InvalidateRect(hwnd, nullptr, FALSE);
+        InvalidateRect(hwnd, nullptr, TRUE);
         return 0;
     }
 
@@ -822,7 +840,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_DPICHANGED:
     {
-        LOG_DEBUG("WM_DPICHANGED");
+        LOG_WM("[App] WM_DPICHANGED");
 
         g_dpi = HIWORD(wParam);
 
@@ -1337,6 +1355,28 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         break;
     }
 
+    case WM_WINDOWPOSCHANGING:
+    {
+        auto *wp = reinterpret_cast<WINDOWPOS *>(lParam);
+
+        // prevents the window going above the top edge
+        if (g_dragging)
+        {
+            HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO mi{};
+            mi.cbSize = sizeof(mi);
+
+            if (GetMonitorInfo(monitor, &mi))
+            {
+                const int top = mi.rcWork.top;
+                if (wp->y < top)
+                    wp->y = top;
+            }
+        }
+
+        break;
+    }
+
     case WM_LBUTTONDOWN:
     {
 
@@ -1406,6 +1446,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     {
         if (g_dragging)
         {
+            SetCursor(LoadCursor(nullptr, IDC_SIZEALL));
+
             POINT cur{};
             GetCursorPos(&cur);
             int dx = cur.x - g_dragStart.x;
@@ -1442,13 +1484,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         {
             g_dragging = false;
             ReleaseCapture();
+
+            RECT rc;
+            if (!GetWindowRect(hwnd, &rc))
+                LOG_ERROR("[App] Failed to get RECT of the window");
+            else
+                LOG_DEBUG("[App] moved to {%d,%d}", rc.left, rc.top);
         }
         return 0;
     }
 
     case WM_DISPLAYCHANGE:
     {
-        LOG_DEBUG("WM_DISPLAYCHANGE");
+        LOG_WM("[App] WM_DISPLAYCHANGE");
 
         g_displayManager.Clear();
         g_displayManager.Discover();
@@ -1488,10 +1536,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     // Custom WMs
     case WM_APP_LAYOUT:
     {
-        LOG_DEBUG("WM_APP_LAYOUT");
+        LOG_WM("[App] WM_APP_LAYOUT");
 
-        g_layoutMetrics = CalculateLayoutMetrics();
+        g_layoutMetrics = CalculateLayoutMetrics(g_backBuffer.memDC);
         LayoutProperties2(g_layoutMetrics);
+
+        g_layoutMetrics.Log();
 
         // commit new repaint
         SetAllRepaintLabelFlag(true); // force all labels repaint
@@ -1567,8 +1617,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     }
 
     case WM_APP_APPLY_TOPMOST:
+    {
         SetAlwaysOnTop(hwnd, g_alwaysOnTop);
         return 0;
+    }
 
     default:
         return DefWindowProc(hwnd, msg, wParam, lParam);
@@ -1610,9 +1662,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
     g_autostart = IsAutostartEnabled();
 
     POINT pt = {g_xPos, g_yPos};
-    POINT pt2 = {g_xPos + g_width, g_yPos + g_height};
 
-    if (isPointValid(pt) && isPointValid(pt2))
+    if (isPointValid(pt))
     {
         g_dpi = getDpiFromPoint(pt);
         g_width = DPIScale(g_width);
@@ -1635,10 +1686,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
         g_yPos = (screenHeight - g_height) / 2;
     }
 
-    RecreateFont();
+    InitTooltips();
 
     LOG_DEBUG("[Main] window created %dx%d at position {%d,%d}", g_width, g_height, g_xPos, g_yPos);
     HWND hwnd = CreateWindowEx(0, CLASS_NAME, APPNAME, WS_POPUP, g_xPos, g_yPos, g_width, g_height, nullptr, nullptr, hInstance, nullptr);
+
+    if (!hwnd)
+    {
+        LOG_ERROR("CreateWindowEx failed");
+        return 1;
+    }
+
+    ShowWindow(hwnd, SW_SHOWNOACTIVATE);
 
     g_networkManager.Initialize(hwnd);
     g_networkManager.Log();
@@ -1689,8 +1748,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int nCmdShow)
 
     CheckVersionAsync(hwnd, false);
 
-    ShowWindow(hwnd, nCmdShow);
-    UpdateWindow(hwnd);
+    // ShowWindow(hwnd, nCmdShow);
+    // UpdateWindow(hwnd);
     PostMessage(hwnd, WM_APP_APPLY_TOPMOST, 0, 0);
 
     if (g_isCpuGraphEnabled && g_cpu.IsInitialized())

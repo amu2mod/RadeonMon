@@ -285,6 +285,7 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_SIZE:
     {
+        LOG_WM("[CPU-W] WM_SIZE");
         m_width = LOWORD(lParam);
         m_height = HIWORD(lParam);
         UpdateLayoutRects();
@@ -396,6 +397,7 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_DPICHANGED:
     {
+        LOG_WM("[CPU-W] WM_DPICHANGED");
         m_dpi = HIWORD(wParam);
         CreateUIFont(m_dpi);
         UpdateLayoutRects();
@@ -406,8 +408,41 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
     }
 
+    case WM_ENTERSIZEMOVE:
+    {
+        LOG_WM("[CPU-W] WM_ENTERSIZEMOVE");
+        m_inSizeMove = true;
+        break;
+    }
+
+    case WM_WINDOWPOSCHANGING:
+    {
+        auto *wp = reinterpret_cast<WINDOWPOS *>(lParam);
+
+        // prevents the window going above the top edge
+        if (m_inSizeMove)
+        {
+            HMONITOR monitor = MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO mi{};
+            mi.cbSize = sizeof(mi);
+
+            if (GetMonitorInfo(monitor, &mi))
+            {
+                const int top = mi.rcWork.top;
+                if (wp->y < top)
+                    wp->y = top;
+            }
+        }
+
+        break;
+    }
+
     case WM_EXITSIZEMOVE:
     {
+        LOG_WM("[CPU-W] WM_EXITSIZEMOVE");
+
+        m_inSizeMove = false;
+
         if (m_pendingDpiResize)
         {
             m_pendingDpiResize = false;
@@ -417,8 +452,8 @@ LRESULT CpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         }
         else
         {
-            InvalidateRect(m_hwnd, &m_GraphRc, TRUE); // request repaint
-            UpdateWindow(m_hwnd);                     // force immediate WM_PAINT
+            // LogRect("[CPU-W] m_GraphRc", m_GraphRc);
+            InvalidateRect(m_hwnd, &m_GraphRc, FALSE); // request repaint
         }
         break;
     }
@@ -1118,6 +1153,7 @@ int CpuGraphWindow::GetMinRequiredClientWidth(UINT dpi) const
 
 void CpuGraphWindow::UpdateLayoutRects()
 {
+    LOG_DEBUG("[CPU-W] UpdateLayoutRects");
     RECT rc;
     GetClientRect(m_hwnd, &rc);
 

@@ -618,6 +618,8 @@ struct LayoutMetrics
 
     // font
     int charWidth;
+
+    void Log() const { LOG_DEBUG("LayoutMetrics: border=%d paddingSide=%d labelWidth=%d valueWidth=%d gap=%d paddingTop=%d titlePadding=%d titleHeight=%d titleWidth=%d lineHeight=%d separatorHeight=%d lineGap=%d spacer=%d lineHeight2=%d cardHeight=%d paddingBottom=%d cardPaddingTopBottom=%d windowWidth=%d windowHeight=%d charWidth=%d", border, paddingSide, labelWidth, valueWidth, gap, paddingTop, titlePadding, titleHeight, titleWidth, lineHeight, separatorHeight, lineGap, spacer, lineHeight2, cardHeight, paddingBottom, cardPaddingTopBottom, windowWidth, windowHeight, charWidth); }
 };
 
 namespace RadeonMon::Hardware

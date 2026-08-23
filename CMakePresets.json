@@ -7,6 +7,7 @@
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
+                "ENABLE_LOGWM": "ON",
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_CXX_COMPILER": "cl"
             }

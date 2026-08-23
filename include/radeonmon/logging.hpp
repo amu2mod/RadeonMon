@@ -44,6 +44,15 @@ inline const char *BaseFileName(const char *path)
 #define LOG_DEBUG(fmt, ...) LOG_IMPL("D", COLOR_CYAN, fmt, ##__VA_ARGS__)
 #define LOG_TRACE(fmt, ...) LOG_IMPL("T", COLOR_DIM_GREY, fmt, ##__VA_ARGS__)
 
+#ifdef LOGWM
+#define LOG_WM(fmt, ...) LOG_IMPL("T", COLOR_DIM_GREY, fmt, ##__VA_ARGS__)
+#else
+#define LOG_WM(fmt, ...) \
+    do                   \
+    {                    \
+    } while (0)
+#endif
+
 #define LOGLN()            \
     do                     \
     {                      \
@@ -85,6 +94,7 @@ constexpr void logDisabled(Args &&...)
 #define LOG_INFO(...) LOG_IMPL(__VA_ARGS__)
 #define LOG_DEBUG(...) LOG_IMPL(__VA_ARGS__)
 #define LOG_TRACE(...) LOG_IMPL(__VA_ARGS__)
+#define LOG_WM(...) LOG_IMPL(__VA_ARGS__)
 
 #define LOGLN() \
     do          \

@@ -969,6 +969,12 @@ inline void LogRect(const char *name, const RECT &rc)
         rc.right - rc.left,
         rc.bottom - rc.top);
 }
+#else
+inline void LogRect(const char *name, const RECT &rc)
+{
+    (void)name;
+    (void)rc;
+}
 #endif
 
 // Converts a UTF-8 (or ASCII-safe) byte buffer, as returned by WinHttpReadData,

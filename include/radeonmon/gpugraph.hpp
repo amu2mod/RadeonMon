@@ -196,6 +196,7 @@ private:
     int m_ChartHeight;
     bool m_RedrawChart = false;
     int m_MedianLabelY;
+    bool m_inSizeMove = false;
 
     GPU_ROW_ID m_selected = GPU_ROW_ID::Usage;
 

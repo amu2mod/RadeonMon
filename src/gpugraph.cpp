@@ -236,7 +236,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
             const StatRow *selectedRow = FindRow(m_selected);
             if (selectedRow)
             {
-                LOG_DEBUG("[GPUGRAPH] label selected: %ls (%d)", selectedRow->name, rowId);
+                LOG_DEBUG("[GPU-W] label selected: %ls (%d)", selectedRow->name, rowId);
 
                 int maxValue;
 
@@ -262,7 +262,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
             }
             else
             {
-                LOG_ERROR("[GPUGRAPH] invalid label selection: %d", rowId);
+                LOG_ERROR("[GPU-W] invalid label selection: %d", rowId);
             }
         }
 
@@ -327,7 +327,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         if (hdc)
             EnsureBackBuffer(hdc, m_width, m_height);
         else
-            LOG_ERROR("[GPUGRAPH] Failed to get DC for back buffer");
+            LOG_ERROR("[GPU-W] Failed to get DC for back buffer");
 
         UpdateLayoutRects();
         BuildStatRows();
@@ -403,7 +403,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         BitBlt(hdc, ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right - ps.rcPaint.left, ps.rcPaint.bottom - ps.rcPaint.top, m_backDC, ps.rcPaint.left, ps.rcPaint.top, SRCCOPY);
 
 #ifdef GDIDRAW
-        LOG_TRACE("[GPUGRAPH] GDI draw = %d", m_GdiCount);
+        LOG_TRACE("[GPU-W] GDI draw = %d", m_GdiCount);
 #endif
 
         m_forceFullRedraw = false;
@@ -428,8 +428,39 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         return 0;
     }
 
+    case WM_ENTERSIZEMOVE:
+    {
+        LOG_WM("[GPU-W] WM_ENTERSIZEMOVE");
+        m_inSizeMove = true;
+        break;
+    }
+
+    case WM_WINDOWPOSCHANGING:
+    {
+        auto *wp = reinterpret_cast<WINDOWPOS *>(lParam);
+
+        // prevents the window going above the top edge
+        if (m_inSizeMove)
+        {
+            HMONITOR monitor = MonitorFromWindow(m_hwnd, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO mi{};
+            mi.cbSize = sizeof(mi);
+
+            if (GetMonitorInfo(monitor, &mi))
+            {
+                const int top = mi.rcWork.top;
+                if (wp->y < top)
+                    wp->y = top;
+            }
+        }
+
+        break;
+    }
+
     case WM_EXITSIZEMOVE:
     {
+        LOG_WM("[GPU-W] WM_EXITSIZEMOVE");
+
         if (m_pendingDpiResize)
         {
             m_pendingDpiResize = false;
@@ -441,7 +472,6 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
         else
         {
             InvalidateRect(m_hwnd, &m_BodyRc, FALSE); // request repaint
-            UpdateWindow(m_hwnd);                     // force immediate WM_PAINT
         }
         break;
     }
@@ -911,7 +941,7 @@ void GpuGraphWindow::OnResizeWindow(bool grow)
     else
         m_fontSize = max(m_fontSize - 2, c_MinFontSize);
 
-    LOG_DEBUG("[GPUGRAPH] New font size=%d", m_fontSize);
+    LOG_DEBUG("[GPU-W] New font size=%d", m_fontSize);
 
     // Already at min/max
     if (m_fontSize == oldFontSize)
@@ -935,7 +965,7 @@ void GpuGraphWindow::OnResizeWindow(bool grow)
     RECT newRc{};
     GetClientRect(m_hwnd, &newRc);
 
-    // LOG_DEBUG("[GPUGRAPH] requested client=%dx%d actual client=%dx%d", minWidth, desiredClientHeight, newRc.right - newRc.left, newRc.bottom - newRc.top);
+    // LOG_DEBUG("[GPU-W] requested client=%dx%d actual client=%dx%d", minWidth, desiredClientHeight, newRc.right - newRc.left, newRc.bottom - newRc.top);
 
     InvalidateRect(m_hwnd, nullptr, TRUE);
 }
@@ -1524,7 +1554,7 @@ void GpuGraphWindow::EnsureBackBuffer(HDC hdc, int width, int height)
     m_backBufferSize.cx = width;
     m_backBufferSize.cy = height;
 
-    LOG_DEBUG("[GPUGRAPH] Back buffer created: %dx%d", width, height);
+    LOG_DEBUG("[GPU-W] Back buffer created: %dx%d", width, height);
 
     // Optional but generally useful: initialize the entire buffer.
     RECT rc{0, 0, width, height};
@@ -1654,7 +1684,7 @@ void GpuGraphWindow::AddCurrentMetricToHistory()
         m_median = GetMedian();
         // LogMedian();
 
-        // LOG_DEBUG("[GPUGRAPH] %ls: avg=%.1f, median=%0.1f", row.name, avg, m_median);
+        // LOG_DEBUG("[GPU-W] %ls: avg=%.1f, median=%0.1f", row.name, avg, m_median);
     }
 }
 

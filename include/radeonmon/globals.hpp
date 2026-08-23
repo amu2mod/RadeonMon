@@ -80,7 +80,7 @@ inline int g_xPos = CW_USEDEFAULT;
 inline int g_yPos = CW_USEDEFAULT;
 inline RECT g_windowRc;
 inline WindowBorder g_border;
-inline bool g_forceFrameRedraw = false;
+inline bool g_forceFrameRedraw = true;
 inline bool g_isAdmin = false;
 #ifdef _DEBUG
 inline UINT g_gdiDrawCallCount = 0;
