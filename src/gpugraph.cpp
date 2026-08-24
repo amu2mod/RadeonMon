@@ -151,6 +151,8 @@ void GpuGraphWindow::Update()
         // history
         AddCurrentMetricToHistory();
 
+        m_allowPainting = true;
+
         InvalidateRect(m_hwnd, &m_Column1ValuesRc, FALSE);
         InvalidateRect(m_hwnd, &m_Column2Rc, FALSE);
         InvalidateRect(m_hwnd, &m_chartRc, FALSE);
@@ -257,6 +259,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
                     m_median = .0;
 
                 m_forceFullRedraw = true;
+                m_allowPainting = true;
                 RECT rc{0, 0, m_width, m_height};
                 InvalidateRect(m_hwnd, &rc, false);
             }
@@ -316,9 +319,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_SIZE:
     {
-#ifdef LOGWM
-        LOG_TRACE("WM_SIZE");
-#endif
+        LOG_WM("[GPU-W] WM_SIZE");
 
         m_width = LOWORD(lParam);
         m_height = HIWORD(lParam);
@@ -361,6 +362,16 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_PAINT:
     {
+        // LOG_WM("[GPU-W] WM_PAINT");
+
+        // Prevents random invalidating from windows DWM composer
+        // only our app can invalidate the UI
+        if (!m_allowPainting)
+        {
+            // LOG_DEBUG("skipping paint");
+            break;
+        }
+
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(m_hwnd, &ps);
         RECT rc{};
@@ -407,6 +418,7 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 #endif
 
         m_forceFullRedraw = false;
+        m_allowPainting = false;
 
         EndPaint(m_hwnd, &ps);
         break;
@@ -414,15 +426,14 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
 
     case WM_DPICHANGED:
     {
-#ifdef LOGWM
-        LOG_TRACE("WM_DPICHANGED");
-#endif
+        LOG_WM("[GPU-W] WM_DPICHANGED");
 
         m_dpi = HIWORD(wParam);
         CreateUIFont(m_dpi);
         UpdateLayoutRects();
         const RECT *r = reinterpret_cast<const RECT *>(lParam);
         m_RedrawChart = true;
+        m_allowPainting = true;
         SetWindowPos(m_hwnd, nullptr, r->left, r->top, r->right - r->left, r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
         m_pendingDpiResize = true;
         return 0;
@@ -461,18 +472,22 @@ LRESULT GpuGraphWindow::HandleMessage(UINT msg, WPARAM wParam, LPARAM lParam)
     {
         LOG_WM("[GPU-W] WM_EXITSIZEMOVE");
 
+        m_inSizeMove = false;
+
         if (m_pendingDpiResize)
         {
             m_pendingDpiResize = false;
             RECT rc;
             GetWindowRect(m_hwnd, &rc);
             m_RedrawChart = true;
+            m_allowPainting = true;
             SetWindowPos(m_hwnd, nullptr, rc.left, rc.top, GetMinRequiredClientWidth(), GetRequiredClientHeight(m_dpi), SWP_NOZORDER | SWP_NOACTIVATE);
         }
         else
         {
             InvalidateRect(m_hwnd, &m_BodyRc, FALSE); // request repaint
         }
+
         break;
     }
 
@@ -959,6 +974,7 @@ void GpuGraphWindow::OnResizeWindow(bool grow)
     int minWidth = GetMinRequiredClientWidth();
 
     m_RedrawChart = true;
+    m_allowPainting = true;
 
     SetWindowPos(m_hwnd, nullptr, 0, 0, minWidth, desiredClientHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 
@@ -1298,6 +1314,7 @@ void GpuGraphWindow::ApplyTheme(GpuTheme::Type theme)
 
     RebuildBrushes();
     m_forceFullRedraw = true;
+    m_allowPainting = true;
     InvalidateRect(m_hwnd, nullptr, TRUE);
 }
 

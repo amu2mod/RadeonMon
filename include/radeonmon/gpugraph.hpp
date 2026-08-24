@@ -197,6 +197,7 @@ private:
     bool m_RedrawChart = false;
     int m_MedianLabelY;
     bool m_inSizeMove = false;
+    bool m_allowPainting = true; // app-driven rendering variable
 
     GPU_ROW_ID m_selected = GPU_ROW_ID::Usage;
 
