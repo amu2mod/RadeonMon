@@ -126,6 +126,7 @@ bool GpuGraphWindow::Create(HWND hParent)
     UpdateWindow(m_hwnd);
 
     m_forceFullRedraw = false;
+    m_allowPainting = true;
 
     return true;
 }
@@ -134,6 +135,7 @@ void GpuGraphWindow::Show()
 {
     if (m_hwnd)
     {
+        m_allowPainting = true;
         ShowWindow(m_hwnd, SW_SHOW);
         SetForegroundWindow(m_hwnd);
     }
