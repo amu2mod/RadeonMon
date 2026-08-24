@@ -94,6 +94,8 @@ bool GpuGraphWindow::Create(HWND hParent)
 
     m_title = m_adlx.GetGpuInfo().name;
 
+    m_allowPainting = true;
+
     m_hwnd = CreateWindowEx(
         0,
         L"GpuGraphWindow",
@@ -126,7 +128,6 @@ bool GpuGraphWindow::Create(HWND hParent)
     UpdateWindow(m_hwnd);
 
     m_forceFullRedraw = false;
-    m_allowPainting = true;
 
     return true;
 }
