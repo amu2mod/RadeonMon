@@ -129,6 +129,7 @@ New-NetFirewallRule -DisplayName "RadeonMon Web Server" -Direction Inbound -Prot
 - Recent AMD graphics drivers
 - [AMD Ryzen™ Master Monitoring SDK](https://www.amd.com/en/developer/ryzen-master-monitoring-sdk.html) installed (required only for CPU metrics). 
 - Administrator privileges (required for CPU metrics and the local web server)
+- Intel PresentMon Service enabled (optional)
 
 Tested with an RX 9070 XT running Windows 10.
 
@@ -144,6 +145,7 @@ This project uses CMake and can be built using MSVC with Ninja.
 - Ninja build system
 - VS Code (optional)
 - AMD Ryzen™ Master Monitoring SDK extracted in the folder /third_party/AMD/RyzenMasterMonitoringSDK/ (include and lib)
+- Intel PresentMon SDK with the following folder copied /third_party/Intel/PresentMon-2.5.1/IntelPresentMon/
 
 ### Build steps
 
