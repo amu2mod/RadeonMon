@@ -3,6 +3,8 @@
 
 #include <windows.h>
 
+#include <cmath>
+
 PresentMonManager *PresentMonManager::s_instance = nullptr;
 
 PresentMonManager::~PresentMonManager()
