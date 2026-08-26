@@ -31,17 +31,22 @@ constexpr int TITLE_PADDING = 4;
 constexpr int SEPARATOR_HEIGHT = 1;
 constexpr int SPACER = 10;
 constexpr int CARD_PADDING = 2;
+constexpr int TAG_GAP = 6;
+constexpr int TAG_PADDING = 3;
 
 // Fonts
 constexpr wchar_t FONT_FAMILY[] = L"Consolas";
 constexpr wchar_t NOTIFICATION_FONT_FAMILY[] = L"Lucida Console";
-constexpr wchar_t MAXLABEL[] = L"1440p @1000Hz";
-constexpr int MAXLABEL_LENGTH = _countof(MAXLABEL) - 1;
+constexpr wchar_t MAXTXTLABEL[] = L"Power Consumption";
+constexpr int MAXTXTLABEL_LENGTH = _countof(MAXTXTLABEL) - 1;
+constexpr wchar_t MAXTXTVALUE[] = L"1440p @1000Hz";
+constexpr int MAXTXTVALUE_LENGTH = _countof(MAXTXTVALUE) - 1;
 
 constexpr int TITLE_FONTSIZE = 15;
 constexpr int FONTSIZE = 16;
 constexpr int NOTIFICATION_FONTSIZE = 11;
 constexpr int CARD_FONTSIZE = 13;
+constexpr int TAG_FONTSIZE = 10;
 
 constexpr UINT FONTSIZE_MIN = 10;
 constexpr UINT FONTSIZE_MAX = 26;

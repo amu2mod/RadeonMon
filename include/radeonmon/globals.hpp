@@ -16,6 +16,7 @@
 #include "radeonmon/processwatcher.hpp"
 #include "radeonmon/cpugraph.hpp"
 #include "radeonmon/gpugraph.hpp"
+#include "radeonmon/PresentMonManager.hpp"
 
 inline UINT g_dpi = 96;
 inline GdiBackBuffer g_backBuffer;
@@ -68,6 +69,7 @@ inline HFONT g_titleFont = nullptr;
 inline HFONT g_font = nullptr;
 inline HFONT g_notificationFont = nullptr;
 inline HFONT g_cardFont = nullptr;
+inline HFONT g_tagFont = nullptr;
 
 inline UINT g_titleFontSize = TITLE_FONTSIZE;
 inline UINT g_fontSize = FONTSIZE;
@@ -120,3 +122,6 @@ inline GpuGraphWindow g_gpuGraph(g_AdlxGPUTelemetry);
 
 inline bool g_isCpuGraphEnabled;
 inline bool g_isGpuGraphEnabled;
+inline PresentMonManager g_presentMonManager;
+
+inline DWORD g_appPID;

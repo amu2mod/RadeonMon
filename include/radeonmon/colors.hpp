@@ -16,6 +16,10 @@ constexpr COLORREF NOTIFICATIONCOLOR = rgb(241, 215, 5);
 // constexpr COLORREF SERVERSTATUSCOLOR = rgb(0, 134, 223);
 constexpr COLORREF SERVERSTATUSCOLOR = rgb(255, 193, 7);
 
+constexpr COLORREF BRIGHT_GREEN = rgb(57, 255, 20);    // Neon/Electric Green
+constexpr COLORREF BRIGHT_BLUE = rgb(0, 210, 255);     // Cyan/Electric Blue
+constexpr COLORREF BRIGHT_PURPLE = rgb(216, 112, 255); // Vivid Neon Purple
+
 constexpr COLORREF colorMapping[] = {
     VALUECOLOR,
     WARNINGCOLOR,

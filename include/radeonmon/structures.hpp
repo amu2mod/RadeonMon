@@ -619,6 +619,15 @@ struct LayoutMetrics
     // font
     int charWidth;
 
+    // FPS tag
+    int tagGap;
+    int tagPadding;
+    int tagCharWidth;
+    int tagCharHeight;
+    int tagTextWidth;
+    int tagWidth;
+    int tagOffsetX;
+
     void Log() const { LOG_DEBUG("LayoutMetrics: border=%d paddingSide=%d labelWidth=%d valueWidth=%d gap=%d paddingTop=%d titlePadding=%d titleHeight=%d titleWidth=%d lineHeight=%d separatorHeight=%d lineGap=%d spacer=%d lineHeight2=%d cardHeight=%d paddingBottom=%d cardPaddingTopBottom=%d windowWidth=%d windowHeight=%d charWidth=%d", border, paddingSide, labelWidth, valueWidth, gap, paddingTop, titlePadding, titleHeight, titleWidth, lineHeight, separatorHeight, lineGap, spacer, lineHeight2, cardHeight, paddingBottom, cardPaddingTopBottom, windowWidth, windowHeight, charWidth); }
 };
 
@@ -733,7 +742,7 @@ namespace RadeonMon::Hardware
         MetricInt npuActivityLevel;
 
         // FPSMetrics fps;
-        int fps;
+        int fps = -1;
 
         int64_t timestampMs = 0;
 
@@ -1457,3 +1466,27 @@ struct adlx_version
         return !(*this < other);
     }
 };
+
+enum class UpscalingType : uint8_t
+{
+    FSR1,
+    FSR2,
+    FSR3,
+    FSR4,
+    Count
+};
+
+enum class GraphicsAPI : uint8_t
+{
+    DX9,
+    DX11,
+    DX12,
+    Vulkan,
+    Count
+};
+
+inline constexpr const wchar_t *UpscalingTypeTxt[] = {L"FSR1", L"FSR2", L"FSR3", L"FSR4"};
+inline constexpr const wchar_t *GraphicsAPITxt[] = {L"DX9", L"DX11", L"DX12", L"VK"};
+
+static_assert(_countof(UpscalingTypeTxt) == static_cast<size_t>(UpscalingType::Count));
+static_assert(_countof(GraphicsAPITxt) == static_cast<size_t>(GraphicsAPI::Count));

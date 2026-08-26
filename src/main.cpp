@@ -39,8 +39,8 @@ void SetDisplayLine(const DisplayInfo &display, HWND hwnd = nullptr)
                                                                                         : std::to_wstring(widthToDisplay) + L"p @";
     std::wstring value = resolution + std::to_wstring(display.frequency) + L"Hz";
 
-    if (value.length() < MAXLABEL_LENGTH)
-        value.append(MAXLABEL_LENGTH - value.length(), L' ');
+    if (value.length() < MAXTXTVALUE_LENGTH)
+        value.append(MAXTXTVALUE_LENGTH - value.length(), L' ');
 
     prop.SetLabel(label.c_str());
     prop.SetValue(value.c_str());
@@ -149,14 +149,13 @@ LayoutMetrics CalculateLayoutMetrics(HDC hdc)
     m.paddingSide = ScaleFontMetric(PADDING_LEFT);
     m.gap = ScaleFontMetric(GAP);
 
-    static constexpr wchar_t LABEL[] = L"Power Consumption";
-    if (!GetTextExtentPoint32W(hdc, LABEL, _countof(LABEL) - 1, &sz))
+    if (!GetTextExtentPoint32W(hdc, MAXTXTLABEL, MAXTXTLABEL_LENGTH, &sz))
         LOG_ERROR("GetTextExtentPoint32W failed");
 
     // Font-derived: no scaling
     m.labelWidth = sz.cx + 2;
 
-    if (!GetTextExtentPoint32W(hdc, MAXLABEL, MAXLABEL_LENGTH, &sz))
+    if (!GetTextExtentPoint32W(hdc, MAXTXTVALUE, MAXTXTVALUE_LENGTH, &sz))
         LOG_ERROR("GetTextExtentPoint32W failed");
 
     // Font-derived: no scaling
@@ -240,6 +239,23 @@ LayoutMetrics CalculateLayoutMetrics(HDC hdc)
     m.cardHeight = sz.cy + (m.cardPaddingTopBottom * 2);
 
     SelectObject(hdc, originalFont);
+
+    // Tags (for FPS)
+    m.tagGap = ScaleFontMetric(TAG_GAP);
+    m.tagPadding = ScaleFontMetric(TAG_PADDING);
+
+    if (!SelectObject(hdc, g_tagFont))
+        LOG_ERROR("SelectObject failed on g_tagFont");
+
+    if (!GetTextExtentPoint32W(hdc, L"X", 1, &sz))
+        LOG_ERROR("GetTextExtentPoint32W failed");
+
+    m.tagCharWidth = sz.cx;
+    m.tagCharHeight = sz.cy;
+
+    m.tagTextWidth = m.tagCharWidth * 2;
+    m.tagWidth = m.tagTextWidth + m.tagPadding * 2;
+    m.tagOffsetX = static_cast<int>(m.charWidth * 1.4f);
 
     // ------------------------------------------------------------
     // Window
@@ -486,6 +502,7 @@ void PaintProperties(HDC hdc)
 
         if (p.repaintLabel)
         {
+            // LOG_DEBUG("[App] drawing label %d: %ls", index, p.label.c_str());
             SetTextColor(hdc, LABELCOLOR);
 
             SIZE sz{};
@@ -700,6 +717,152 @@ void CheckVersionAsync(HWND hwnd, bool showDialogs)
         .detach();
 }
 
+void PaintFpsTags(HDC hdc)
+{
+    if (!g_AdlxGPUTelemetry.isInitialized || !g_isFpsEnabled || !g_presentMonManager.IsInitialized())
+        return;
+
+    const int adlxCurrentFPS = g_AdlxGPUTelemetry.GetSnapshotFPS();
+    int pmFps = -1;
+
+    // Clear previous tags
+    const RECT &rTags = g_props[MetricsIndex::Fps].textLabelRc;
+    RECT clearRc = {rTags.right, rTags.top, g_props[MetricsIndex::Fps].valueRc.left, rTags.bottom};
+    HBRUSH brush = CreateSolidBrush(BACKGROUNDCOLOR);
+    FillRect(hdc, &clearRc, brush);
+    DeleteObject(brush);
+
+    if (adlxCurrentFPS == -1)
+    {
+        if (g_presentMonManager.IsQueryOpened())
+            g_presentMonManager.ClosePMMetric();
+
+        if (g_presentMonManager.IsTracking())
+            g_presentMonManager.StopPMTracking();
+
+        // hack: extra start/stop tracking to clear etw state of presentmon to prevent cpu leak
+        if (g_presentMonManager.IsSessionOpened())
+        {
+            g_presentMonManager.StartPMTracking(g_appPID);
+            g_presentMonManager.StopPMTracking();
+        }
+
+        if (g_presentMonManager.IsSessionOpened())
+            g_presentMonManager.ClosePMSession();
+
+        if (g_presentMonManager.IsHooking())
+            g_presentMonManager.StopEventHook();
+
+        return;
+    }
+    else
+    {
+        if (!g_presentMonManager.IsHooking())
+        {
+
+            if (!g_presentMonManager.StartEventHook())
+            {
+                LOG_ERROR("[App] PresentMon: StartEventHook failed");
+                return;
+            }
+
+            // Open PM session immediately after hooking
+            if (!g_presentMonManager.IsSessionOpened())
+            {
+                if (g_presentMonManager.OpenPMSession() != 0)
+                {
+                    LOG_ERROR("[App] PresentMon: OpenPMSession failed");
+                    g_presentMonManager.StopEventHook();
+                    return;
+                }
+            }
+            else
+                LOG_WARN("[App] PresentMon: session already opened");
+
+            if (g_presentMonManager.IsTracking())
+            {
+                LOG_WARN("[App] PresentMon: tracking is active, stopping previous tracking");
+                g_presentMonManager.StopPMTracking();
+                LOG_DEBUG("[App] PresentMon: previous tracking stopped");
+            }
+
+            DWORD currentPID = GetForegroundPID();
+            LOG_DEBUG("[App] PresentMon: foreground PID=%lu", currentPID);
+
+            g_presentMonManager.StartPMTracking(currentPID);
+
+            if (!g_presentMonManager.IsQueryOpened())
+            {
+                if (!g_presentMonManager.OpenFPSMetric())
+                {
+                    LOG_ERROR("[App] PresentMon: OpenFPSMetric failed");
+                    return;
+                }
+            }
+            else
+                LOG_WARN("[App] PresentMon: FPS metric query already opened");
+        }
+
+        // Always poll FPS, whether hooking was just started or already active.
+        pmFps = g_presentMonManager.PollFPSMetric();
+    }
+
+    if (pmFps == -1)
+    {
+        LOG_ERROR("[App] PresentMon: PollFPSMetric failed");
+        return;
+    }
+
+    double ratio = static_cast<double>(adlxCurrentFPS) / static_cast<double>(pmFps);
+
+    // Tolerance
+    if (ratio <= 1.90 || ratio >= 2.05)
+    {
+#ifdef LOGFPS
+        LOG_WARN("[PMON] PM FPS=%d, ADLX FPS=%d, ratio=%.2fx, Skipping", pmFps, adlxCurrentFPS, ratio);
+#endif
+        return;
+    }
+#ifdef LOGFPS
+    else
+        LOG_DEBUG("[PMON] PM FPS=%d, ADLX FPS=%d, ratio=%.2fx", pmFps, adlxCurrentFPS, ratio);
+#endif
+
+    const RECT &r = g_props[MetricsIndex::Fps].textLabelRc;
+    [[maybe_unused]] const int tagPadding = g_layoutMetrics.tagPadding;
+    const int cy = (r.top + r.bottom) / 2;
+
+    //// FG Tag
+
+    HFONT oldFont = (HFONT)SelectObject(hdc, g_tagFont);
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, RGB(0, 0, 0));
+
+    constexpr wchar_t fgTag[] = L"FG";
+    const int tagLeft = r.right + g_layoutMetrics.tagOffsetX;
+    const int tagHeight = g_layoutMetrics.tagCharHeight;
+    const int tagTop = cy - tagHeight / 2;
+    const int textX = tagLeft + (g_layoutMetrics.tagWidth - g_layoutMetrics.tagTextWidth) / 2;
+    const int textY = tagTop;
+
+    // Main text.
+    SetTextColor(hdc, BRIGHT_GREEN);
+    TextOutW(hdc, textX, textY, fgTag, 2);
+
+    // Border.
+    HPEN hPen = CreatePen(PS_SOLID, 1, BRIGHT_GREEN);
+    HGDIOBJ oldPen = SelectObject(hdc, hPen);
+    HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+
+    Rectangle(hdc, tagLeft, tagTop, tagLeft + g_layoutMetrics.tagWidth, tagTop + g_layoutMetrics.tagCharHeight);
+
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(hPen);
+
+    SelectObject(hdc, oldFont);
+}
+
 // ── window procedure ─────────────────────────────────────────────────────────
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -787,21 +950,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         // Content
         PaintProperties(memDC);
 
+        PaintFpsTags(memDC);
+
         // Present
-        // BitBlt(hdc, 0, 0, rc.right - rc.left, rc.bottom - rc.top, memDC, 0, 0, SRCCOPY);
         BitBlt(hdc, 0, 0, g_backBuffer.width, g_backBuffer.height, memDC, 0, 0, SRCCOPY);
 
         EndPaint(hwnd, &ps);
 
-        static bool firstPaintDone = false;
-        if (!firstPaintDone)
-        {
-            firstPaintDone = true;
-            SetAllRepaintLabelFlag(false);
-        }
-
 #ifdef GDIDRAW
-        LOG_TRACE("GDI draw count=%u", g_gdiDrawCallCount); // very verbose
+        LOG_TRACE("[App] GDI draw count=%u", g_gdiDrawCallCount); // very verbose
         g_gdiDrawCallCount = 0;
 #endif
 
@@ -1642,6 +1799,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
 #endif
     g_isAdmin = IsRunningAsAdministrator();
 
+    g_appPID = GetCurrentProcessId();
+
     const wchar_t CLASS_NAME[] = L"radeonmon";
 
     WNDCLASS wc{};
@@ -1731,13 +1890,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
         else
         {
             if (!g_cpu.Init())
-            {
                 SetPropertyValueAtIndex(MetricsIndex::Cpu, NotSupported, L"not supported", 14);
-            }
             else
-            {
                 g_cpu.Start();
-            }
         }
     }
     else
@@ -1764,6 +1919,57 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
         g_gpuGraph.Create(hwnd);
         g_gpuGraph.Show();
         SetAlwaysOnTop(hwnd, g_alwaysOnTop);
+    }
+
+    // PresentMon
+    {
+        const int i = g_presentMonManager.Init();
+        switch (i)
+        {
+        case -1:
+        {
+            TaskDialog(
+                nullptr, nullptr,
+                L"PresentMon SDK Not Found",
+                L"Unable to load the PresentMon SDK.",
+                L"The PresentMon API DLL could not be found or loaded. Some FPS monitoring features will be unavailable.",
+                TDCBF_OK_BUTTON, TD_WARNING_ICON, nullptr);
+            break;
+        }
+        case -2:
+        {
+            TaskDialog(
+                nullptr, nullptr,
+                L"PresentMon Service Not Running",
+                L"Unable to connect to the PresentMon service.",
+                L"The PresentMon service is not running. Some FPS monitoring features will be unavailable.",
+                TDCBF_OK_BUTTON, TD_WARNING_ICON, nullptr);
+            break;
+        }
+        case -3:
+        {
+            TaskDialog(
+                nullptr, nullptr,
+                L"Unable to Open Session",
+                L"The PresentMon session could not be opened.",
+                L"Some FPS monitoring features will be unavailable.",
+                TDCBF_OK_BUTTON, TD_WARNING_ICON, nullptr);
+            break;
+        }
+
+        case -4:
+        {
+            TaskDialog(
+                nullptr, nullptr,
+                L"PresentMon API Unavailable",
+                L"The PresentMon API could not be initialized.",
+                L"The required PresentMon API function could not be found in the DLL. Some FPS monitoring features will be unavailable.",
+                TDCBF_OK_BUTTON, TD_WARNING_ICON, nullptr);
+            break;
+        }
+        default:
+            break;
+        };
     }
 
     LOG_INFO("[Main] Entering Dispatcher loop");

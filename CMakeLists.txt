@@ -75,12 +75,16 @@ add_executable(radeonmon WIN32
     # src/gpuusagesampler.cpp
     src/linechart.cpp
     ${CMAKE_BINARY_DIR}/generated/version.rc
+    src/PresentMonManager.cpp
 )
 
 option(ENABLE_TESTMODE "Enable TEST preprocessor define" OFF)
 option(ENABLE_LOCALFILES "Enable LOCALFILES preprocessor define" OFF)
 option(ENABLE_GPUGRAPHRECT "Enable ENABLE_GPUGRAPHRECT preprocessor define" OFF)
 option(ENABLE_LOGWM "Enable ENABLE_LOGWM preprocessor define" OFF)
+option(ENABLE_FPSLOG "Enable ENABLE_FPSLOG preprocessor define" OFF)
+
+
 
 
 if(ENABLE_TESTMODE)
@@ -101,6 +105,10 @@ endif()
 
 if(ENABLE_LOGWM)
     target_compile_definitions(radeonmon PRIVATE LOGWM)
+endif()
+
+if(ENABLE_LOGFPS)
+    target_compile_definitions(radeonmon PRIVATE LOGFPS)
 endif()
 
 configure_file(
@@ -131,6 +139,7 @@ target_compile_definitions(radeonmon PRIVATE
 
 target_link_libraries(radeonmon PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/AMD/RyzenMasterMonitoringSDK/lib/Platform.lib
+    "C:/Program Files/Intel/PresentMon/SDK/PresentMonAPI2Loader.lib"
 )
 
 target_link_options(radeonmon PRIVATE

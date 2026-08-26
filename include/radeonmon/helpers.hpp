@@ -44,19 +44,23 @@ inline void RecreateFont()
         DeleteObject(g_notificationFont);
     if (g_cardFont)
         DeleteObject(g_cardFont);
+    if (g_tagFont)
+        DeleteObject(g_tagFont);
 
     // g_fontSize is the user preference (base font size)
     const float scale = static_cast<float>(g_fontSize) / static_cast<float>(FONTSIZE);
     const int titleFontSize = max(1, static_cast<int>(roundf(TITLE_FONTSIZE * scale)));
     const int notificationFontSize = max(1, static_cast<int>(roundf(NOTIFICATION_FONTSIZE * scale)));
     const int cardFontSize = max(1, static_cast<int>(roundf(CARD_FONTSIZE * scale)));
+    const int tagFontSize = max(1, static_cast<int>(roundf(TAG_FONTSIZE * scale)));
 
     g_font = CreateAppFont(g_fontSize, FONT_FAMILY);
     g_titleFont = CreateAppFont(titleFontSize, FONT_FAMILY);
     g_notificationFont = CreateAppFont(notificationFontSize, NOTIFICATION_FONT_FAMILY);
     g_cardFont = CreateAppFont(cardFontSize, FONT_FAMILY);
+    g_tagFont = CreateAppFont(tagFontSize, FONT_FAMILY);
 
-    LOG_DEBUG("Fonts recreated (DPI=%d base=%d title=%d notification=%d card=%d)", g_dpi, g_fontSize, titleFontSize, notificationFontSize, cardFontSize);
+    LOG_DEBUG("Fonts recreated (DPI=%d base=%d title=%d notification=%d card=%d tag=%d)", g_dpi, g_fontSize, titleFontSize, notificationFontSize, cardFontSize, tagFontSize);
 }
 
 template <size_t N>
@@ -1124,3 +1128,16 @@ inline bool Intersects(const RECT &a, const RECT &b)
     RECT intersection;
     return IntersectRect(&intersection, &a, &b);
 };
+
+inline DWORD GetForegroundPID()
+{
+    HWND hwnd = GetForegroundWindow();
+
+    if (!hwnd)
+        return 0;
+
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+
+    return pid;
+}

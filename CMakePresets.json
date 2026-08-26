@@ -21,7 +21,8 @@
                 "ENABLE_GDIDRAW": "OFF",
                 "ENABLE_TESTMODE": "OFF",
                 "ENABLE_GPUGRAPHRECT": "OFF",
-                "ENABLE_LOGWM": "ON"
+                "ENABLE_LOGWM": "ON",
+                "ENABLE_LOGFPS": "OFF"
             }
         },
         {

@@ -70,3 +70,6 @@ Testing/
 
 # ADLX
 third_party/AMD/
+
+# Intel PresentMon
+third_party/Intel/
