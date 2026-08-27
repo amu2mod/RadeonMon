@@ -242,7 +242,8 @@ LayoutMetrics CalculateLayoutMetrics(HDC hdc)
 
     // Tags (for FPS)
     m.tagGap = ScaleFontMetric(TAG_GAP);
-    m.tagPadding = ScaleFontMetric(TAG_PADDING);
+    m.tagTopPadding = ScaleFontMetric(TAG_PADDING - 2);
+    m.tagSidePadding = ScaleFontMetric(TAG_PADDING);
 
     if (!SelectObject(hdc, g_tagFont))
         LOG_ERROR("SelectObject failed on g_tagFont");
@@ -254,7 +255,7 @@ LayoutMetrics CalculateLayoutMetrics(HDC hdc)
     m.tagCharHeight = sz.cy;
 
     m.tagTextWidth = m.tagCharWidth * 2;
-    m.tagWidth = m.tagTextWidth + m.tagPadding * 2;
+    m.tagWidth = m.tagTextWidth + m.tagSidePadding * 2;
     m.tagOffsetX = static_cast<int>(m.charWidth * 1.4f);
 
     // ------------------------------------------------------------
@@ -717,6 +718,30 @@ void CheckVersionAsync(HWND hwnd, bool showDialogs)
         .detach();
 }
 
+void DrawTag(HDC hdc, int x, int y, LPCWSTR text, int topPadding, int sidePadding, COLORREF color)
+{
+    const int textLen = lstrlenW(text);
+
+    RECT tagRc = {
+        x - sidePadding,
+        y - topPadding,
+        x + g_layoutMetrics.tagCharWidth * textLen + sidePadding,
+        y + g_layoutMetrics.tagCharHeight + topPadding};
+
+    HPEN pen = CreatePen(PS_SOLID, 1, color);
+    HPEN oldPen = (HPEN)SelectObject(hdc, pen);
+    HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH)); // clear brush for background
+
+    SetTextColor(hdc, color);
+
+    Rectangle(hdc, tagRc.left, tagRc.top, tagRc.right, tagRc.bottom);
+    TextOutW(hdc, x, y, text, textLen);
+
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(pen);
+}
+
 void PaintFpsTags(HDC hdc)
 {
     if (!g_AdlxGPUTelemetry.isInitialized || !g_isFpsEnabled || !g_presentMonManager.IsInitialized())
@@ -829,7 +854,7 @@ void PaintFpsTags(HDC hdc)
 #endif
 
     const RECT &r = g_props[MetricsIndex::Fps].textLabelRc;
-    [[maybe_unused]] const int tagPadding = g_layoutMetrics.tagPadding;
+    [[maybe_unused]] const int tagPadding = g_layoutMetrics.tagSidePadding;
     const int cy = (r.top + r.bottom) / 2;
 
     //// FG Tag
@@ -859,6 +884,64 @@ void PaintFpsTags(HDC hdc)
     SelectObject(hdc, oldBrush);
     SelectObject(hdc, oldPen);
     DeleteObject(hPen);
+
+    SelectObject(hdc, oldFont);
+}
+
+void PaintDisplayTags(HDC hdc)
+{
+    if (!g_vrrDetector.IsRunning())
+        return;
+
+    const RECT &labelRc = g_props[MetricsIndex::Display].textLabelRc;
+
+    int x = labelRc.right + g_layoutMetrics.charWidth + g_layoutMetrics.tagGap;
+    int y = labelRc.top + (labelRc.bottom - labelRc.top - g_layoutMetrics.tagCharHeight) / 2;
+
+    HFONT oldFont = (HFONT)SelectObject(hdc, g_tagFont);
+
+    const int topPadding = g_layoutMetrics.tagTopPadding;
+    const int sidePadding = g_layoutMetrics.tagSidePadding;
+
+    static HBRUSH bgBrush = CreateSolidBrush(BACKGROUNDCOLOR);
+
+    static bool vrrTagCleared = false;
+
+    if (g_vrrDetector.IsVRROn())
+    {
+        DrawTag(hdc, x, y, L"VRR", topPadding, sidePadding, BRIGHT_BLUE);
+        vrrTagCleared = false;
+    }
+    else if (!vrrTagCleared)
+    {
+        RECT vrrTagRc = {x - sidePadding, y - topPadding, x + g_layoutMetrics.tagCharWidth * 3 + 2 * sidePadding, y + g_layoutMetrics.tagCharHeight + topPadding};
+        FillRect(hdc, &vrrTagRc, bgBrush);
+        vrrTagCleared = true;
+    }
+
+    x += g_layoutMetrics.tagCharWidth * 3 + g_layoutMetrics.tagGap + 2 + 2 * sidePadding;
+
+    static bool lfcTagCleared = false;
+    bool lfcActive = false;
+
+    const int fps = g_AdlxGPUTelemetry.GetSnapshotFPS();
+    if (fps > 0)
+    {
+        const double ratio = static_cast<double>(g_vrrDetector.CurrentHz()) / static_cast<double>(fps);
+        lfcActive = ratio >= 1.80; // large jitter tolerance without average smoothing
+    }
+
+    if (lfcActive && g_vrrDetector.IsVRROn())
+    {
+        DrawTag(hdc, x, y, L"LFC", topPadding, sidePadding, BRIGHT_ORANGE);
+        lfcTagCleared = false;
+    }
+    else if (!lfcTagCleared)
+    {
+        RECT lfcTagRc = {x - sidePadding, y - topPadding, x + g_layoutMetrics.tagCharWidth * 3 + 2 * sidePadding, y + g_layoutMetrics.tagCharHeight + topPadding};
+        FillRect(hdc, &lfcTagRc, bgBrush);
+        lfcTagCleared = true;
+    }
 
     SelectObject(hdc, oldFont);
 }
@@ -951,6 +1034,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         PaintProperties(memDC);
 
         PaintFpsTags(memDC);
+
+        PaintDisplayTags(memDC);
 
         // Present
         BitBlt(hdc, 0, 0, g_backBuffer.width, g_backBuffer.height, memDC, 0, 0, SRCCOPY);
@@ -1873,6 +1958,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
     const auto &display = manager.Current();
     if (display.has_value())
         SetDisplayLine(display.value());
+
+    g_vrrDetector.Start();
+    if (g_vrrDetector.IsRunning())
+        LOG_INFO("[App] VRR Detector running");
+    else
+        LOG_ERROR("[App] Failed to start VRR Detector");
 
     if (g_AdlxGPUTelemetry.isInitialized)
         UpdateToolTipText(hwnd, TOOLID_GPUINFO, g_AdlxGPUTelemetry.GetGpuInfo().GetTooltip(), g_AdlxGPUTelemetry.GetGpuInfo().GetDriverPathTooltipWidth(g_hwndTooltip));

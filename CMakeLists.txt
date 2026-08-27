@@ -72,10 +72,10 @@ add_executable(radeonmon WIN32
     resources/resources.rc
     src/processwatcher.cpp
     src/ProgressRing.cpp
-    # src/gpuusagesampler.cpp
     src/linechart.cpp
     ${CMAKE_BINARY_DIR}/generated/version.rc
     src/PresentMonManager.cpp
+    src/VRRDetector.cpp
 )
 
 option(ENABLE_TESTMODE "Enable TEST preprocessor define" OFF)
@@ -83,9 +83,7 @@ option(ENABLE_LOCALFILES "Enable LOCALFILES preprocessor define" OFF)
 option(ENABLE_GPUGRAPHRECT "Enable ENABLE_GPUGRAPHRECT preprocessor define" OFF)
 option(ENABLE_LOGWM "Enable ENABLE_LOGWM preprocessor define" OFF)
 option(ENABLE_FPSLOG "Enable ENABLE_FPSLOG preprocessor define" OFF)
-
-
-
+option(ENABLE_LOGVRR "Enable ENABLE_FPSLOG preprocessor define" OFF)
 
 if(ENABLE_TESTMODE)
     target_compile_definitions(radeonmon PRIVATE TESTMODE)
@@ -109,6 +107,10 @@ endif()
 
 if(ENABLE_LOGFPS)
     target_compile_definitions(radeonmon PRIVATE LOGFPS)
+endif()
+
+if(ENABLE_LOGVRR)
+    target_compile_definitions(radeonmon PRIVATE LOGVRR)
 endif()
 
 configure_file(

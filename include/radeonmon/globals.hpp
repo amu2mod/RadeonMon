@@ -17,6 +17,7 @@
 #include "radeonmon/cpugraph.hpp"
 #include "radeonmon/gpugraph.hpp"
 #include "radeonmon/PresentMonManager.hpp"
+#include "radeonmon/VRRDetector.hpp"
 
 inline UINT g_dpi = 96;
 inline GdiBackBuffer g_backBuffer;
@@ -34,7 +35,7 @@ inline PropertyItem g_props[] =
         {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
         {L"CPU", 0, 0, L"-"},
         {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
-        {L"Display", 0, 0, L"-"},
+        {L"Display 1", 0, 0, L"-"},
         {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
         {L"FPS", 0, 0, L"-"},
         {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
@@ -125,3 +126,4 @@ inline bool g_isGpuGraphEnabled;
 inline PresentMonManager g_presentMonManager;
 
 inline DWORD g_appPID;
+inline VRRDetector g_vrrDetector(g_displayManager);

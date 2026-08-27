@@ -22,7 +22,8 @@
                 "ENABLE_TESTMODE": "OFF",
                 "ENABLE_GPUGRAPHRECT": "OFF",
                 "ENABLE_LOGWM": "ON",
-                "ENABLE_LOGFPS": "OFF"
+                "ENABLE_LOGFPS": "OFF",
+                "ENABLE_LOGVRR": "OFF"
             }
         },
         {

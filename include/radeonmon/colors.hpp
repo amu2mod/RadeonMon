@@ -19,6 +19,7 @@ constexpr COLORREF SERVERSTATUSCOLOR = rgb(255, 193, 7);
 constexpr COLORREF BRIGHT_GREEN = rgb(57, 255, 20);    // Neon/Electric Green
 constexpr COLORREF BRIGHT_BLUE = rgb(0, 210, 255);     // Cyan/Electric Blue
 constexpr COLORREF BRIGHT_PURPLE = rgb(216, 112, 255); // Vivid Neon Purple
+constexpr COLORREF BRIGHT_ORANGE = rgb(255, 127, 0);   // Neon Electric Orange
 
 constexpr COLORREF colorMapping[] = {
     VALUECOLOR,

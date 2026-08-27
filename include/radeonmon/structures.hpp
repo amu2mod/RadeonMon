@@ -621,7 +621,8 @@ struct LayoutMetrics
 
     // FPS tag
     int tagGap;
-    int tagPadding;
+    int tagTopPadding;
+    int tagSidePadding;
     int tagCharWidth;
     int tagCharHeight;
     int tagTextWidth;
