@@ -154,6 +154,17 @@ This project uses CMake and can be built using MSVC. A `CMakePresets.json` file 
 ```powershell
 cmake -S . -B build
 ```
+*Optional preprocessor flags for Debug build:
+```
+cmake -S . -B build \
+  -DENABLE_TESTMODE=ON \
+  -DENABLE_LOCALFILES=ON \
+  -DENABLE_GPUGRAPHRECT=ON \
+  -DENABLE_LOGWM=ON \
+  -DENABLE_FPSLOG=ON \
+  -DENABLE_LOGVRR=ON
+```
+  
 4. Build the Release executable:
 ```powershell
 cmake --build build --config Release
