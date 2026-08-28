@@ -133,22 +133,52 @@ New-NetFirewallRule -DisplayName "RadeonMon Web Server" -Direction Inbound -Prot
 
 Tested with an RX 9070 XT running Windows 10.
 
-## How to Build
+# How to Build
 
-This project uses CMake and can be built using MSVC with Ninja.
+This project uses CMake and can be built using MSVC. A `CMakePresets.json` file is included for convenience when building with Ninja, but using the presets is optional.
 
-### Prerequisites
-
-- ADLX 1.5 SDK extracted in the folder /third_party/AMD/ADLX-1.5/
+## Prerequisites
+- Visual Studio 2022 / MSVC (Visual Studio Build Tools are sufficient)
 - CMake (≥ 3.25)
-- MSVC (Visual Studio Build Tools)
-- Ninja build system
+- ADLX 1.5 SDK extracted to `/third_party/AMD/ADLX-1.5/`
+- AMD Ryzen™ Master Monitoring SDK extracted to `/third_party/AMD/RyzenMasterMonitoringSDK/` (including include and lib)
+- Intel PresentMon SDK 2.5.1, with IntelPresentMon/ copied to `/third_party/Intel/PresentMon-2.5.1/`
+- Ninja build system (optional)
 - VS Code (optional)
-- AMD Ryzen™ Master Monitoring SDK extracted in the folder /third_party/AMD/RyzenMasterMonitoringSDK/ (include and lib)
-- Intel PresentMon SDK with the following folder copied /third_party/Intel/PresentMon-2.5.1/IntelPresentMon/
 
-### Build steps
+## Build Commands
 
-cmake --preset msvc-release
+1. Open `Developer Command Prompt for VS 2022` or `Developer PowerShell for VS 2022`.
+2. Change to the root directory of the project (cloned repository or extracted source release).
+3. Configure the project:
+```powershell
+cmake -S . -B build
+```
+*Optional preprocessor flags for Debug build:
+```
+cmake -S . -B build \
+  -DENABLE_TESTMODE=ON \
+  -DENABLE_LOCALFILES=ON \
+  -DENABLE_GPUGRAPHRECT=ON \
+  -DENABLE_LOGWM=ON \
+  -DENABLE_FPSLOG=ON \
+  -DENABLE_LOGVRR=ON
+```
+  
+4. Build the Release executable:
+```powershell
+cmake --build build --config Release
+```
 
-cmake --build build/release
+Or build the Debug executable:
+```powershell
+cmake --build build --config Debug
+```
+
+CMake will automatically select an available generator. When using a Visual Studio environment, this will normally select the Visual Studio/MSVC generator.
+The included `CMakePresets.json` can be used instead if you prefer to build with Ninja.
+
+5. Run the executable from `build\Release\radeonmon.exe` or `build\Debug\radeonmon.exe`.
+
+The Release version does not produce any console or file logging. The Debug version opens a console window and outputs logging information for debugging purposes.
+
