@@ -149,7 +149,7 @@ This project uses CMake and can be built using MSVC. A `CMakePresets.json` file 
 ## Build Commands
 
 1. Open `Developer Command Prompt for VS 2022` or `Developer PowerShell for VS 2022`.
-2. Change to the root directory of the project.
+2. Change to the root directory of the project (cloned repository or extracted source release).
 3. Configure the project:
 ```powershell
 cmake -S . -B build
