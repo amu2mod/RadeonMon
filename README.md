@@ -169,4 +169,5 @@ The included `CMakePresets.json` can be used instead if you prefer to build with
 
 5. Run the executable from `build\Release\radeonmon.exe` or `build\Debug\radeonmon.exe`.
 
-The Debug version also opens a console window with logging for debugging purposes.
+The Release version does not produce any console or file logging. The Debug version opens a console window and outputs logging information for debugging purposes.
+
