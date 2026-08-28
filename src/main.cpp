@@ -744,6 +744,7 @@ void DrawTag(HDC hdc, int x, int y, LPCWSTR text, int topPadding, int sidePaddin
 
 void PaintFpsTags(HDC hdc)
 {
+
     if (!g_AdlxGPUTelemetry.isInitialized || !g_isFpsEnabled || !g_presentMonManager.IsInitialized())
         return;
 
@@ -890,7 +891,7 @@ void PaintFpsTags(HDC hdc)
 
 void PaintDisplayTags(HDC hdc)
 {
-    if (!g_vrrDetector.IsRunning())
+    if (!g_isVRREnabled || !g_vrrDetector.IsRunning())
         return;
 
     const RECT &labelRc = g_props[MetricsIndex::Display].textLabelRc;
@@ -1296,8 +1297,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         for (size_t i = 0; i < list.size(); ++i)
             AppendMenuW(hStartStopMenu, flags | (g_webServer.isBoundTo(list[i]) ? MF_CHECKED : MF_UNCHECKED), IDM_WEBSERVER_BASE + static_cast<UINT>(i), list[i].display().c_str());
 
-        AppendMenu(hTemplateMenu, MF_STRING | (g_currentWebTemplate == IDM_WEBSERVER_TEMPLATE_LIGHT ? MF_CHECKED : MF_UNCHECKED), IDM_WEBSERVER_TEMPLATE_LIGHT, L"Mobile (light text)");
-        AppendMenu(hTemplateMenu, MF_STRING | (g_currentWebTemplate == IDM_WEBSERVER_TEMPLATE_HEAVY ? MF_CHECKED : MF_UNCHECKED), IDM_WEBSERVER_TEMPLATE_HEAVY, L"PC (heavy CSS)");
+        AppendMenu(hTemplateMenu, MF_STRING | (g_currentWebTemplate == IDM_WEBSERVER_TEMPLATE_LIGHT ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_WEBSERVER_TEMPLATE_LIGHT, L"Mobile (light text)");
+        AppendMenu(hTemplateMenu, MF_STRING | (g_currentWebTemplate == IDM_WEBSERVER_TEMPLATE_HEAVY ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_WEBSERVER_TEMPLATE_HEAVY, L"PC (heavy CSS)");
 
         AppendMenuW(hWebServerMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hStartStopMenu), g_webServer.IsRunning() ? L"Stop" : L"Start");
         AppendMenuW(hWebServerMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hTemplateMenu), L"Template");
@@ -1310,10 +1311,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         // FPS submenu
         HMENU hFPSMenu = CreatePopupMenu();
 
-        AppendMenuW(hFPSMenu, MF_STRING | g_isFpsEnabled ? MF_CHECKED : MF_UNCHECKED, IDM_ENABLEFPS_BASE, L"On");
-        AppendMenuW(hFPSMenu, MF_STRING | g_isFpsEnabled ? MF_UNCHECKED : MF_CHECKED, IDM_ENABLEFPS_BASE + 1, L"Off");
+        AppendMenuW(hFPSMenu, MF_STRING | g_isFpsEnabled ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED, IDM_ENABLEFPS_BASE, L"On");
+        AppendMenuW(hFPSMenu, MF_STRING | g_isFpsEnabled ? MF_UNCHECKED : MF_CHECKED | MF_DISABLED, IDM_ENABLEFPS_BASE + 1, L"Off");
 
-        AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hFPSMenu), L"FPS");
+        AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hFPSMenu), L"FPS metric");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+        /////////////////////////////////
+
+        /////////////////////////////////
+        // VRR submenu
+        HMENU hVRRMenu = CreatePopupMenu();
+
+        AppendMenuW(hVRRMenu, MF_STRING | g_isVRREnabled ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED, IDM_ENABLEVRR_BASE, L"On");
+        AppendMenuW(hVRRMenu, MF_STRING | g_isVRREnabled ? MF_UNCHECKED : MF_CHECKED | MF_DISABLED, IDM_ENABLEVRR_BASE + 1, L"Off");
+
+        AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hVRRMenu), L"VRR detection");
         AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
         /////////////////////////////////
 
@@ -1566,6 +1578,36 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 UpdateWindow(hwnd);
 
                 LOG_DEBUG("FPS %s", g_isFpsEnabled ? "On" : "Off");
+            }
+            // VRR On/Off
+            else if (LOWORD(wParam) == IDM_ENABLEVRR_BASE || LOWORD(wParam) == (IDM_ENABLEVRR_BASE + 1))
+            {
+                g_isVRREnabled = (LOWORD(wParam) - IDM_ENABLEVRR_BASE) == 0 ? true : false;
+
+                LOG_DEBUG("[App] VRR detection %s", g_isVRREnabled ? "On" : "Off");
+
+                if (g_isVRREnabled)
+                {
+                    g_vrrDetector.Start();
+                }
+                else
+                {
+                    g_vrrDetector.Stop();
+
+                    // clear ui
+                    const RECT &labelRc = g_props[MetricsIndex::Display].textLabelRc;
+                    int x = labelRc.right + g_layoutMetrics.charWidth + g_layoutMetrics.tagGap;
+                    int y = labelRc.top + (labelRc.bottom - labelRc.top - g_layoutMetrics.tagCharHeight) / 2;
+                    const int topPadding = g_layoutMetrics.tagTopPadding;
+                    const int sidePadding = g_layoutMetrics.tagSidePadding;
+                    HBRUSH bgBrush = CreateSolidBrush(BACKGROUNDCOLOR);
+                    RECT vrrTagRc = {x - sidePadding, y - topPadding, x + g_layoutMetrics.tagCharWidth * 3 + 2 * sidePadding, y + g_layoutMetrics.tagCharHeight + topPadding};
+
+                    FillRect(g_backBuffer.memDC, &vrrTagRc, bgBrush);
+                    DeleteObject(bgBrush);
+
+                    InvalidateRect(hwnd, &vrrTagRc, FALSE);
+                }
             }
         }
         }
@@ -1959,11 +2001,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
     if (display.has_value())
         SetDisplayLine(display.value());
 
-    g_vrrDetector.Start();
-    if (g_vrrDetector.IsRunning())
-        LOG_INFO("[App] VRR Detector running");
-    else
-        LOG_ERROR("[App] Failed to start VRR Detector");
+    if (g_isVRREnabled)
+        g_vrrDetector.Start();
 
     if (g_AdlxGPUTelemetry.isInitialized)
         UpdateToolTipText(hwnd, TOOLID_GPUINFO, g_AdlxGPUTelemetry.GetGpuInfo().GetTooltip(), g_AdlxGPUTelemetry.GetGpuInfo().GetDriverPathTooltipWidth(g_hwndTooltip));

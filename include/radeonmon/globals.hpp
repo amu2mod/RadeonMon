@@ -127,3 +127,4 @@ inline PresentMonManager g_presentMonManager;
 
 inline DWORD g_appPID;
 inline VRRDetector g_vrrDetector(g_displayManager);
+inline bool g_isVRREnabled;

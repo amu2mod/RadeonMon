@@ -13,6 +13,8 @@ void VRRDetector::Start()
 
     m_running = true;
     m_thread = std::thread(&VRRDetector::VBlankThread, this);
+
+    LOG_INFO("[VRR] VRR detector started");
 }
 
 void VRRDetector::Stop()
@@ -21,6 +23,8 @@ void VRRDetector::Stop()
 
     if (m_thread.joinable())
         m_thread.join();
+
+    LOG_INFO("[VRR] VRR detector stopped");
 }
 
 void VRRDetector::VBlankThread()

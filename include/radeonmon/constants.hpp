@@ -67,10 +67,11 @@ constexpr int IDM_WEBSERVER_MAX = 1104;
 constexpr int IDM_WEBSERVER_STOP = 1105;
 constexpr int IDM_WEBSERVER_TEMPLATE_LIGHT = 1106;
 constexpr int IDM_WEBSERVER_TEMPLATE_HEAVY = 1107;
-constexpr int IDM_ENABLEFPS_BASE = 1108; // on/off
-constexpr int IDM_CHECK_VERSION = 1110;
-constexpr int IDM_ABOUT = 1111;
-constexpr int IDM_EXIT = 1112;
+constexpr int IDM_ENABLEFPS_BASE = 1108; // on & off
+constexpr int IDM_ENABLEVRR_BASE = 1110; // on & off
+constexpr int IDM_CHECK_VERSION = 1112;
+constexpr int IDM_ABOUT = 1113;
+constexpr int IDM_EXIT = 1114;
 
 // WM
 constexpr int WM_APP_LAYOUT = WM_APP + 1;

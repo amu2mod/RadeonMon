@@ -83,7 +83,7 @@ option(ENABLE_LOCALFILES "Enable LOCALFILES preprocessor define" OFF)
 option(ENABLE_GPUGRAPHRECT "Enable ENABLE_GPUGRAPHRECT preprocessor define" OFF)
 option(ENABLE_LOGWM "Enable ENABLE_LOGWM preprocessor define" OFF)
 option(ENABLE_FPSLOG "Enable ENABLE_FPSLOG preprocessor define" OFF)
-option(ENABLE_LOGVRR "Enable ENABLE_FPSLOG preprocessor define" OFF)
+option(ENABLE_LOGVRR "Enable ENABLE_LOGVRR preprocessor define" OFF)
 
 if(ENABLE_TESTMODE)
     target_compile_definitions(radeonmon PRIVATE TESTMODE)
