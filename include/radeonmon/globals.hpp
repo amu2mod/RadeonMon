@@ -18,6 +18,7 @@
 #include "radeonmon/gpugraph.hpp"
 #include "radeonmon/PresentMonManager.hpp"
 #include "radeonmon/VRRDetector.hpp"
+#include "radeonmon/Screenshot.hpp"
 
 inline UINT g_dpi = 96;
 inline GdiBackBuffer g_backBuffer;
@@ -128,3 +129,5 @@ inline PresentMonManager g_presentMonManager;
 inline DWORD g_appPID;
 inline VRRDetector g_vrrDetector(g_displayManager);
 inline bool g_isVRREnabled;
+inline int g_draggingX, g_draggingY;
+inline Screenshot g_screenshot;

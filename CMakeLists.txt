@@ -76,6 +76,9 @@ add_executable(radeonmon WIN32
     ${CMAKE_BINARY_DIR}/generated/version.rc
     src/PresentMonManager.cpp
     src/VRRDetector.cpp
+    src/Screenshot.cpp
+    src/JpegEncoder.cpp
+    src/PngEncoder.cpp
 )
 
 option(ENABLE_TESTMODE "Enable TEST preprocessor define" OFF)

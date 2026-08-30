@@ -947,6 +947,53 @@ void PaintDisplayTags(HDC hdc)
     SelectObject(hdc, oldFont);
 }
 
+std::wstring SelectFolder(HWND hOwner)
+{
+    IFileDialog *pFileDialog = nullptr;
+
+    HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFileDialog));
+
+    if (FAILED(hr))
+        return {};
+
+    DWORD options = 0;
+    pFileDialog->GetOptions(&options);
+
+    pFileDialog->SetOptions(options | FOS_PICKFOLDERS);
+
+    hr = pFileDialog->Show(hOwner);
+
+    if (FAILED(hr))
+    {
+        pFileDialog->Release();
+        return {};
+    }
+
+    IShellItem *pItem = nullptr;
+    hr = pFileDialog->GetResult(&pItem);
+
+    std::wstring folder;
+
+    if (SUCCEEDED(hr))
+    {
+        PWSTR path = nullptr;
+
+        hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &path);
+
+        if (SUCCEEDED(hr))
+        {
+            folder = path;
+            CoTaskMemFree(path);
+        }
+
+        pItem->Release();
+    }
+
+    pFileDialog->Release();
+
+    return folder;
+}
+
 // ── window procedure ─────────────────────────────────────────────────────────
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
@@ -1329,6 +1376,42 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
         /////////////////////////////////
 
+        ///////////////////////////////
+        // Screenshot submenu
+        HMENU hScreenshotMenu = CreatePopupMenu();
+
+        AppendMenuW(hMenu, MF_POPUP,
+                    reinterpret_cast<UINT_PTR>(hScreenshotMenu),
+                    L"Screenshot");
+
+        ///////////////////////////////
+        // Format submenu
+        HMENU hFormatMenu = CreatePopupMenu();
+
+        AppendMenuW(hScreenshotMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hFormatMenu), L"Format");
+
+        AppendMenuW(hFormatMenu, MF_STRING | (g_screenshot.m_format == Screenshot::Format::BMP ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_FORMAT_BMP, L"BMP");
+        AppendMenuW(hFormatMenu, MF_STRING | (g_screenshot.m_format == Screenshot::Format::JPEG ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_FORMAT_JPEG, L"JPEG");
+        AppendMenuW(hFormatMenu, MF_STRING | (g_screenshot.m_format == Screenshot::Format::PNG ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_FORMAT_PNG, L"PNG");
+
+        ///////////////////////////////
+        // Save Folder submenu
+        HMENU hSaveFolderMenu = CreatePopupMenu();
+
+        AppendMenuW(hScreenshotMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hSaveFolderMenu), L"Save Folder");
+
+        // Current folder — display only
+        AppendMenuW(hSaveFolderMenu, MF_STRING | MF_DISABLED | MF_GRAYED, 0, g_screenshot.IsPathEmpty() ? L"(no folder selected)" : g_screenshot.GetPath());
+        AppendMenuW(hSaveFolderMenu, MF_SEPARATOR, 0, nullptr);
+
+        // Permanent action
+        AppendMenuW(hSaveFolderMenu, MF_STRING, IDM_SCREENSHOT_SAVE_FOLDER, L"Select Folder...");
+
+        ///////////////////////////////
+
+        AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+        ///////////////////////////////
+
         AppendMenu(hMenu, MF_STRING, IDM_CHECK_VERSION, L"Check update");
         AppendMenu(hMenu, MF_STRING, IDM_ABOUT, L"About");
         AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
@@ -1463,6 +1546,36 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         case IDM_WEBSERVER_TEMPLATE_HEAVY:
         {
             g_currentWebTemplate = IDM_WEBSERVER_TEMPLATE_HEAVY;
+            break;
+        }
+
+        case IDM_SCREENSHOT_FORMAT_BMP:
+        {
+            g_screenshot.m_format = Screenshot::Format::BMP;
+            break;
+        }
+
+        case IDM_SCREENSHOT_FORMAT_JPEG:
+        {
+            g_screenshot.m_format = Screenshot::Format::JPEG;
+            break;
+        }
+
+        case IDM_SCREENSHOT_FORMAT_PNG:
+        {
+            g_screenshot.m_format = Screenshot::Format::PNG;
+            break;
+        }
+
+        case IDM_SCREENSHOT_SAVE_FOLDER:
+        {
+            std::wstring folder = SelectFolder(hwnd);
+
+            if (!folder.empty())
+            {
+                LOG_INFO("[App] Setting screenshot folder to: %ls", folder.c_str());
+                g_screenshot.SetPath(folder.c_str());
+            }
             break;
         }
 
@@ -1718,9 +1831,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 g_currentDisplayIndex = current.value().index;
             }
         }
+        else if (PtInRect(&g_props[MetricsIndex::Display].valueRc, pt)) // display value
+        {
+            LOG_DEBUG("[App] show display window");
+        }
 
         SetCapture(hwnd);
         g_dragging = true;
+        RECT rc;
+        if (!GetWindowRect(hwnd, &rc))
+            LOG_ERROR("[App] Failed GetWindowRect");
+        else
+        {
+            g_draggingX = rc.left;
+            g_draggingY = rc.top;
+        }
+
         GetCursorPos(&g_dragStart);
         GetWindowRect(hwnd, &g_wndStart);
         return 0;
@@ -1747,13 +1873,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             else if (g_AdlxGPUTelemetry.isInitialized && PtInRect(&g_props[MetricsIndex::Temp].textLabelRc, pt)) // gpu temp
                 SetCursor(LoadCursor(nullptr, IDC_HAND));
             else if (PtInRect(&g_clickableUrlRect, pt) && g_webServer.IsRunning()) // web server url
-            {
                 SetCursor(LoadCursor(nullptr, IDC_HAND));
-            }
-            else if (PtInRect(&g_props[MetricsIndex::Display].textLabelRc, pt)) // display label
-            {
+            else if (PtInRect(&g_props[MetricsIndex::Display].textLabelRc, pt) || PtInRect(&g_props[MetricsIndex::Display].valueRc, pt)) // display label
                 SetCursor(LoadCursor(nullptr, IDC_HAND));
-            }
+
             else
             {
                 SetCursor(LoadCursor(nullptr, IDC_ARROW));
@@ -1773,7 +1896,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (!GetWindowRect(hwnd, &rc))
                 LOG_ERROR("[App] Failed to get RECT of the window");
             else
-                LOG_DEBUG("[App] moved to {%d,%d}", rc.left, rc.top);
+            {
+                if (g_draggingX != rc.left || g_draggingY != rc.top)
+                    LOG_DEBUG("[App] moved to {%d,%d}", rc.left, rc.top);
+            }
         }
         return 0;
     }
@@ -1924,9 +2050,20 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
     freopen_s(&f, "CONIN$", "r", stdin);
     LOG_INFO("[Main] Starting App");
 #endif
-    g_isAdmin = IsRunningAsAdministrator();
 
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+
+    g_isAdmin = IsRunningAsAdministrator();
     g_appPID = GetCurrentProcessId();
+
+    // Register F12 as a global hotkey
+    if (!RegisterHotKey(nullptr, HOTKEY_SCREENSHOT, 0, VK_SCROLL))
+        LOG_ERROR("[App] Failed to register hotkey: %d", GetLastError());
+    else
+    {
+        LOG_DEBUG("[App] Hotkey registered successfully (VK_SCROLL)");
+        // g_screenshot.SetPath(L"C:\\Temp");
+    }
 
     const wchar_t CLASS_NAME[] = L"radeonmon";
 
@@ -2107,9 +2244,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
     MSG msg{};
     while (GetMessage(&msg, nullptr, 0, 0))
     {
+        if (msg.message == WM_HOTKEY)
+            if (msg.wParam == HOTKEY_SCREENSHOT)
+            {
+                // LOG_DEBUG("VK_SCROLL pressed");
+                g_screenshot.GetScreenshot();
+            }
+
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+
+    UnregisterHotKey(nullptr, HOTKEY_SCREENSHOT);
+    CoUninitialize();
 
     return static_cast<int>(msg.wParam);
 }

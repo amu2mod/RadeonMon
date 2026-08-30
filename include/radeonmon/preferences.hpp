@@ -44,6 +44,12 @@ inline void SavePreferences()
 
     swprintf_s(buffer, L"%d", g_DontShowHttpsWebServerWarning ? 1 : 0);
     WritePrivateProfileStringW(L"WebServer", L"WebServerHttpsWarning", buffer, path);
+
+    if (!g_screenshot.IsPathEmpty())
+        WritePrivateProfileStringW(L"Screenshot", L"Path", g_screenshot.GetPath(), path);
+
+    swprintf_s(buffer, L"%d", static_cast<int>(g_screenshot.m_format));
+    WritePrivateProfileStringW(L"Screenshot", L"Format", buffer, path);
 }
 
 inline void LoadPreferences()
@@ -73,4 +79,16 @@ inline void LoadPreferences()
 
     g_isCpuGraphEnabled = GetPrivateProfileIntW(L"Window", L"CpuGraphActive", 0, path) != 0;
     g_isGpuGraphEnabled = GetPrivateProfileIntW(L"Window", L"GpuGraphActive", 0, path) != 0;
+
+    wchar_t buffer[MAX_PATH] = {};
+    DWORD length = GetPrivateProfileStringW(L"Screenshot", L"Path", L"", buffer, MAX_PATH, path);
+
+    if (length != 0)
+        g_screenshot.SetPath(buffer);
+
+    UINT f = GetPrivateProfileIntW(L"Screenshot", L"Format", Screenshot::Format::BMP, path);
+    if (f < 0 || f > Screenshot::Format::PNG)
+        g_screenshot.m_format = Screenshot::Format::BMP;
+    else
+        g_screenshot.m_format = static_cast<Screenshot::Format>(f);
 }

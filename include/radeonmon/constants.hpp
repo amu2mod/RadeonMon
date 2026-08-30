@@ -69,9 +69,13 @@ constexpr int IDM_WEBSERVER_TEMPLATE_LIGHT = 1106;
 constexpr int IDM_WEBSERVER_TEMPLATE_HEAVY = 1107;
 constexpr int IDM_ENABLEFPS_BASE = 1108; // on & off
 constexpr int IDM_ENABLEVRR_BASE = 1110; // on & off
-constexpr int IDM_CHECK_VERSION = 1112;
-constexpr int IDM_ABOUT = 1113;
-constexpr int IDM_EXIT = 1114;
+constexpr int IDM_SCREENSHOT_FORMAT_BMP = 1112;
+constexpr int IDM_SCREENSHOT_FORMAT_JPEG = 1113;
+constexpr int IDM_SCREENSHOT_FORMAT_PNG = 1114;
+constexpr int IDM_SCREENSHOT_SAVE_FOLDER = 1115;
+constexpr int IDM_CHECK_VERSION = 1116;
+constexpr int IDM_ABOUT = 1117;
+constexpr int IDM_EXIT = 1118;
 
 // WM
 constexpr int WM_APP_LAYOUT = WM_APP + 1;
@@ -91,3 +95,6 @@ constexpr int WEBSERVER_PORT_NUM = 9090;
 constexpr UINT_PTR TOOLID_GPUINFO = 1;
 
 constexpr int GPU_JSON_BUFFER_SIZE = 4096;
+
+// Top Level IDs (outside of hwnd)
+constexpr int HOTKEY_SCREENSHOT = 1;
