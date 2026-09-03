@@ -79,7 +79,7 @@ add_executable(radeonmon WIN32
     src/Screenshot.cpp
     src/JpegEncoder.cpp
     src/PngEncoder.cpp
-    src/ScreenshotKeyBinder.cpp
+    # src/ScreenshotKeyBinder.cpp
     src/dualsense.cpp
 )
 
