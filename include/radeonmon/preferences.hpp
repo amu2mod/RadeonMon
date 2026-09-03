@@ -50,6 +50,9 @@ inline void SavePreferences()
 
     swprintf_s(buffer, L"%d", static_cast<int>(g_screenshot.m_format));
     WritePrivateProfileStringW(L"Screenshot", L"Format", buffer, path);
+
+    swprintf_s(buffer, L"%d", g_isDualSenseEnabled ? 1 : 0);
+    WritePrivateProfileStringW(L"Screenshot", L"DualSenseEnabled", buffer, path);
 }
 
 inline void LoadPreferences()
@@ -91,4 +94,6 @@ inline void LoadPreferences()
         g_screenshot.m_format = Screenshot::Format::BMP;
     else
         g_screenshot.m_format = static_cast<Screenshot::Format>(f);
+
+    g_isDualSenseEnabled = GetPrivateProfileIntW(L"Screenshot", L"DualSenseEnabled", 0, path) != 0;
 }

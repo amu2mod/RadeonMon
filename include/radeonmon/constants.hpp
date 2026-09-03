@@ -1,5 +1,7 @@
 #pragma once
 
+//// TEXT
+// Title
 #ifdef _DEBUG
 constexpr wchar_t APPNAME[] = L"RadeonMon (Debug)";
 #else
@@ -10,6 +12,9 @@ constexpr uint8_t APPNAME_LENGTH = static_cast<uint8_t>(_countof(APPNAME) - 1);
 constexpr uint8_t APPNAME_UPDATE_LENGTH = static_cast<uint8_t>(_countof(APPNAME_UPDATE) - 1);
 static_assert(APPNAME_LENGTH <= UINT8_MAX);
 static_assert(APPNAME_UPDATE_LENGTH <= UINT8_MAX);
+// Screenshot emoji
+constexpr wchar_t SCREENSHOT_ICON[] = L"📸";
+constexpr wchar_t GAMEPAD_ICON[] = L"🎮";
 
 // Polling rate
 constexpr int APP_REFRESH_TIMER = 2000;
@@ -57,6 +62,7 @@ constexpr int TEMPERATURE_ALERT_THRESHOLD = 100;
 // Timer IDs
 constexpr UINT_PTR APP_POLLING_ID = 1;
 constexpr UINT_PTR NETWORK_TIMER_ID = 2;
+constexpr UINT_PTR SCREENSHOT_ICON_ID = 3;
 
 // IDM
 constexpr int IDM_RESTART_AS_ADMIN = 1001;
@@ -73,9 +79,11 @@ constexpr int IDM_SCREENSHOT_FORMAT_BMP = 1112;
 constexpr int IDM_SCREENSHOT_FORMAT_JPEG = 1113;
 constexpr int IDM_SCREENSHOT_FORMAT_PNG = 1114;
 constexpr int IDM_SCREENSHOT_SAVE_FOLDER = 1115;
-constexpr int IDM_CHECK_VERSION = 1116;
-constexpr int IDM_ABOUT = 1117;
-constexpr int IDM_EXIT = 1118;
+constexpr int IDM_SCREENSHOT_BINDKEY = 1116;
+constexpr int IDM_ENABLEDUALSENSE_BASE = 1117; // on & off
+constexpr int IDM_CHECK_VERSION = 1119;
+constexpr int IDM_ABOUT = 1120;
+constexpr int IDM_EXIT = 1121;
 
 // WM
 constexpr int WM_APP_LAYOUT = WM_APP + 1;

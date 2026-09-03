@@ -22,12 +22,12 @@ public:
     inline const wchar_t *GetPath() const { return path; }
     inline bool IsPathEmpty() const { return path[0] == '\0'; }
     bool SetPath(const wchar_t *newPath);
+    static constexpr DWORD MIN_INTERVAL_MS = 500; // Minimum 500 ms between shots (2 per second max)
 
 private:
     wchar_t path[MAX_PATH] = {};
     wchar_t filename[256];
     DWORD lastScreenshotTime = 0;
-    const DWORD minIntervalMs = 500; // Minimum 500 ms between shots (2 per second max)
     JpegEncoder m_jpegEncoder;
     PngEncoder m_pngEncoder;
 

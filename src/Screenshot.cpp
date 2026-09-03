@@ -10,7 +10,7 @@ bool Screenshot::GetScreenshot()
     }
 
     const DWORD now = GetTickCount();
-    if (lastScreenshotTime != 0 && (now - lastScreenshotTime) < minIntervalMs)
+    if (lastScreenshotTime != 0 && (now - lastScreenshotTime) < MIN_INTERVAL_MS)
     {
         LOG_WARN("[Screenhot] Antispam triggered");
         return false; // Too soon;

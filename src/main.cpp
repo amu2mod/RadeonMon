@@ -30,6 +30,85 @@ using namespace RadeonMon::Hardware;
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "comctl32.lib")
 
+void DrawGamepadIcon(HDC hdc)
+{
+    HFONT oldFont = (HFONT)SelectObject(hdc, g_titleFont);
+    SetBkMode(hdc, TRANSPARENT);
+
+    // switch (g_dualsense.GetTransport())
+    // {
+    // case DualSense::Transport::USB:
+    //     SetTextColor(hdc, GAMEPAD_USB);
+    //     break;
+
+    // case DualSense::Transport::Bluetooth:
+    //     SetTextColor(hdc, GAMEPAD_BT);
+    //     break;
+
+    // case DualSense::Transport::None:
+    //     SetTextColor(hdc, GAMEPAD_NEUTRAL);
+    //     break;
+    // }
+
+    SetTextColor(hdc, GAMEPAD_NEUTRAL);
+    TextOutW(hdc, g_border.gamepadIcon.left, g_border.gamepadIcon.top, GAMEPAD_ICON, 2);
+    SelectObject(hdc, oldFont);
+}
+
+void ClearGamepadIcon(HDC hdc)
+{
+    HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
+    FillRect(hdc, &g_border.gamepadIcon, brush);
+    DeleteObject(brush);
+}
+
+void PaintGampepadIcon(HDC hdc)
+{
+    static bool lastDualSenseEnabled = false;
+    static bool initialized = false;
+
+    if (!g_forceFrameRedraw)
+        if (initialized && lastDualSenseEnabled == g_isDualSenseEnabled)
+            return;
+
+    initialized = true;
+    lastDualSenseEnabled = g_isDualSenseEnabled;
+
+    if (g_isDualSenseEnabled)
+        DrawGamepadIcon(hdc);
+    else
+        ClearGamepadIcon(hdc);
+
+    g_forceFrameRedraw = false; // consume the flag as last painter
+}
+
+void DrawScreenshotIcon(HWND hwnd, HDC hdc)
+{
+    HFONT oldFont = (HFONT)SelectObject(hdc, g_titleFont);
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, RGB(255, 255, 255));
+
+    TextOutW(hdc, g_border.screeshotIcon.left, g_border.screeshotIcon.top, SCREENSHOT_ICON, 2);
+
+    SelectObject(hdc, oldFont);
+
+    InvalidateRect(hwnd, &g_border.screeshotIcon, FALSE);
+}
+
+void ClearScreenshotIcon(HDC hdc)
+{
+    HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
+    FillRect(hdc, &g_border.screeshotIcon, brush);
+    DeleteObject(brush);
+}
+
+void OnScreenshotAction(HWND hwnd)
+{
+    g_screenshot.GetScreenshot();
+    DrawScreenshotIcon(hwnd, g_backBuffer.memDC);
+    SetTimer(hwnd, SCREENSHOT_ICON_ID, 1000, nullptr);
+}
+
 void SetDisplayLine(const DisplayInfo &display, HWND hwnd = nullptr)
 {
     PropertyItem &prop = g_props[MetricsIndex::Display];
@@ -378,6 +457,33 @@ void LayoutFrame(const LayoutMetrics &m)
     g_border.left = {0, m.border, m.border, m.windowHeight - m.border};
     g_border.right = {m.windowWidth - m.border, m.border, m.windowWidth, m.windowHeight - m.border};
 
+    //// extra icons in title bar
+    // Screenshot icon
+    SIZE textSize{};
+    HDC hdc = GetDC(nullptr); // Back buffer may not be ready during startup, using a screen DC for text measurement.
+    HFONT oldFont = (HFONT)SelectObject(hdc, g_titleFont);
+    GetTextExtentPoint32W(hdc, SCREENSHOT_ICON, 2, &textSize);
+
+    const int height = g_border.top.bottom - g_border.top.top;
+
+    g_border.screeshotIcon.right = g_border.top.right - g_layoutMetrics.paddingSide;
+    g_border.screeshotIcon.left = g_border.screeshotIcon.right - textSize.cx;
+    g_border.screeshotIcon.top = g_border.top.top + (height - textSize.cy) / 2;
+    g_border.screeshotIcon.bottom = g_border.screeshotIcon.top + textSize.cy;
+
+    // Gamepad icon
+    SIZE gamepadTextSize{};
+    GetTextExtentPoint32W(hdc, GAMEPAD_ICON, 2, &gamepadTextSize);
+
+    g_border.gamepadIcon.left = g_border.top.left + g_layoutMetrics.paddingSide;
+    g_border.gamepadIcon.right = g_border.gamepadIcon.left + gamepadTextSize.cx;
+    g_border.gamepadIcon.top = g_border.top.top + (height - gamepadTextSize.cy) / 2;
+    g_border.gamepadIcon.bottom = g_border.gamepadIcon.top + gamepadTextSize.cy;
+
+    SelectObject(hdc, oldFont);
+    ReleaseDC(nullptr, hdc);
+    ////
+
     g_appTitle.UpdateRC(g_border.top, m);
 }
 
@@ -642,7 +748,6 @@ void PaintFrame(HDC hdc)
     LOG_DEBUG("[App] Painting FRAME (border+title)");
 
     drawn = true;
-    g_forceFrameRedraw = false;
 
     // Border sides
     FillRect(hdc, &g_border.top, frameBrush);
@@ -1085,6 +1190,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
         PaintDisplayTags(memDC);
 
+        PaintGampepadIcon(memDC);
+
         // Present
         BitBlt(hdc, 0, 0, g_backBuffer.width, g_backBuffer.height, memDC, 0, 0, SRCCOPY);
 
@@ -1307,6 +1414,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             g_networkManager.Log();
             g_networkManager.m_timer = 0;
         }
+        else if (wParam == SCREENSHOT_ICON_ID)
+        {
+            KillTimer(hwnd, SCREENSHOT_ICON_ID);
+            ClearScreenshotIcon(g_backBuffer.memDC);
+        }
         return 0;
     }
 
@@ -1380,11 +1492,27 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         // Screenshot submenu
         HMENU hScreenshotMenu = CreatePopupMenu();
 
-        AppendMenuW(hMenu, MF_POPUP,
-                    reinterpret_cast<UINT_PTR>(hScreenshotMenu),
-                    L"Screenshot");
+        AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hScreenshotMenu), L"Screenshot");
 
-        ///////////////////////////////
+        // Key binder
+        // HMENU hKeyMenu = CreatePopupMenu();
+        // wchar_t keyName[64]{};
+
+        // UINT scanCode = MapVirtualKeyW(static_cast<UINT>(g_screenshotKey), MAPVK_VK_TO_VSC);
+
+        // if (scanCode != 0)
+        // {
+        //     LONG lp = static_cast<LONG>(scanCode << 16);
+        //     if (GetKeyNameTextW(lp, keyName, ARRAYSIZE(keyName)) == 0)
+        //         wcscpy_s(keyName, L"Unknown");
+        // }
+
+        // AppendMenuW(hKeyMenu, MF_STRING | MF_DISABLED | MF_GRAYED, 0, keyName);
+        // AppendMenuW(hKeyMenu, MF_SEPARATOR, 0, nullptr);
+        // AppendMenuW(hKeyMenu, MF_STRING, IDM_SCREENSHOT_BINDKEY, L"Select Key...");
+
+        // AppendMenuW(hScreenshotMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hKeyMenu), L"Bind key");
+
         // Format submenu
         HMENU hFormatMenu = CreatePopupMenu();
 
@@ -1394,18 +1522,21 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         AppendMenuW(hFormatMenu, MF_STRING | (g_screenshot.m_format == Screenshot::Format::JPEG ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_FORMAT_JPEG, L"JPEG");
         AppendMenuW(hFormatMenu, MF_STRING | (g_screenshot.m_format == Screenshot::Format::PNG ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_FORMAT_PNG, L"PNG");
 
-        ///////////////////////////////
         // Save Folder submenu
         HMENU hSaveFolderMenu = CreatePopupMenu();
 
         AppendMenuW(hScreenshotMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hSaveFolderMenu), L"Save Folder");
 
-        // Current folder — display only
         AppendMenuW(hSaveFolderMenu, MF_STRING | MF_DISABLED | MF_GRAYED, 0, g_screenshot.IsPathEmpty() ? L"(no folder selected)" : g_screenshot.GetPath());
         AppendMenuW(hSaveFolderMenu, MF_SEPARATOR, 0, nullptr);
-
-        // Permanent action
         AppendMenuW(hSaveFolderMenu, MF_STRING, IDM_SCREENSHOT_SAVE_FOLDER, L"Select Folder...");
+
+        // DualSense submenu
+        HMENU hDualSenseMenu = CreatePopupMenu();
+
+        AppendMenuW(hScreenshotMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hDualSenseMenu), L"DualSense Capture");
+        AppendMenuW(hDualSenseMenu, MF_STRING | g_isDualSenseEnabled ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED, IDM_ENABLEDUALSENSE_BASE, L"On");
+        AppendMenuW(hDualSenseMenu, MF_STRING | g_isDualSenseEnabled ? MF_UNCHECKED : MF_CHECKED | MF_DISABLED, IDM_ENABLEDUALSENSE_BASE + 1, L"Off");
 
         ///////////////////////////////
 
@@ -1579,6 +1710,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             break;
         }
 
+        case IDM_SCREENSHOT_BINDKEY:
+        {
+            // g_screenshotKeyBinder.Show();
+            break;
+        }
+
         default:
         {
             // WEB SERVER
@@ -1688,7 +1825,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 }
 
                 InvalidateRect(hwnd, &result, FALSE);
-                UpdateWindow(hwnd);
+                // UpdateWindow(hwnd);
 
                 LOG_DEBUG("FPS %s", g_isFpsEnabled ? "On" : "Off");
             }
@@ -1722,10 +1859,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                     InvalidateRect(hwnd, &vrrTagRc, FALSE);
                 }
             }
+            // DualSense Screenshot Capture
+            else if (LOWORD(wParam) == IDM_ENABLEDUALSENSE_BASE || LOWORD(wParam) == (IDM_ENABLEDUALSENSE_BASE + 1))
+            {
+                g_isDualSenseEnabled = (LOWORD(wParam) - IDM_ENABLEDUALSENSE_BASE) == 0 ? true : false;
+
+                LOG_DEBUG("[App] DualSense Screenshot Capture %s", g_isDualSenseEnabled ? "On" : "Off");
+
+                if (g_isDualSenseEnabled)
+                    g_dualsense.Start();
+                else
+                    g_dualsense.Stop();
+
+                InvalidateRect(hwnd, &g_border.gamepadIcon, FALSE);
+            }
+            return 0;
         }
         }
-        return 0;
-    }
 
     case WM_KEYDOWN:
     {
@@ -2035,7 +2185,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     default:
         return DefWindowProc(hwnd, msg, wParam, lParam);
     }
-
+    }
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
@@ -2056,15 +2206,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
     g_isAdmin = IsRunningAsAdministrator();
     g_appPID = GetCurrentProcessId();
 
-    // Register F12 as a global hotkey
-    if (!RegisterHotKey(nullptr, HOTKEY_SCREENSHOT, 0, VK_SCROLL))
-        LOG_ERROR("[App] Failed to register hotkey: %d", GetLastError());
-    else
-    {
-        LOG_DEBUG("[App] Hotkey registered successfully (VK_SCROLL)");
-        // g_screenshot.SetPath(L"C:\\Temp");
-    }
-
     const wchar_t CLASS_NAME[] = L"radeonmon";
 
     WNDCLASS wc{};
@@ -2081,6 +2222,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
     }
 
     LoadPreferences();
+
+    // Register F12 as a global hotkey
+    if (!RegisterHotKey(nullptr, HOTKEY_SCREENSHOT, 0, g_screenshotKey))
+        LOG_ERROR("[App] Failed to register hotkey: %d", GetLastError());
+    else
+        LOG_DEBUG("[App] Hotkey registered successfully (VK_SCROLL)");
 
     g_autostart = IsAutostartEnabled();
 
@@ -2119,6 +2266,16 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
         LOG_ERROR("CreateWindowEx failed");
         return 1;
     }
+
+    // DualSense
+    g_dualsense.SetOnConnected([]()
+                               { LOG_INFO("[APP] DualSense connected"); });
+    g_dualsense.SetOnDisconnected([]()
+                                  { LOG_INFO("[APP] DualSense disconnected"); });
+    g_dualsense.SetOnCreateButtonPressed([hwnd]()
+                                         { OnScreenshotAction(hwnd); });
+    if (g_isDualSenseEnabled)
+        g_dualsense.Start();
 
     ShowWindow(hwnd, SW_SHOWNOACTIVATE);
 
@@ -2247,8 +2404,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
         if (msg.message == WM_HOTKEY)
             if (msg.wParam == HOTKEY_SCREENSHOT)
             {
-                // LOG_DEBUG("VK_SCROLL pressed");
-                g_screenshot.GetScreenshot();
+                LOG_DEBUG("VK_SCROLL pressed");
+                OnScreenshotAction(hwnd);
             }
 
         TranslateMessage(&msg);

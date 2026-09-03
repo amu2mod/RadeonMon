@@ -79,6 +79,8 @@ add_executable(radeonmon WIN32
     src/Screenshot.cpp
     src/JpegEncoder.cpp
     src/PngEncoder.cpp
+    src/ScreenshotKeyBinder.cpp
+    src/dualsense.cpp
 )
 
 option(ENABLE_TESTMODE "Enable TEST preprocessor define" OFF)
@@ -87,6 +89,7 @@ option(ENABLE_GPUGRAPHRECT "Enable ENABLE_GPUGRAPHRECT preprocessor define" OFF)
 option(ENABLE_LOGWM "Enable ENABLE_LOGWM preprocessor define" OFF)
 option(ENABLE_FPSLOG "Enable ENABLE_FPSLOG preprocessor define" OFF)
 option(ENABLE_LOGVRR "Enable ENABLE_LOGVRR preprocessor define" OFF)
+option(ENABLE_LOGDS "Enable ENABLE_LOGDS preprocessor define" OFF)
 
 if(ENABLE_TESTMODE)
     target_compile_definitions(radeonmon PRIVATE TESTMODE)
@@ -114,6 +117,10 @@ endif()
 
 if(ENABLE_LOGVRR)
     target_compile_definitions(radeonmon PRIVATE LOGVRR)
+endif()
+
+if(ENABLE_LOGDS)
+    target_compile_definitions(radeonmon PRIVATE LOGDS)
 endif()
 
 configure_file(

@@ -9,7 +9,8 @@
             "cacheVariables": {
                 "ENABLE_LOGWM": "ON",
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_CXX_COMPILER": "cl"
+                "CMAKE_CXX_COMPILER": "cl",
+                "ENABLE_LOGDS": "OFF"
             }
         },
         {
@@ -23,7 +24,8 @@
                 "ENABLE_GPUGRAPHRECT": "OFF",
                 "ENABLE_LOGWM": "ON",
                 "ENABLE_LOGFPS": "OFF",
-                "ENABLE_LOGVRR": "OFF"
+                "ENABLE_LOGVRR": "OFF",
+                "ENABLE_LOGDS": "OFF"
             }
         },
         {
