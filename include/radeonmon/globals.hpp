@@ -19,7 +19,7 @@
 #include "radeonmon/PresentMonManager.hpp"
 #include "radeonmon/VRRDetector.hpp"
 #include "radeonmon/Screenshot.hpp"
-#include "radeonmon/ScreenshotKeyBinder.hpp"
+// #include "radeonmon/ScreenshotKeyBinder.hpp"
 #include "radeonmon/dualsense.hpp"
 
 inline UINT g_dpi = 96;
@@ -135,7 +135,9 @@ inline int g_draggingX, g_draggingY;
 inline Screenshot g_screenshot;
 inline bool g_drawScreenshotIcon = false;
 inline int g_screenshotKey = VK_SCROLL;
-inline ScreenshotKeyBinder g_screenshotKeyBinder(g_screenshotKey);
+// inline ScreenshotKeyBinder g_screenshotKeyBinder(g_screenshotKey);
 inline DualSense g_dualsense;
 inline bool g_isDualSenseEnabled = false;
-inline ULONG_PTR g_gdiplusToken;
+
+inline HGLOBAL g_screenshotSoundResource = nullptr;
+inline void *g_screenshotSoundData = nullptr;

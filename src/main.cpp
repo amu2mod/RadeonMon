@@ -1,9 +1,11 @@
 #include "radeonmon/webserver.hpp"
 #include "radeonmon/colors.hpp"
+#include "radeonmon/resource_ids.h"
 
 #include <windows.h>
 #include <shellscalingapi.h>
 #include <windowsx.h>
+#include <mmsystem.h>
 
 #include <cstdio>
 #include <cmath>
@@ -29,61 +31,274 @@ using namespace RadeonMon::Hardware;
 #pragma comment(lib, "Shcore.lib")
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "comctl32.lib")
+#pragma comment(lib, "winmm.lib")
+
+RECT GetGamepadIconRect()
+{
+    const int dotDiameter = MulDiv(6, g_fontSize, FONTSIZE);
+    const int dotGap = MulDiv(3, g_fontSize, FONTSIZE);
+
+    RECT rect;
+    UnionRect(&rect, &g_border.gamepadIcon, &g_border.gamepadStatus);
+
+    // Include the transport dot.
+    rect.left -= dotDiameter + dotGap + 1;
+
+    return rect;
+}
+
+void PaintGamepadStatus(HDC hdc)
+{
+    static bool wasVisible = false;
+    static int lastBatteryLevel = -2;
+    static bool lastIsCharging = false;
+
+    const bool isVisible =
+        g_isDualSenseEnabled &&
+        g_dualsense.GetTransport() == DualSense::Transport::Bluetooth;
+
+    // Status is no longer visible (disabled, USB, etc.).
+    if (!isVisible)
+    {
+        if (wasVisible || g_forceFrameRedraw)
+        {
+            HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
+            FillRect(hdc, &g_border.gamepadStatus, brush);
+            DeleteObject(brush);
+            wasVisible = false;
+        }
+
+        return;
+    }
+
+    const int batteryLevel = g_dualsense.m_batteryLevel;
+    const bool isCharging = g_dualsense.m_isCharging;
+
+    if (batteryLevel == -1)
+    {
+        LOG_WARN("[App] DualSense Battery Status: unavailable (short HID report)");
+        return;
+    }
+
+    // Nothing changed and the entire UI isn't being forced to redraw.
+    if (!g_forceFrameRedraw && wasVisible && batteryLevel == lastBatteryLevel && isCharging == lastIsCharging)
+        return;
+
+    LOG_DEBUG("[App] DualSense Battery Status: %d%%, charging: %s", batteryLevel * 10, isCharging ? "yes" : "no");
+
+    HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
+    FillRect(hdc, &g_border.gamepadStatus, brush);
+    DeleteObject(brush);
+
+    HFONT oldFont = (HFONT)SelectObject(hdc, g_titleFont);
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, GAMEPAD_NEUTRAL);
+
+    wchar_t buffer[10];
+    swprintf_s(buffer, L"%d%%%ls", batteryLevel * 10, isCharging ? L"⚡" : L" "); // TODO: custom formatter
+
+    TextOutW(hdc, g_border.gamepadStatus.left, g_border.gamepadStatus.top, buffer, static_cast<int>(wcslen(buffer)));
+    SelectObject(hdc, oldFont);
+
+    lastBatteryLevel = batteryLevel;
+    lastIsCharging = isCharging;
+    wasVisible = true;
+}
+
+bool InitScreenshotSound()
+{
+    HMODULE hModule = GetModuleHandleW(nullptr);
+
+    HRSRC hResource = FindResourceW(hModule, MAKEINTRESOURCEW(IDR_SCREENSHOT_WAV), RT_RCDATA);
+
+    if (!hResource)
+        return false;
+
+    HGLOBAL hLoaded = LoadResource(hModule, hResource);
+    if (!hLoaded)
+        return false;
+
+    g_screenshotSoundData = LockResource(hLoaded);
+
+    return g_screenshotSoundData != nullptr;
+}
+
+void PlayScreenshotSound()
+{
+    if (!g_screenshotSoundData)
+        return;
+
+    PlaySoundW(static_cast<LPCWSTR>(g_screenshotSoundData), nullptr, SND_MEMORY | SND_ASYNC);
+}
+
+// void DrawGamepadIcon(HDC hdc)
+// {
+//     HFONT oldFont = (HFONT)SelectObject(hdc, g_titleFont);
+//     SetBkMode(hdc, TRANSPARENT);
+
+//     // switch (g_dualsense.GetTransport())
+//     // {
+//     // case DualSense::Transport::USB:
+//     //     SetTextColor(hdc, GAMEPAD_USB);
+//     //     break;
+
+//     // case DualSense::Transport::Bluetooth:
+//     //     SetTextColor(hdc, GAMEPAD_BT);
+//     //     break;
+
+//     // case DualSense::Transport::None:
+//     //     SetTextColor(hdc, GAMEPAD_NEUTRAL);
+//     //     break;
+//     // }
+
+//     SetTextColor(hdc, GAMEPAD_NEUTRAL);
+//     TextOutW(hdc, g_border.gamepadIcon.left, g_border.gamepadIcon.top, GAMEPAD_ICON, 2);
+//     SelectObject(hdc, oldFont);
+// }
 
 void DrawGamepadIcon(HDC hdc)
 {
+    static DualSense::Transport lastTransport =
+        DualSense::Transport::None;
+
+    const auto transport = g_dualsense.GetTransport();
+
+    const int dotDiameter = MulDiv(6, g_fontSize, FONTSIZE);
+    const int dotGap = MulDiv(3, g_fontSize, FONTSIZE);
+
+    // If the previous state had a transport dot, clear its area.
+    if (lastTransport != DualSense::Transport::None)
+    {
+        RECT dotRect = g_border.gamepadIcon;
+
+        dotRect.left =
+            g_border.gamepadIcon.left - dotGap - dotDiameter - 1;
+
+        HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
+        FillRect(hdc, &dotRect, brush);
+        DeleteObject(brush);
+    }
+
+    lastTransport = transport;
+
     HFONT oldFont = (HFONT)SelectObject(hdc, g_titleFont);
     SetBkMode(hdc, TRANSPARENT);
 
-    // switch (g_dualsense.GetTransport())
-    // {
-    // case DualSense::Transport::USB:
-    //     SetTextColor(hdc, GAMEPAD_USB);
-    //     break;
+    COLORREF transportColor = GAMEPAD_NEUTRAL;
+    bool showTransportDot = false;
 
-    // case DualSense::Transport::Bluetooth:
-    //     SetTextColor(hdc, GAMEPAD_BT);
-    //     break;
+    switch (transport)
+    {
+    case DualSense::Transport::USB:
+        transportColor = GAMEPAD_USB;
+        showTransportDot = true;
+        break;
 
-    // case DualSense::Transport::None:
-    //     SetTextColor(hdc, GAMEPAD_NEUTRAL);
-    //     break;
-    // }
+    case DualSense::Transport::Bluetooth:
+        transportColor = GAMEPAD_BT;
+        showTransportDot = true;
+        break;
+
+    case DualSense::Transport::None:
+        break;
+    }
+
+    if (showTransportDot)
+    {
+        const int iconHeight =
+            g_border.gamepadIcon.bottom -
+            g_border.gamepadIcon.top;
+
+        const int dotY =
+            g_border.gamepadIcon.top +
+            (iconHeight - dotDiameter) / 2;
+
+        const int dotX =
+            g_border.gamepadIcon.left -
+            dotGap -
+            dotDiameter;
+
+        HBRUSH brush = CreateSolidBrush(transportColor);
+        HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, brush);
+        HPEN oldPen = (HPEN)SelectObject(
+            hdc,
+            GetStockObject(NULL_PEN));
+
+        Ellipse(
+            hdc,
+            dotX,
+            dotY,
+            dotX + dotDiameter,
+            dotY + dotDiameter);
+
+        SelectObject(hdc, oldPen);
+        SelectObject(hdc, oldBrush);
+        DeleteObject(brush);
+    }
 
     SetTextColor(hdc, GAMEPAD_NEUTRAL);
-    TextOutW(hdc, g_border.gamepadIcon.left, g_border.gamepadIcon.top, GAMEPAD_ICON, 2);
+
+    TextOutW(
+        hdc,
+        g_border.gamepadIcon.left,
+        g_border.gamepadIcon.top,
+        GAMEPAD_ICON,
+        2);
+
     SelectObject(hdc, oldFont);
 }
 
 void ClearGamepadIcon(HDC hdc)
 {
+    const int dotDiameter = MulDiv(6, g_fontSize, FONTSIZE);
+    const int dotGap = MulDiv(3, g_fontSize, FONTSIZE);
+
+    RECT rect;
+
+    // Start with the gamepad icon.
+    UnionRect(&rect, &g_border.gamepadIcon, &g_border.gamepadStatus);
+
+    // Include the transport dot to the left of the icon.
+    rect.left -= dotDiameter + dotGap + 1;
+
+    // Small safety margin for text/ellipse rendering.
+    rect.left--;
+    rect.right++;
+    rect.top--;
+    rect.bottom++;
+
     HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
-    FillRect(hdc, &g_border.gamepadIcon, brush);
+    FillRect(hdc, &rect, brush);
     DeleteObject(brush);
 }
 
 void PaintGampepadIcon(HDC hdc)
 {
     static bool lastDualSenseEnabled = false;
+    static DualSense::Transport lastTransport = DualSense::Transport::None;
     static bool initialized = false;
+    const auto currentTransport = g_dualsense.GetTransport();
 
     if (!g_forceFrameRedraw)
-        if (initialized && lastDualSenseEnabled == g_isDualSenseEnabled)
+        if (initialized && lastDualSenseEnabled == g_isDualSenseEnabled && lastTransport == currentTransport)
             return;
 
     initialized = true;
     lastDualSenseEnabled = g_isDualSenseEnabled;
+    lastTransport = currentTransport;
 
     if (g_isDualSenseEnabled)
         DrawGamepadIcon(hdc);
     else
         ClearGamepadIcon(hdc);
-
-    g_forceFrameRedraw = false; // consume the flag as last painter
 }
 
 void DrawScreenshotIcon(HWND hwnd, HDC hdc)
 {
+    HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
+    FillRect(hdc, &g_border.screeshotIcon, brush);
+    DeleteObject(brush);
+
     HFONT oldFont = (HFONT)SelectObject(hdc, g_titleFont);
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, RGB(255, 255, 255));
@@ -104,9 +319,12 @@ void ClearScreenshotIcon(HDC hdc)
 
 void OnScreenshotAction(HWND hwnd)
 {
-    g_screenshot.GetScreenshot();
-    DrawScreenshotIcon(hwnd, g_backBuffer.memDC);
-    SetTimer(hwnd, SCREENSHOT_ICON_ID, 1000, nullptr);
+    if (g_screenshot.GetScreenshot())
+    {
+        PlayScreenshotSound();
+        DrawScreenshotIcon(hwnd, g_backBuffer.memDC);
+        SetTimer(hwnd, SCREENSHOT_ICON_ID, 1000, nullptr);
+    }
 }
 
 void SetDisplayLine(const DisplayInfo &display, HWND hwnd = nullptr)
@@ -458,18 +676,10 @@ void LayoutFrame(const LayoutMetrics &m)
     g_border.right = {m.windowWidth - m.border, m.border, m.windowWidth, m.windowHeight - m.border};
 
     //// extra icons in title bar
-    // Screenshot icon
-    SIZE textSize{};
     HDC hdc = GetDC(nullptr); // Back buffer may not be ready during startup, using a screen DC for text measurement.
     HFONT oldFont = (HFONT)SelectObject(hdc, g_titleFont);
-    GetTextExtentPoint32W(hdc, SCREENSHOT_ICON, 2, &textSize);
 
     const int height = g_border.top.bottom - g_border.top.top;
-
-    g_border.screeshotIcon.right = g_border.top.right - g_layoutMetrics.paddingSide;
-    g_border.screeshotIcon.left = g_border.screeshotIcon.right - textSize.cx;
-    g_border.screeshotIcon.top = g_border.top.top + (height - textSize.cy) / 2;
-    g_border.screeshotIcon.bottom = g_border.screeshotIcon.top + textSize.cy;
 
     // Gamepad icon
     SIZE gamepadTextSize{};
@@ -479,6 +689,28 @@ void LayoutFrame(const LayoutMetrics &m)
     g_border.gamepadIcon.right = g_border.gamepadIcon.left + gamepadTextSize.cx;
     g_border.gamepadIcon.top = g_border.top.top + (height - gamepadTextSize.cy) / 2;
     g_border.gamepadIcon.bottom = g_border.gamepadIcon.top + gamepadTextSize.cy;
+
+    // Gamepad status: e.g. "⚡85%"
+    static constexpr wchar_t gamepadStatus[] = L"⚡85%";
+
+    SIZE gamepadStatusTextSize{};
+    GetTextExtentPoint32W(hdc, gamepadStatus, static_cast<int>(wcslen(gamepadStatus)), &gamepadStatusTextSize);
+
+    constexpr int gamepadStatusSpacing = 2;
+
+    g_border.gamepadStatus.left = g_border.gamepadIcon.right + gamepadStatusSpacing;
+    g_border.gamepadStatus.right = g_border.gamepadStatus.left + gamepadStatusTextSize.cx;
+    g_border.gamepadStatus.top = g_border.top.top + (height - gamepadStatusTextSize.cy) / 2;
+    g_border.gamepadStatus.bottom = g_border.gamepadStatus.top + gamepadStatusTextSize.cy;
+
+    // Screenshot icon
+    SIZE textSize{};
+    GetTextExtentPoint32W(hdc, SCREENSHOT_ICON, 2, &textSize);
+
+    g_border.screeshotIcon.right = g_border.top.right - g_layoutMetrics.paddingSide;
+    g_border.screeshotIcon.left = g_border.screeshotIcon.right - textSize.cx;
+    g_border.screeshotIcon.top = g_border.top.top + (height - textSize.cy) / 2;
+    g_border.screeshotIcon.bottom = g_border.screeshotIcon.top + textSize.cy;
 
     SelectObject(hdc, oldFont);
     ReleaseDC(nullptr, hdc);
@@ -1191,6 +1423,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
         PaintDisplayTags(memDC);
 
         PaintGampepadIcon(memDC);
+        PaintGamepadStatus(memDC);
+
+        g_forceFrameRedraw = false;
 
         // Present
         BitBlt(hdc, 0, 0, g_backBuffer.width, g_backBuffer.height, memDC, 0, 0, SRCCOPY);
@@ -1871,7 +2106,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
                 else
                     g_dualsense.Stop();
 
-                InvalidateRect(hwnd, &g_border.gamepadIcon, FALSE);
+                RECT rect = GetGamepadIconRect();
+                InvalidateRect(hwnd, &rect, FALSE);
             }
             return 0;
         }
@@ -2205,6 +2441,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
 
     g_isAdmin = IsRunningAsAdministrator();
     g_appPID = GetCurrentProcessId();
+
+    if (!InitScreenshotSound())
+    {
+        LOG_ERROR("[App] Failed to init screenshot sound");
+    }
 
     const wchar_t CLASS_NAME[] = L"radeonmon";
 

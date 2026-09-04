@@ -1,8 +1,11 @@
 #pragma once
 
 #include "radeonmon/logging.hpp"
+#include "radeonmon/Screenshot.hpp"
 
 #include <windows.h>
+#include <bluetoothapis.h>
+#include <cfgmgr32.h>
 
 #include <functional>
 #include <mutex>
@@ -10,6 +13,7 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "hid.lib")
+#pragma comment(lib, "Cfgmgr32.lib")
 
 #ifdef LOGDS
 #define LOGDS_D(fmt, ...) LOG_IMPL("D", COLOR_CYAN, fmt, ##__VA_ARGS__)
@@ -30,6 +34,8 @@ public:
     };
 
     static const char *TransportName(Transport transport);
+    int8_t m_batteryLevel = -1;
+    bool m_isCharging = false;
 
 public:
     using Callback = std::function<void()>; // callback alias
@@ -41,6 +47,8 @@ public:
 
     bool Start();
     void Stop();
+    bool IsRunning() const;
+    bool IsConnected() const;
 
     // API
     void SetOnCreateButtonPressed(Callback callback);
@@ -60,7 +68,7 @@ private:
     static constexpr USHORT DUALSENSE_VID = 0x054C;
     static constexpr USHORT DUALSENSE_PID = 0x0CE6;
     static constexpr DWORD REPORT_THROTTLE_MS = 50;
-    static constexpr DWORD SCREENSHOT_COOLDOWN_MS = 500; // TODO: sync with Screenshot constexpr
+    static constexpr DWORD SCREENSHOT_COOLDOWN_MS = Screenshot::MIN_INTERVAL_MS;
     static constexpr UINT WM_DUALSENSE_DEVICE_CHANGE = WM_APP + 1;
     static constexpr WPARAM DEVICE_CHANGE_GENERIC = 0;
     static constexpr WPARAM DEVICE_CHANGE_BT_CONNECTED = 1;
@@ -97,8 +105,7 @@ private:
     Callback m_onDisconnected;
 
 private:
-    bool IsRunning() const;
-    bool IsConnected() const;
+    bool InitializeDualSense(HANDLE);
     void WorkerThread();
     HANDLE FindDualSense(Transport &selectedTransport);
     bool TryConnect();
@@ -110,6 +117,8 @@ private:
     void DestroyNotificationWindow();
     void WaitForDeviceOrStop();
     inline bool ShouldStop() const { return m_stopEvent && WaitForSingleObject(m_stopEvent, 0) == WAIT_OBJECT_0; }
+    bool GetBluetoothAddressFromDevNode(DEVINST devInst, BLUETOOTH_ADDRESS &address);
+    bool IsBluetoothDualSenseConnected(DEVINST devInst);
 
     // Callbacks
     void InvokeCreateButton();

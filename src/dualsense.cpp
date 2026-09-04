@@ -3,8 +3,6 @@
 #include <dbt.h>
 #include <setupapi.h>
 #include <hidsdi.h>
-#include <cfgmgr32.h>
-#include <bluetoothapis.h>
 
 #include <chrono>
 #include <thread>
@@ -13,7 +11,7 @@
 #pragma comment(lib, "Cfgmgr32.lib")
 #pragma comment(lib, "Bthprops.lib")
 
-static bool GetBluetoothAddressFromDevNode(DEVINST devInst, BLUETOOTH_ADDRESS &address)
+bool DualSense::GetBluetoothAddressFromDevNode(DEVINST devInst, BLUETOOTH_ADDRESS &address)
 {
     address.ullLong = 0;
 
@@ -72,15 +70,14 @@ static bool GetBluetoothAddressFromDevNode(DEVINST devInst, BLUETOOTH_ADDRESS &a
 
     return false;
 }
-static bool IsBluetoothDualSenseConnected(DEVINST devInst)
+
+bool DualSense::IsBluetoothDualSenseConnected(DEVINST devInst)
 {
     BLUETOOTH_ADDRESS address{};
 
     if (!GetBluetoothAddressFromDevNode(devInst, address))
     {
-        LOGDS_D(
-            "[DualSense] Failed to obtain Bluetooth address");
-
+        LOGDS_D("[DualSense] Failed to obtain Bluetooth address");
         return false;
     }
 
@@ -89,24 +86,15 @@ static bool IsBluetoothDualSenseConnected(DEVINST devInst)
     deviceInfo.dwSize = sizeof(deviceInfo);
     deviceInfo.Address = address;
 
-    DWORD result = BluetoothGetDeviceInfo(
-        nullptr,
-        &deviceInfo);
+    DWORD result = BluetoothGetDeviceInfo(nullptr, &deviceInfo);
 
     if (result != ERROR_SUCCESS)
     {
-        LOGDS_D(
-            "[DualSense] BluetoothGetDeviceInfo failed: %lu",
-            result);
-
+        LOGDS_D("[DualSense] BluetoothGetDeviceInfo failed: %lu", result);
         return false;
     }
 
-    LOGDS_D(
-        "[DualSense] Bluetooth device: connected=%s remembered=%s authenticated=%s",
-        (deviceInfo.fConnected ? "YES" : "NO"),
-        (deviceInfo.fRemembered ? "YES" : "NO"),
-        (deviceInfo.fAuthenticated ? "YES" : "NO"));
+    LOGDS_D("[DualSense] Bluetooth device: connected=%s remembered=%s authenticated=%s", (deviceInfo.fConnected ? "YES" : "NO"), (deviceInfo.fRemembered ? "YES" : "NO"), (deviceInfo.fAuthenticated ? "YES" : "NO"));
 
     return deviceInfo.fConnected != FALSE;
 }
@@ -352,6 +340,7 @@ HANDLE DualSense::FindDualSense(Transport &selectedTransport)
 
         HIDP_CAPS caps{};
         NTSTATUS status = HidP_GetCaps(preparsed, &caps);
+
         HidD_FreePreparsedData(preparsed);
 
         if (status != HIDP_STATUS_SUCCESS)
@@ -439,11 +428,22 @@ bool DualSense::TryConnect()
     HIDP_CAPS caps{};
 
     NTSTATUS status = HidP_GetCaps(preparsed, &caps);
+
+    LOGDS_D("[DualSense] Caps: input=%u output=%u feature=%u", caps.InputReportByteLength, caps.OutputReportByteLength, caps.FeatureReportByteLength);
+
     HidD_FreePreparsedData(preparsed);
 
     if (status != HIDP_STATUS_SUCCESS)
     {
         LOGDS_E("[DualSense] HidP_GetCaps failed.");
+        CloseHandle(handle);
+        return false;
+    }
+
+    if (!InitializeDualSense(handle))
+    {
+        LOGDS_E("[DualSense] Initialization failed.");
+        HidD_FreePreparsedData(preparsed);
         CloseHandle(handle);
         return false;
     }
@@ -717,6 +717,20 @@ DualSense::ReadResult DualSense::ReadInputReports()
         if (buttonOffset >= bytesRead)
             continue;
 
+        ////// Battery status
+        if (bytesRead == 64 || m_buffer[0] == 0x01)
+            m_batteryLevel = -1;
+        else
+        {
+            const BYTE status = m_buffer[54];
+            m_batteryLevel = status & 0x0F;
+            m_isCharging = ((status >> 4) & 0x0F) == 0x2;
+
+            // LOGDS_D("Battery: %u/10, charging status: %s (0x%X)\n", batteryLevel, chargingStatus == 0x0 ? "no" : "yes", chargingStatus);
+        }
+        //////
+
+        ////// Special buttons
         const BYTE buttons = m_buffer[buttonOffset];
 
         // DualSense Create button
@@ -730,6 +744,7 @@ DualSense::ReadResult DualSense::ReadInputReports()
         // DualSense Options button is using the same byte
         // if (buttons & 0x20)
         //     LOGDS_D("[DualSense] Options button pressed");
+        //////
     }
 
     if (ShouldStop())
@@ -1093,4 +1108,20 @@ DualSense::Transport DualSense::GetTransport() const
 {
     std::lock_guard<std::mutex> lock(m_deviceMutex);
     return m_transport;
+}
+
+bool DualSense::InitializeDualSense(HANDLE handle)
+{
+    BYTE calibration[41] = {};
+    calibration[0] = 0x05;
+
+    if (!HidD_GetFeature(handle, calibration, sizeof(calibration)))
+    {
+        LOGDS_E("HidD_GetFeature(0x05) failed: %lu\n", GetLastError());
+        return false;
+    }
+
+    LOGDS_D("DualSense calibration feature read OK\n");
+
+    return true;
 }

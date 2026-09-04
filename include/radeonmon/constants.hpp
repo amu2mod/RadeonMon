@@ -3,11 +3,11 @@
 //// TEXT
 // Title
 #ifdef _DEBUG
-constexpr wchar_t APPNAME[] = L"RadeonMon (Debug)";
+constexpr wchar_t APPNAME[] = L"RMon_Debug";
 #else
 constexpr wchar_t APPNAME[] = L"RadeonMon";
 #endif
-constexpr wchar_t APPNAME_UPDATE[] = L"RadeonMon - Update available";
+constexpr wchar_t APPNAME_UPDATE[] = L"Update available";
 constexpr uint8_t APPNAME_LENGTH = static_cast<uint8_t>(_countof(APPNAME) - 1);
 constexpr uint8_t APPNAME_UPDATE_LENGTH = static_cast<uint8_t>(_countof(APPNAME_UPDATE) - 1);
 static_assert(APPNAME_LENGTH <= UINT8_MAX);

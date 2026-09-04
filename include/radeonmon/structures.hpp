@@ -514,6 +514,11 @@ struct WindowBorder
     RECT bottom{};
     RECT left{};
     RECT right{};
+
+    // Extras
+    RECT gamepadIcon{};
+    RECT gamepadStatus{};
+    RECT screeshotIcon{};
 };
 
 struct NetworkInterface

@@ -5,3 +5,5 @@
 
 // Light template
 #define IDR_INDEX2_HTML 104
+
+#define IDR_SCREENSHOT_WAV 105
