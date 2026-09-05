@@ -724,7 +724,8 @@ DualSense::ReadResult DualSense::ReadInputReports()
         {
             const BYTE status = m_buffer[54];
             m_batteryLevel = status & 0x0F;
-            m_isCharging = ((status >> 4) & 0x0F) == 0x2;
+            BYTE batteryStatus = ((status >> 4) & 0x0F); // 0: not charging, 1: charging, 2: full
+            m_isCharging = batteryStatus != 0;
 
             // LOGDS_D("Battery: %u/10, charging status: %s (0x%X)\n", batteryLevel, chargingStatus == 0x0 ? "no" : "yes", chargingStatus);
         }
