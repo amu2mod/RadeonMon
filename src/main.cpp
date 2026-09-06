@@ -170,10 +170,7 @@ void DrawGamepadIcon(HDC hdc)
     if (lastTransport != DualSense::Transport::None)
     {
         RECT dotRect = g_border.gamepadIcon;
-
-        dotRect.left =
-            g_border.gamepadIcon.left - dotGap - dotDiameter - 1;
-
+        dotRect.left = g_border.gamepadIcon.left - dotGap - dotDiameter - 1;
         HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
         FillRect(hdc, &dotRect, brush);
         DeleteObject(brush);
@@ -205,31 +202,15 @@ void DrawGamepadIcon(HDC hdc)
 
     if (showTransportDot)
     {
-        const int iconHeight =
-            g_border.gamepadIcon.bottom -
-            g_border.gamepadIcon.top;
-
-        const int dotY =
-            g_border.gamepadIcon.top +
-            (iconHeight - dotDiameter) / 2;
-
-        const int dotX =
-            g_border.gamepadIcon.left -
-            dotGap -
-            dotDiameter;
+        const int iconHeight = g_border.gamepadIcon.bottom - g_border.gamepadIcon.top;
+        const int dotY = g_border.gamepadIcon.top + (iconHeight - dotDiameter) / 2;
+        const int dotX = g_border.gamepadIcon.left - dotGap - dotDiameter;
 
         HBRUSH brush = CreateSolidBrush(transportColor);
         HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, brush);
-        HPEN oldPen = (HPEN)SelectObject(
-            hdc,
-            GetStockObject(NULL_PEN));
+        HPEN oldPen = (HPEN)SelectObject(hdc, GetStockObject(NULL_PEN));
 
-        Ellipse(
-            hdc,
-            dotX,
-            dotY,
-            dotX + dotDiameter,
-            dotY + dotDiameter);
+        Ellipse(hdc, dotX, dotY, dotX + dotDiameter, dotY + dotDiameter);
 
         SelectObject(hdc, oldPen);
         SelectObject(hdc, oldBrush);
@@ -238,12 +219,7 @@ void DrawGamepadIcon(HDC hdc)
 
     SetTextColor(hdc, GAMEPAD_NEUTRAL);
 
-    TextOutW(
-        hdc,
-        g_border.gamepadIcon.left,
-        g_border.gamepadIcon.top,
-        GAMEPAD_ICON,
-        2);
+    TextOutW(hdc, g_border.gamepadIcon.left, g_border.gamepadIcon.top, GAMEPAD_ICON, 2);
 
     SelectObject(hdc, oldFont);
 }
@@ -691,7 +667,7 @@ void LayoutFrame(const LayoutMetrics &m)
     g_border.gamepadIcon.bottom = g_border.gamepadIcon.top + gamepadTextSize.cy;
 
     // Gamepad status: e.g. "⚡85%"
-    static constexpr wchar_t gamepadStatus[] = L"⚡85%";
+    static constexpr wchar_t gamepadStatus[] = L"⚡100%";
 
     SIZE gamepadStatusTextSize{};
     GetTextExtentPoint32W(hdc, gamepadStatus, static_cast<int>(wcslen(gamepadStatus)), &gamepadStatusTextSize);

@@ -401,16 +401,24 @@ HANDLE DualSense::FindDualSense(Transport &selectedTransport)
     return INVALID_HANDLE_VALUE;
 }
 
-bool DualSense::TryConnect()
+bool DualSense::TryConnect(HANDLE existingHandle, Transport existingTransport)
+
 {
     if (ShouldStop())
         return false;
 
     if (IsConnected())
+    {
+        if (existingHandle != INVALID_HANDLE_VALUE) // caller already found a handle we're not going to use, we close it
+            CloseHandle(existingHandle);
         return true;
+    }
 
-    Transport transport = Transport::None;
-    HANDLE handle = FindDualSense(transport);
+    Transport transport = existingTransport;
+    HANDLE handle = existingHandle;
+
+    if (handle == INVALID_HANDLE_VALUE)
+        handle = FindDualSense(transport); // only scan if caller didn't already
 
     if (handle == INVALID_HANDLE_VALUE)
         return false;
@@ -443,9 +451,10 @@ bool DualSense::TryConnect()
     if (!InitializeDualSense(handle))
     {
         LOGDS_E("[DualSense] Initialization failed.");
-        HidD_FreePreparsedData(preparsed);
-        CloseHandle(handle);
-        return false;
+
+        // We let it through to let dualsense fallback to short report (theorically)
+        // CloseHandle(handle);
+        // return false;
     }
 
     reportSize = caps.InputReportByteLength;
@@ -617,6 +626,10 @@ DualSense::ReadResult DualSense::ReadInputReports()
         {
             // Stop requested.
             CancelIoEx(device, &m_overlapped);
+
+            DWORD discarded = 0;
+            GetOverlappedResult(device, &m_overlapped, &discarded, TRUE); // wait for cancel to land
+
             return ReadResult::Stopped;
         }
         else if (waitResult == WAIT_OBJECT_0 + 2)
@@ -641,7 +654,11 @@ DualSense::ReadResult DualSense::ReadInputReports()
                 return ReadResult::Stopped;
 
             if (IsSwitchTransportRequested())
+            {
+                DWORD discarded = 0;
+                GetOverlappedResult(device, &m_overlapped, &discarded, TRUE);
                 return ReadResult::SwitchTransport;
+            }
 
             // No transport switch.
             // Continue waiting for the HID read.
@@ -790,12 +807,10 @@ void DualSense::HandleDeviceChange(WPARAM changeType)
     if (changeType == DEVICE_CHANGE_BT_DISCONNECTED)
     {
         Transport transport;
-
         {
             std::lock_guard<std::mutex> lock(m_deviceMutex);
             transport = m_transport;
         }
-
         if (transport == Transport::Bluetooth)
         {
             Disconnect();
@@ -804,10 +819,7 @@ void DualSense::HandleDeviceChange(WPARAM changeType)
     }
 
     Transport preferredTransport = Transport::None;
-    HANDLE testHandle = FindDualSense(preferredTransport);
-
-    if (testHandle != INVALID_HANDLE_VALUE)
-        CloseHandle(testHandle);
+    HANDLE foundHandle = FindDualSense(preferredTransport); // single scan now
 
     Transport currentTransport = Transport::None;
     HANDLE currentDevice = INVALID_HANDLE_VALUE;
@@ -820,9 +832,12 @@ void DualSense::HandleDeviceChange(WPARAM changeType)
 
     if (currentDevice == INVALID_HANDLE_VALUE)
     {
-        TryConnect();
+        TryConnect(foundHandle, preferredTransport); // not connected yet, hand the freshly found handle straight to TryConnect.
         return;
     }
+
+    if (foundHandle != INVALID_HANDLE_VALUE)
+        CloseHandle(foundHandle); // already connected, we don't need the freshly opened handle
 
     if (preferredTransport == Transport::None)
         return;
@@ -837,8 +852,7 @@ void DualSense::HandleDeviceChange(WPARAM changeType)
         m_switchTransportRequested = true;
     }
 
-    if (currentDevice != INVALID_HANDLE_VALUE)
-        CancelIoEx(currentDevice, nullptr);
+    CancelIoEx(currentDevice, nullptr);
 }
 
 // Device notification window
@@ -918,7 +932,29 @@ LRESULT CALLBACK DualSense::WindowProc(HWND hwnd, UINT message, WPARAM wParam, L
     if (message == WM_DUALSENSE_DEVICE_CHANGE)
     {
         if (self && !self->ShouldStop())
-            self->HandleDeviceChange(wParam);
+        {
+            if (wParam == DEVICE_CHANGE_BT_DISCONNECTED)
+            {
+                KillTimer(hwnd, DEVICE_CHANGE_TIMER_ID); // disconnects immediately, no debounce
+                self->HandleDeviceChange(wParam);
+            }
+            else
+            {
+                // debounce bursts of arrival/generic notifications
+                self->m_pendingChangeType = wParam;
+                SetTimer(hwnd, DEVICE_CHANGE_TIMER_ID, DEVICE_CHANGE_DEBOUNCE_MS, nullptr);
+            }
+        }
+
+        return 0;
+    }
+
+    if (message == WM_TIMER && wParam == DEVICE_CHANGE_TIMER_ID)
+    {
+        KillTimer(hwnd, DEVICE_CHANGE_TIMER_ID);
+
+        if (self && !self->ShouldStop())
+            self->HandleDeviceChange(self->m_pendingChangeType);
 
         return 0;
     }
@@ -1118,11 +1154,11 @@ bool DualSense::InitializeDualSense(HANDLE handle)
 
     if (!HidD_GetFeature(handle, calibration, sizeof(calibration)))
     {
-        LOGDS_E("HidD_GetFeature(0x05) failed: %lu\n", GetLastError());
+        LOGDS_E("HidD_GetFeature(0x05) failed: %lu", GetLastError());
         return false;
     }
 
-    LOGDS_D("DualSense calibration feature read OK\n");
+    LOGDS_D("[DualSense] DualSense calibration feature read OK");
 
     return true;
 }

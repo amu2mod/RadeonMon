@@ -17,7 +17,7 @@
 
 #ifdef LOGDS
 #define LOGDS_D(fmt, ...) LOG_IMPL("D", COLOR_CYAN, fmt, ##__VA_ARGS__)
-#define LOGDS_E(fmt, ...) LOG_IMPL("D", COLOR_CYAN, fmt, ##__VA_ARGS__)
+#define LOGDS_E(fmt, ...) LOG_IMPL("E", COLOR_RED, fmt, ##__VA_ARGS__)
 #else
 #define LOGDS_D(fmt, ...) ((void)0)
 #define LOGDS_E(fmt, ...) ((void)0)
@@ -73,6 +73,10 @@ private:
     static constexpr WPARAM DEVICE_CHANGE_GENERIC = 0;
     static constexpr WPARAM DEVICE_CHANGE_BT_CONNECTED = 1;
     static constexpr WPARAM DEVICE_CHANGE_BT_DISCONNECTED = 2;
+    static constexpr UINT_PTR DEVICE_CHANGE_TIMER_ID = 3;
+    static constexpr UINT DEVICE_CHANGE_DEBOUNCE_MS = 1000; // plenty room to avoid windows event spamming
+
+    UINT_PTR m_pendingChangeType = DEVICE_CHANGE_GENERIC; // last non-disconnect reason seen
 
     mutable std::mutex m_stateMutex;
     bool m_running = false;
@@ -108,7 +112,7 @@ private:
     bool InitializeDualSense(HANDLE);
     void WorkerThread();
     HANDLE FindDualSense(Transport &selectedTransport);
-    bool TryConnect();
+    bool TryConnect(HANDLE existingHandle = INVALID_HANDLE_VALUE, Transport existingTransport = Transport::None);
     void Disconnect();
     ReadResult ReadInputReports();
     bool IsSwitchTransportRequested() const;
