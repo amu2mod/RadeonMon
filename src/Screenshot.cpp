@@ -99,7 +99,7 @@ bool Screenshot::GetScreenshot()
         LOG_ERROR("[Screenhot] BitBlt failed. Error: %d", GetLastError());
 
     // Save bitmap
-    UpdateFilenameWithForegroundProcess();
+    UpdateFilenameWithForegroundProcess(hwnd);
     std::wstring fullPath = std::wstring(path) + filename;
 
     if (!SaveBitmapToFile(hBitmap, fullPath.c_str()))
@@ -271,47 +271,31 @@ bool Screenshot::SaveBitmapToFile(HBITMAP hBitmap, const wchar_t *filePath)
     return true;
 }
 
-void Screenshot::UpdateFilenameWithForegroundProcess()
+bool Screenshot::EncodeFileAsJPEG(const wchar_t *filePath)
+{
+    return m_jpegEncoder.Queue(filePath);
+}
+
+bool Screenshot::EncodeFileAsPNG(const wchar_t *filePath)
+{
+    return m_pngEncoder.Queue(filePath);
+}
+
+void Screenshot::UpdateFilenameWithForegroundProcess(HWND hwnd)
 {
     SYSTEMTIME st;
     GetLocalTime(&st);
 
-    wchar_t processName[MAX_PATH] = L"unknown";
-
-    HWND hwnd = GetForegroundWindow();
-    if (hwnd)
+    if (hwnd == nullptr)
     {
-        DWORD processId = 0;
-
-        if (GetWindowThreadProcessId(hwnd, &processId) != 0)
-        {
-            HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
-
-            if (process)
-            {
-                wchar_t processPath[MAX_PATH];
-                DWORD pathSize = _countof(processPath);
-
-                if (QueryFullProcessImageNameW(
-                        process, 0, processPath, &pathSize))
-                {
-                    const wchar_t *name = wcsrchr(processPath, L'\\');
-                    name = name ? name + 1 : processPath;
-
-                    wcscpy_s(processName, _countof(processName), name);
-
-                    // Strip ".exe"
-                    wchar_t *extension = wcsrchr(processName, L'.');
-                    if (extension && _wcsicmp(extension, L".exe") == 0)
-                        *extension = L'\0';
-                }
-
-                CloseHandle(process);
-            }
-        }
+        LOG_ERROR("[Screenshot] handle parameter is null");
+        return;
     }
 
-    // Format: process_YYYYMMDD_HHMMSS_mmm.bmp
+    // START_CHRONO(getname);
+    const wchar_t *processName = GetCachedProcessName(hwnd);
+    // END_CHRONO(getname, "GetCachedProcessName");
+
     swprintf_s(filename,
                L"%ls_%04d-%02d-%02d_%02d-%02d-%02d-%03d.bmp",
                processName,
@@ -324,12 +308,126 @@ void Screenshot::UpdateFilenameWithForegroundProcess()
                st.wMilliseconds);
 }
 
-bool Screenshot::EncodeFileAsJPEG(const wchar_t *filePath)
+Screenshot::Screenshot()
 {
-    return m_jpegEncoder.Queue(filePath);
+    HMODULE win32u = LoadLibraryW(L"win32u.dll");
+
+    if (!win32u)
+    {
+        LOG_ERROR("win32u.dll not found");
+        return;
+    }
+
+    m_NtUserQueryWindow = reinterpret_cast<NtUserQueryWindow_t>(GetProcAddress(win32u, "NtUserQueryWindow"));
+
+    if (!m_NtUserQueryWindow)
+    {
+        LOG_ERROR("NtUserQueryWindow not found");
+        return;
+    }
 }
 
-bool Screenshot::EncodeFileAsPNG(const wchar_t *filePath)
+DWORD Screenshot::GetProcessIdFromWindow(HWND hwnd)
 {
-    return m_pngEncoder.Queue(filePath);
+    DWORD pid = 0;
+
+    // Fast (documented path)
+    if (GetWindowThreadProcessId(hwnd, &pid) && pid)
+        return pid;
+
+    // Undocumented Fallback
+    if (m_NtUserQueryWindow)
+    {
+        pid = static_cast<DWORD>(m_NtUserQueryWindow(hwnd, 0)); // 0 for window PID
+
+        if (pid)
+            return pid;
+    }
+
+    return 0;
+}
+
+const wchar_t *Screenshot::GetCachedProcessName(HWND hwnd)
+{
+    if (hwnd == nullptr)
+        return L"unknown";
+
+    // Same window as last time.
+    if (hwnd == m_lastHwnd)
+        return m_lastProcessName;
+
+    m_lastHwnd = hwnd;
+
+    DWORD processId = GetProcessIdFromWindow(hwnd);
+
+    wcscpy_s(m_lastProcessName, LASTPROCESSNAMECOUNT, L"unknown");
+
+    if (processId == 0)
+    {
+        LOG_ERROR("[Screenshot] GetProcessIdFromWindow failed: error %lu", GetLastError());
+        return m_lastProcessName;
+    }
+
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+
+    if (!process)
+        return m_lastProcessName;
+
+    wchar_t processPath[MAX_PATH] = {};
+    DWORD pathSize = _countof(processPath);
+
+    if (QueryFullProcessImageNameW(process, 0, processPath, &pathSize))
+    {
+        const wchar_t *name = wcsrchr(processPath, L'\\');
+        name = name ? name + 1 : processPath;
+
+        wcscpy_s(m_lastProcessName, LASTPROCESSNAMECOUNT, name);
+
+        // Strip ".exe"
+        wchar_t *extension = wcsrchr(m_lastProcessName, L'.');
+
+        if (extension && _wcsicmp(extension, L".exe") == 0)
+            *extension = L'\0';
+
+        StripUnrealSuffix(m_lastProcessName);
+    }
+
+    CloseHandle(process);
+
+    return m_lastProcessName;
+}
+
+void Screenshot::StripUnrealSuffix(wchar_t *name)
+{
+    static constexpr struct
+    {
+        const wchar_t *value;
+        size_t length;
+    } suffixes[] =
+        {
+            {L"-Win64-Shipping", _countof(L"-Win64-Shipping") - 1},
+            {L"-Win64-Test", _countof(L"-Win64-Test") - 1},
+            {L"-Win64-Development", _countof(L"-Win64-Development") - 1},
+            {L"-Win64-DebugGame", _countof(L"-Win64-DebugGame") - 1},
+            {L"-Win64-Debug", _countof(L"-Win64-Debug") - 1},
+        };
+
+    static constexpr size_t suffixCount = _countof(suffixes);
+    static constexpr size_t minSuffixLength = 11; // "-Win64-Test"
+
+    const size_t nameLength = wcslen(name);
+
+    if (nameLength < minSuffixLength)
+        return;
+
+    for (size_t i = 0; i < suffixCount; ++i)
+    {
+        const auto &suffix = suffixes[i];
+
+        if (nameLength >= suffix.length && _wcsicmp(name + nameLength - suffix.length, suffix.value) == 0)
+        {
+            name[nameLength - suffix.length] = L'\0';
+            return;
+        }
+    }
 }
