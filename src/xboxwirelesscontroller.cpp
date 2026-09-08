@@ -61,7 +61,8 @@ bool XboxWirelessController::Start()
 
 	std::unique_lock<std::mutex> lock(m_stateMutex);
 
-	m_stateCv.wait(lock, [this] { return m_initialized; });
+	m_stateCv.wait(lock, [this]
+				   { return m_initialized; });
 
 	const bool success = m_initSuccess;
 
@@ -510,7 +511,7 @@ void XboxWirelessController::EnumerateDevices()
 	(void)bluetoothAddress;
 }
 
-void XboxWirelessController::DumpHex(const BYTE *data, UINT size)
+void XboxWirelessController::DumpHex([[maybe_unused]] const BYTE *data, UINT size)
 {
 	for (UINT i = 0; i < size; ++i)
 		LOGXBX_D("[XboxWC] %02X", data[i]);
@@ -642,7 +643,8 @@ bool XboxWirelessController::InitializeBattery(uint64_t address)
 		LOGXBX_D("[XboxWC] Battery level characteristic found");
 
 		m_batteryCharacteristic = characteristics.GetAt(0);
-		m_batteryValueChangedToken = m_batteryCharacteristic.ValueChanged([this](auto const &characteristic, auto const &args) { OnBatteryValueChanged(characteristic, args); });
+		m_batteryValueChangedToken = m_batteryCharacteristic.ValueChanged([this](auto const &characteristic, auto const &args)
+																		  { OnBatteryValueChanged(characteristic, args); });
 
 		LOGXBX_D("[XboxWC] Battery notifications subscribed");
 
@@ -665,7 +667,7 @@ bool XboxWirelessController::InitializeBattery(uint64_t address)
 
 		return true;
 	}
-	catch (const winrt::hresult_error &e)
+	catch ([[maybe_unused]] const winrt::hresult_error &e)
 	{
 		LOGXBX_E("[XboxWC] Battery WinRT error: 0x%08X", static_cast<unsigned>(e.code().value));
 		LOGXBX_E("[XboxWC] Battery error message: %ls", e.message().c_str());
@@ -691,7 +693,7 @@ void XboxWirelessController::OnBatteryValueChanged(winrt::Windows::Devices::Blue
 
 		LOGXBX_D("[XboxWC] Battery level changed: %d%%", level);
 	}
-	catch (const winrt::hresult_error &e)
+	catch ([[maybe_unused]] const winrt::hresult_error &e)
 	{
 		LOGXBX_E("[XboxWC] Battery ValueChanged error: 0x%08X", static_cast<unsigned>(e.code().value));
 	}
@@ -713,7 +715,7 @@ void XboxWirelessController::ShutdownBattery()
 			}
 		}
 	}
-	catch (const winrt::hresult_error &e)
+	catch ([[maybe_unused]] const winrt::hresult_error &e)
 	{
 		LOGXBX_E("[XboxWC] Battery shutdown error: 0x%08X", static_cast<unsigned>(e.code().value));
 	}
@@ -760,7 +762,7 @@ int XboxWirelessController::ReadBatteryValue()
 
 		return static_cast<int>(level);
 	}
-	catch (const winrt::hresult_error &e)
+	catch ([[maybe_unused]] const winrt::hresult_error &e)
 	{
 		LOGXBX_E("[XboxWC] Battery read error: 0x%08X", static_cast<unsigned>(e.code().value));
 
