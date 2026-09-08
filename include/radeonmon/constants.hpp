@@ -80,10 +80,10 @@ constexpr int IDM_SCREENSHOT_FORMAT_JPEG = 1113;
 constexpr int IDM_SCREENSHOT_FORMAT_PNG = 1114;
 constexpr int IDM_SCREENSHOT_SAVE_FOLDER = 1115;
 constexpr int IDM_SCREENSHOT_BINDKEY = 1116;
-constexpr int IDM_ENABLEDUALSENSE_BASE = 1117; // on & off
-constexpr int IDM_CHECK_VERSION = 1119;
-constexpr int IDM_ABOUT = 1120;
-constexpr int IDM_EXIT = 1121;
+constexpr int IDM_ENABLEGAMEPAD_BASE = 1117; // 4: none, DS, Xbox, Nintendo
+constexpr int IDM_CHECK_VERSION = 1121;
+constexpr int IDM_ABOUT = 1122;
+constexpr int IDM_EXIT = 1123;
 
 // WM
 constexpr int WM_APP_LAYOUT = WM_APP + 1;
@@ -91,6 +91,7 @@ constexpr int WM_APP_VERSION_RESULT = WM_APP + 2;
 constexpr int WM_APP_VERSION_ERROR = WM_APP + 3;
 constexpr int WM_APP_GPU_PWR_TUNING_CHANGE = WM_APP + 4;
 constexpr int WM_APP_APPLY_TOPMOST = WM_APP + 5;
+constexpr int WM_APP_SCREENSHOT_KEY_ERROR = WM_APP + 6;
 
 constexpr wchar_t REPOURL[] = L"https://api.github.com/repos/amu2mod/RadeonMon/releases/latest";
 constexpr wchar_t LATESTURL[] = L"https://github.com/amu2mod/RadeonMon/releases/latest";

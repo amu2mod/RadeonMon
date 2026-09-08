@@ -20,40 +20,29 @@
 #include "radeonmon/VRRDetector.hpp"
 #include "radeonmon/Screenshot.hpp"
 // #include "radeonmon/ScreenshotKeyBinder.hpp"
+#include "radeonmon/gamepad.hpp"
 #include "radeonmon/dualsense.hpp"
+#include "radeonmon/xboxwirelesscontroller.hpp"
 
 inline UINT g_dpi = 96;
 inline GdiBackBuffer g_backBuffer;
-inline PropertyItem g_props[] =
-    {
-        {L"GPU Temperature", 0, 0, L"-"},
-        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
-        {L"GPU Hotspot", 0, 0, L"-"},
-        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
-        {L"VRAM Temperature", 0, 0, L"-"},
-        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
-        {L"Fan Speed", -1, 0, L"-"},
-        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
-        {L"Power Consumption", 0, 0, L"-"},
-        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
-        {L"CPU", 0, 0, L"-"},
-        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
-        {L"Display 1", 0, 0, L"-"},
-        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
-        {L"FPS", 0, 0, L"-"},
-        {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
+inline PropertyItem g_props[] = {
+	{L"GPU Temperature", 0, 0, L"-"},	{L"", 0, 0, L"", {}, {}, PropertyType::Separator}, {L"GPU Hotspot", 0, 0, L"-"}, {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
+	{L"VRAM Temperature", 0, 0, L"-"},	{L"", 0, 0, L"", {}, {}, PropertyType::Separator}, {L"Fan Speed", -1, 0, L"-"},	 {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
+	{L"Power Consumption", 0, 0, L"-"}, {L"", 0, 0, L"", {}, {}, PropertyType::Separator}, {L"CPU", 0, 0, L"-"},		 {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
+	{L"Display 1", 0, 0, L"-"},			{L"", 0, 0, L"", {}, {}, PropertyType::Separator}, {L"FPS", 0, 0, L"-"},		 {L"", 0, 0, L"", {}, {}, PropertyType::Separator},
 };
 
 enum MetricsIndex
 {
-    Temp = 0,
-    Hotspot = 2,
-    Vram = 4,
-    FanSpeed = 6,
-    Power = 8,
-    Cpu = 10,
-    Display = 12,
-    Fps = 14
+	Temp = 0,
+	Hotspot = 2,
+	Vram = 4,
+	FanSpeed = 6,
+	Power = 8,
+	Cpu = 10,
+	Display = 12,
+	Fps = 14
 };
 
 static_assert(std::size(g_props) == Fps + 2, "g_props and MetricsIndex are out of sync");
@@ -134,10 +123,13 @@ inline bool g_isVRREnabled;
 inline int g_draggingX, g_draggingY;
 inline Screenshot g_screenshot;
 inline bool g_drawScreenshotIcon = false;
-inline int g_screenshotKey = VK_SCROLL;
+inline int g_screenshotKey = VK_F11;
 // inline ScreenshotKeyBinder g_screenshotKeyBinder(g_screenshotKey);
 inline DualSense g_dualsense;
-inline bool g_isDualSenseEnabled = false;
 
 inline HGLOBAL g_screenshotSoundResource = nullptr;
 inline void *g_screenshotSoundData = nullptr;
+
+inline GamePad::Type g_gamepadType = GamePad::Type::None;
+inline GamePad *g_gamepad = nullptr;
+inline XboxWirelessController g_xboxWC;

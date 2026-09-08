@@ -25,7 +25,8 @@
                 "ENABLE_LOGWM": "ON",
                 "ENABLE_LOGFPS": "OFF",
                 "ENABLE_LOGVRR": "OFF",
-                "ENABLE_LOGDS": "ON"
+                "ENABLE_LOGDS": "ON",
+                "ENABLE_LOGXBX": "ON"
             }
         },
         {

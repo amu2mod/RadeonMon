@@ -2,6 +2,7 @@
 
 #include "radeonmon/logging.hpp"
 #include "radeonmon/Screenshot.hpp"
+#include "radeonmon/gamepad.hpp"
 
 #include <windows.h>
 #include <bluetoothapis.h>
@@ -23,112 +24,107 @@
 #define LOGDS_E(fmt, ...) ((void)0)
 #endif
 
-class DualSense
+class DualSense : public GamePad
 {
-public:
-    enum class Transport
-    {
-        None,
-        USB,
-        Bluetooth
-    };
+  public:
+	static const char *TransportName(Transport transport);
+	int m_batteryLevel = -1;
+	bool m_isCharging = false;
 
-    static const char *TransportName(Transport transport);
-    int8_t m_batteryLevel = -1;
-    bool m_isCharging = false;
+  public:
+	DualSense() = default;
+	inline ~DualSense() { Stop(); }
+	DualSense(const DualSense &) = delete;
+	DualSense &operator=(const DualSense &) = delete;
 
-public:
-    using Callback = std::function<void()>; // callback alias
+	bool IsRunning() const;
 
-    DualSense() = default;
-    inline ~DualSense() { Stop(); }
-    DualSense(const DualSense &) = delete;
-    DualSense &operator=(const DualSense &) = delete;
+	// GamePad Interface
+	bool Start() override;
+	void Stop() override;
+	int BatteryLevel() const override;
+	inline bool IsCharging() const override { return m_isCharging; };
+	Transport GetTransport() const override;
+	bool IsConnected() const override;
 
-    bool Start();
-    void Stop();
-    bool IsRunning() const;
-    bool IsConnected() const;
+	// API
+	void SetOnCreateButtonPressed(Callback callback) override;
+	void SetOnConnected(Callback callback) override;
+	void SetOnDisconnected(Callback callback) override;
 
-    // API
-    void SetOnCreateButtonPressed(Callback callback);
-    void SetOnConnected(Callback callback);
-    void SetOnDisconnected(Callback callback);
-    Transport GetTransport() const;
+  private:
+	enum class ReadResult
+	{
+		Disconnected,
+		SwitchTransport,
+		Stopped
+	};
 
-private:
-    enum class ReadResult
-    {
-        Disconnected,
-        SwitchTransport,
-        Stopped
-    };
+  private:
+	static constexpr USHORT DUALSENSE_VID = 0x054C;
+	static constexpr USHORT DUALSENSE_PID = 0x0CE6;
+	static constexpr DWORD REPORT_THROTTLE_MS = 50;
+	static constexpr DWORD SCREENSHOT_COOLDOWN_MS = Screenshot::MIN_INTERVAL_MS;
+	static constexpr UINT WM_DUALSENSE_DEVICE_CHANGE = WM_APP + 1;
+	static constexpr WPARAM DEVICE_CHANGE_GENERIC = 0;
+	static constexpr WPARAM DEVICE_CHANGE_BT_CONNECTED = 1;
+	static constexpr WPARAM DEVICE_CHANGE_BT_DISCONNECTED = 2;
+	static constexpr UINT_PTR DEVICE_CHANGE_TIMER_ID = 3;
+	static constexpr UINT DEVICE_CHANGE_DEBOUNCE_MS = 1000; // plenty room to avoid windows event spamming
 
-private:
-    static constexpr USHORT DUALSENSE_VID = 0x054C;
-    static constexpr USHORT DUALSENSE_PID = 0x0CE6;
-    static constexpr DWORD REPORT_THROTTLE_MS = 50;
-    static constexpr DWORD SCREENSHOT_COOLDOWN_MS = Screenshot::MIN_INTERVAL_MS;
-    static constexpr UINT WM_DUALSENSE_DEVICE_CHANGE = WM_APP + 1;
-    static constexpr WPARAM DEVICE_CHANGE_GENERIC = 0;
-    static constexpr WPARAM DEVICE_CHANGE_BT_CONNECTED = 1;
-    static constexpr WPARAM DEVICE_CHANGE_BT_DISCONNECTED = 2;
-    static constexpr UINT_PTR DEVICE_CHANGE_TIMER_ID = 3;
-    static constexpr UINT DEVICE_CHANGE_DEBOUNCE_MS = 1000; // plenty room to avoid windows event spamming
+	UINT_PTR m_pendingChangeType = DEVICE_CHANGE_GENERIC; // last non-disconnect reason seen
 
-    UINT_PTR m_pendingChangeType = DEVICE_CHANGE_GENERIC; // last non-disconnect reason seen
+	mutable std::mutex m_stateMutex;
+	bool m_running = false;
+	std::thread m_worker;
+	HANDLE m_stopEvent = nullptr;
 
-    mutable std::mutex m_stateMutex;
-    bool m_running = false;
-    std::thread m_worker;
-    HANDLE m_stopEvent = nullptr;
+	// HID device
+	mutable std::mutex m_deviceMutex;
+	HANDLE m_device = INVALID_HANDLE_VALUE;
+	HANDLE m_readEvent = nullptr;
+	OVERLAPPED m_overlapped{};
+	std::vector<BYTE> m_buffer;
+	DWORD m_reportSize = 0;
+	Transport m_transport = Transport::None;
+	bool m_switchTransportRequested = false;
 
-    // HID device
-    mutable std::mutex m_deviceMutex;
-    HANDLE m_device = INVALID_HANDLE_VALUE;
-    HANDLE m_readEvent = nullptr;
-    OVERLAPPED m_overlapped{};
-    std::vector<BYTE> m_buffer;
-    DWORD m_reportSize = 0;
-    Transport m_transport = Transport::None;
-    bool m_switchTransportRequested = false;
+	HWND m_hwnd = nullptr;
 
-    HWND m_hwnd = nullptr;
+	//// Windows device notification
+	// HID (app level)
+	HDEVNOTIFY m_notificationHandle = nullptr;
+	// HCI (Bluetooth connection level)
+	HDEVNOTIFY m_bluetoothNotificationHandle = nullptr;
+	HANDLE m_bluetoothRadio = nullptr;
 
-    //// Windows device notification
-    // HID (app level)
-    HDEVNOTIFY m_notificationHandle = nullptr;
-    // HCI (Bluetooth connection level)
-    HDEVNOTIFY m_bluetoothNotificationHandle = nullptr;
-    HANDLE m_bluetoothRadio = nullptr;
+	// Callbacks
+	mutable std::mutex m_callbackMutex;
+	Callback m_onCreateButtonPressed;
+	Callback m_onConnected;
+	Callback m_onDisconnected;
 
-    // Callbacks
-    mutable std::mutex m_callbackMutex;
-    Callback m_onCreateButtonPressed;
-    Callback m_onConnected;
-    Callback m_onDisconnected;
+  private:
+	bool InitializeDualSense(HANDLE);
+	void WorkerThread();
+	HANDLE FindDualSense(Transport &selectedTransport);
+	bool TryConnect(HANDLE existingHandle = INVALID_HANDLE_VALUE, Transport existingTransport = Transport::None);
+	void Disconnect();
+	ReadResult ReadInputReports();
+	bool IsSwitchTransportRequested() const;
+	void HandleDeviceChange(WPARAM changeType);
+	bool CreateNotificationWindow();
+	void DestroyNotificationWindow();
+	void WaitForDeviceOrStop();
+	inline bool ShouldStop() const { return m_stopEvent && WaitForSingleObject(m_stopEvent, 0) == WAIT_OBJECT_0; }
+	bool GetBluetoothAddressFromDevNode(DEVINST devInst, BLUETOOTH_ADDRESS &address);
+	bool IsBluetoothDualSenseConnected(DEVINST devInst);
 
-private:
-    bool InitializeDualSense(HANDLE);
-    void WorkerThread();
-    HANDLE FindDualSense(Transport &selectedTransport);
-    bool TryConnect(HANDLE existingHandle = INVALID_HANDLE_VALUE, Transport existingTransport = Transport::None);
-    void Disconnect();
-    ReadResult ReadInputReports();
-    bool IsSwitchTransportRequested() const;
-    void HandleDeviceChange(WPARAM changeType);
-    bool CreateNotificationWindow();
-    void DestroyNotificationWindow();
-    void WaitForDeviceOrStop();
-    inline bool ShouldStop() const { return m_stopEvent && WaitForSingleObject(m_stopEvent, 0) == WAIT_OBJECT_0; }
-    bool GetBluetoothAddressFromDevNode(DEVINST devInst, BLUETOOTH_ADDRESS &address);
-    bool IsBluetoothDualSenseConnected(DEVINST devInst);
+	// Callbacks
+	void InvokeCreateButton();
+	void InvokeConnected();
+	void InvokeDisconnected();
 
-    // Callbacks
-    void InvokeCreateButton();
-    void InvokeConnected();
-    void InvokeDisconnected();
-
-    // win32 proc
-    static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+	// win32 proc
+	static LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 };

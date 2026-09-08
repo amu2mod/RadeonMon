@@ -1,14 +1,14 @@
 #pragma once
 
+#include "radeonmon/constants.hpp"
+#include "radeonmon/structures.hpp"
+#include "radeonmon/globals.hpp"
+
 #include <Windows.h>
 #include <cstddef>
 #include "shellscalingapi.h"
 #include <commctrl.h>
 #include <shellapi.h>
-
-#include "radeonmon/constants.hpp"
-#include "radeonmon/structures.hpp"
-#include "radeonmon/globals.hpp"
 
 #include <cstdint>
 
@@ -1140,4 +1140,11 @@ inline DWORD GetForegroundPID()
     GetWindowThreadProcessId(hwnd, &pid);
 
     return pid;
+}
+
+inline std::wstring GetLastErrorMessage(DWORD error)
+{
+    wchar_t buffer[512]{};
+    FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, error, 0, buffer, ARRAYSIZE(buffer), nullptr);
+    return buffer;
 }
