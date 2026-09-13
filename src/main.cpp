@@ -24,6 +24,8 @@
 #include "radeonmon/logging.hpp"
 #include "radeonmon/version_checker.hpp"
 
+#include "radeonmon/switchprocontroller.hpp"
+
 #include <version.hpp>
 
 using namespace RadeonMon::Hardware;
@@ -34,6 +36,7 @@ using namespace RadeonMon::Hardware;
 #pragma comment(lib, "winmm.lib")
 
 void OnScreenshotAction(HWND hwnd);
+void ClearGamepadIcon(HDC hdc);
 
 void SelectGamePad(GamePad::Type type, HWND hwnd)
 {
@@ -51,7 +54,7 @@ void SelectGamePad(GamePad::Type type, HWND hwnd)
 		g_gamepad = &g_dualsense;
 		g_gamepad->SetOnConnected([]() { LOG_INFO("[APP] DualSense connected"); });
 		g_gamepad->SetOnDisconnected([]() { LOG_INFO("[APP] DualSense disconnected"); });
-		g_gamepad->SetOnCreateButtonPressed([hwnd]() { OnScreenshotAction(hwnd); });
+		g_gamepad->SetOnButtonPressed([hwnd]() { OnScreenshotAction(hwnd); });
 		g_gamepad->Start();
 		break;
 
@@ -59,12 +62,20 @@ void SelectGamePad(GamePad::Type type, HWND hwnd)
 		g_gamepad = &g_xboxWC;
 		g_gamepad->SetOnConnected([]() { LOG_INFO("[APP] Xbox Wireless Controller connected"); });
 		g_gamepad->SetOnDisconnected([]() { LOG_INFO("[APP] Xbox Wireless Controller disconnected"); });
-		g_gamepad->SetOnCreateButtonPressed([hwnd]() { OnScreenshotAction(hwnd); });
+		g_gamepad->SetOnButtonPressed([hwnd]() { OnScreenshotAction(hwnd); });
 		g_gamepad->Start();
 		break;
 
-	case GamePad::Type::NintendoSwitch2ProController:
+	case GamePad::Type::NintendoSwitchProController:
+		g_gamepad = &g_switchPC;
+		g_gamepad->SetOnConnected([]() { LOG_INFO("[APP] Switch Pro Controller connected"); });
+		g_gamepad->SetOnDisconnected([]() { LOG_INFO("[APP] Switch Pro Controller disconnected"); });
+		g_gamepad->SetOnButtonPressed([hwnd]() { OnScreenshotAction(hwnd); });
+		g_gamepad->Start();
 		break;
+
+		// case GamePad::Type::NintendoSwitch2ProController:
+		// 	break;
 	}
 
 	g_gamepadType = type;
@@ -99,9 +110,7 @@ void PaintGamepadStatus(HDC hdc)
 	{
 		if (wasVisible || g_forceFrameRedraw)
 		{
-			HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
-			FillRect(hdc, &g_border.gamepadStatus, brush);
-			DeleteObject(brush);
+			FillRect(hdc, &g_border.gamepadStatus, g_borderBrush);
 			wasVisible = false;
 		}
 
@@ -113,21 +122,18 @@ void PaintGamepadStatus(HDC hdc)
 
 	if (batteryLevel == -1)
 	{
-		LOG_WARN("[App] GamePad Battery Status: unavailable");
+		FillRect(hdc, &g_border.gamepadStatus, g_borderBrush);
+		LOG_WARN("[App] GamePad Battery Status unavailable");
 		return;
 	}
 
 	// Nothing changed and the entire UI isn't being forced to redraw.
 	if (!g_forceFrameRedraw && wasVisible && batteryLevel == lastBatteryLevel && isCharging == lastIsCharging)
-	{
 		return;
-	}
 
 	LOG_DEBUG("[App] GamePad Battery Status: %d%%, charging: %s", batteryLevel, isCharging ? "yes" : "no");
 
-	HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
-	FillRect(hdc, &g_border.gamepadStatus, brush);
-	DeleteObject(brush);
+	FillRect(hdc, &g_border.gamepadStatus, g_borderBrush);
 
 	HFONT oldFont = (HFONT)SelectObject(hdc, g_titleFont);
 	SetBkMode(hdc, TRANSPARENT);
@@ -185,9 +191,7 @@ void DrawGamepadIcon(HDC hdc)
 	{
 		RECT dotRect = g_border.gamepadIcon;
 		dotRect.left = g_border.gamepadIcon.left - dotGap - dotDiameter - 1;
-		HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
-		FillRect(hdc, &dotRect, brush);
-		DeleteObject(brush);
+		FillRect(hdc, &dotRect, g_borderBrush);
 	}
 
 	lastTransport = transport;
@@ -257,9 +261,7 @@ void ClearGamepadIcon(HDC hdc)
 	rect.top--;
 	rect.bottom++;
 
-	HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
-	FillRect(hdc, &rect, brush);
-	DeleteObject(brush);
+	FillRect(hdc, &rect, g_borderBrush);
 }
 
 void PaintGampepadIcon(HDC hdc)
@@ -286,9 +288,7 @@ void PaintGampepadIcon(HDC hdc)
 
 void DrawScreenshotIcon(HWND hwnd, HDC hdc)
 {
-	HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
-	FillRect(hdc, &g_border.screeshotIcon, brush);
-	DeleteObject(brush);
+	FillRect(hdc, &g_border.screeshotIcon, g_borderBrush);
 
 	HFONT oldFont = (HFONT)SelectObject(hdc, g_titleFont);
 	SetBkMode(hdc, TRANSPARENT);
@@ -301,21 +301,19 @@ void DrawScreenshotIcon(HWND hwnd, HDC hdc)
 	InvalidateRect(hwnd, &g_border.screeshotIcon, FALSE);
 }
 
-void ClearScreenshotIcon(HDC hdc)
-{
-	HBRUSH brush = CreateSolidBrush(BORDERCOLOR);
-	FillRect(hdc, &g_border.screeshotIcon, brush);
-	DeleteObject(brush);
-}
+void ClearScreenshotIcon(HDC hdc) { FillRect(hdc, &g_border.screeshotIcon, g_borderBrush); }
 
 void OnScreenshotAction(HWND hwnd)
 {
 	if (g_screenshot.GetScreenshot())
+	// if (g_screenshot.BurstScreenshot(10))
 	{
 		PlayScreenshotSound();
 		DrawScreenshotIcon(hwnd, g_backBuffer.memDC);
 		SetTimer(hwnd, SCREENSHOT_ICON_ID, 1000, nullptr);
 	}
+	else
+		LOG_ERROR("[App] failed to get a screenshot");
 }
 
 void SetDisplayLine(const DisplayInfo &display, HWND hwnd = nullptr)
@@ -938,7 +936,6 @@ void OnResizeWindow(HWND hwnd, bool grow)
 void PaintFrame(HDC hdc)
 {
 	static bool drawn = false;
-	static HBRUSH frameBrush = CreateSolidBrush(BORDERCOLOR);
 
 	if (!g_forceFrameRedraw && drawn)
 		return;
@@ -948,10 +945,10 @@ void PaintFrame(HDC hdc)
 	drawn = true;
 
 	// Border sides
-	FillRect(hdc, &g_border.top, frameBrush);
-	FillRect(hdc, &g_border.bottom, frameBrush);
-	FillRect(hdc, &g_border.left, frameBrush);
-	FillRect(hdc, &g_border.right, frameBrush);
+	FillRect(hdc, &g_border.top, g_borderBrush);
+	FillRect(hdc, &g_border.bottom, g_borderBrush);
+	FillRect(hdc, &g_border.left, g_borderBrush);
+	FillRect(hdc, &g_border.right, g_borderBrush);
 
 	// Title text
 	SetBkMode(hdc, TRANSPARENT);
@@ -1055,9 +1052,7 @@ void PaintFpsTags(HDC hdc)
 	// Clear previous tags
 	const RECT &rTags = g_props[MetricsIndex::Fps].textLabelRc;
 	RECT clearRc = {rTags.right, rTags.top, g_props[MetricsIndex::Fps].valueRc.left, rTags.bottom};
-	HBRUSH brush = CreateSolidBrush(BACKGROUNDCOLOR);
-	FillRect(hdc, &clearRc, brush);
-	DeleteObject(brush);
+	FillRect(hdc, &clearRc, g_bgBrush);
 
 	if (adlxCurrentFPS == -1)
 	{
@@ -1205,8 +1200,6 @@ void PaintDisplayTags(HDC hdc)
 	const int topPadding = g_layoutMetrics.tagTopPadding;
 	const int sidePadding = g_layoutMetrics.tagSidePadding;
 
-	static HBRUSH bgBrush = CreateSolidBrush(BACKGROUNDCOLOR);
-
 	static bool vrrTagCleared = false;
 
 	if (g_vrrDetector.IsVRROn())
@@ -1217,7 +1210,7 @@ void PaintDisplayTags(HDC hdc)
 	else if (!vrrTagCleared)
 	{
 		RECT vrrTagRc = {x - sidePadding, y - topPadding, x + g_layoutMetrics.tagCharWidth * 3 + 2 * sidePadding, y + g_layoutMetrics.tagCharHeight + topPadding};
-		FillRect(hdc, &vrrTagRc, bgBrush);
+		FillRect(hdc, &vrrTagRc, g_bgBrush);
 		vrrTagCleared = true;
 	}
 
@@ -1241,7 +1234,7 @@ void PaintDisplayTags(HDC hdc)
 	else if (!lfcTagCleared)
 	{
 		RECT lfcTagRc = {x - sidePadding, y - topPadding, x + g_layoutMetrics.tagCharWidth * 3 + 2 * sidePadding, y + g_layoutMetrics.tagCharHeight + topPadding};
-		FillRect(hdc, &lfcTagRc, bgBrush);
+		FillRect(hdc, &lfcTagRc, g_bgBrush);
 		lfcTagCleared = true;
 	}
 
@@ -1733,7 +1726,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		AppendMenuW(hDualSenseMenu, MF_STRING | (g_gamepadType == GamePad::Type::None) ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED, IDM_ENABLEGAMEPAD_BASE, L"Off");
 		AppendMenuW(hDualSenseMenu, MF_STRING | (g_gamepadType == GamePad::Type::DualSense) ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED, IDM_ENABLEGAMEPAD_BASE + 1, L"DualSense");
 		AppendMenuW(hDualSenseMenu, MF_STRING | (g_gamepadType == GamePad::Type::XboxWirelessController) ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED, IDM_ENABLEGAMEPAD_BASE + 2, L"Xbox Wireless Controller");
-		AppendMenuW(hDualSenseMenu, MF_STRING | MF_DISABLED, IDM_ENABLEGAMEPAD_BASE + 3, L"Nintendo Switch 2 Pro Controller");
+		AppendMenuW(hDualSenseMenu, MF_STRING | (g_gamepadType == GamePad::Type::NintendoSwitchProController) ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED, IDM_ENABLEGAMEPAD_BASE + 3, L"Nintendo Switch Pro Controller");
 
 		///////////////////////////////
 
@@ -2007,11 +2000,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					sepProp.dirty = true;
 				}
 				else
-				{
-					HBRUSH brush = CreateSolidBrush(BACKGROUNDCOLOR);
-					FillRect(g_backBuffer.memDC, &result, brush);
-					DeleteObject(brush);
-				}
+					FillRect(g_backBuffer.memDC, &result, g_bgBrush);
 
 				InvalidateRect(hwnd, &result, FALSE);
 				// UpdateWindow(hwnd);
@@ -2039,11 +2028,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					int y = labelRc.top + (labelRc.bottom - labelRc.top - g_layoutMetrics.tagCharHeight) / 2;
 					const int topPadding = g_layoutMetrics.tagTopPadding;
 					const int sidePadding = g_layoutMetrics.tagSidePadding;
-					HBRUSH bgBrush = CreateSolidBrush(BACKGROUNDCOLOR);
 					RECT vrrTagRc = {x - sidePadding, y - topPadding, x + g_layoutMetrics.tagCharWidth * 3 + 2 * sidePadding, y + g_layoutMetrics.tagCharHeight + topPadding};
 
-					FillRect(g_backBuffer.memDC, &vrrTagRc, bgBrush);
-					DeleteObject(bgBrush);
+					FillRect(g_backBuffer.memDC, &vrrTagRc, g_bgBrush);
 
 					InvalidateRect(hwnd, &vrrTagRc, FALSE);
 				}
@@ -2072,7 +2059,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 				case 3:
 					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for Nintendo");
-					SelectGamePad(GamePad::Type::NintendoSwitch2ProController, hwnd);
+					SelectGamePad(GamePad::Type::NintendoSwitchProController, hwnd);
 					break;
 
 				default:
@@ -2453,6 +2440,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
 
 	g_autostart = IsAutostartEnabled();
 
+	g_borderBrush = CreateSolidBrush(BORDERCOLOR);
+	g_bgBrush = CreateSolidBrush(BACKGROUNDCOLOR);
+
 	POINT pt = {g_xPos, g_yPos};
 
 	if (isPointValid(pt))
@@ -2616,6 +2606,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
 
 	UnregisterHotKey(nullptr, HOTKEY_SCREENSHOT);
 	CoUninitialize();
+
+	DeleteObject(g_borderBrush);
+	g_borderBrush = nullptr;
+	DeleteObject(g_bgBrush);
+	g_bgBrush = nullptr;
 
 	return static_cast<int>(msg.wParam);
 }

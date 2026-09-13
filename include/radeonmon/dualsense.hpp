@@ -24,6 +24,21 @@
 #define LOGDS_E(fmt, ...) ((void)0)
 #endif
 
+/**
+ * DualSense controller implementation using direct Windows HID access.
+ *
+ * Technical choice:
+ * - Uses the Windows HID device interface (CreateFile/ReadFile + OVERLAPPED I/O) which is a low level access.
+ * - HidD_GetPreparsedData() is used to inspect the HID report capabilities;
+ *   input reports are then read directly from the HID device handle.
+ *
+ * Threading:
+ * - HID reads are performed asynchronously on the worker thread.
+ * - The worker uses MsgWaitForMultipleObjects() so the same thread can both
+ *   wait for HID input and process the notification window's Windows messages.
+ *
+ * TODO: Switch to Raw Input API
+ */
 class DualSense : public GamePad
 {
   public:
@@ -37,18 +52,15 @@ class DualSense : public GamePad
 	DualSense(const DualSense &) = delete;
 	DualSense &operator=(const DualSense &) = delete;
 
-	bool IsRunning() const;
-
 	// GamePad Interface
 	bool Start() override;
 	void Stop() override;
 	int BatteryLevel() const override;
 	inline bool IsCharging() const override { return m_isCharging; };
 	Transport GetTransport() const override;
-	bool IsConnected() const override;
 
 	// API
-	void SetOnCreateButtonPressed(Callback callback) override;
+	void SetOnButtonPressed(Callback callback) override;
 	void SetOnConnected(Callback callback) override;
 	void SetOnDisconnected(Callback callback) override;
 
@@ -75,7 +87,6 @@ class DualSense : public GamePad
 	UINT_PTR m_pendingChangeType = DEVICE_CHANGE_GENERIC; // last non-disconnect reason seen
 
 	mutable std::mutex m_stateMutex;
-	bool m_running = false;
 	std::thread m_worker;
 	HANDLE m_stopEvent = nullptr;
 
@@ -119,6 +130,7 @@ class DualSense : public GamePad
 	inline bool ShouldStop() const { return m_stopEvent && WaitForSingleObject(m_stopEvent, 0) == WAIT_OBJECT_0; }
 	bool GetBluetoothAddressFromDevNode(DEVINST devInst, BLUETOOTH_ADDRESS &address);
 	bool IsBluetoothDualSenseConnected(DEVINST devInst);
+	inline bool IsConnected() const { return m_device != INVALID_HANDLE_VALUE; }
 
 	// Callbacks
 	void InvokeCreateButton();

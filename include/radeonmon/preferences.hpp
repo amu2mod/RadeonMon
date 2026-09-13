@@ -95,5 +95,5 @@ inline void LoadPreferences()
 	else
 		g_screenshot.m_format = static_cast<Screenshot::Format>(f);
 
-	g_gamepadType = static_cast<GamePad::Type>(std::clamp(GetPrivateProfileIntW(L"Screenshot", L"GamepadType", 0, path), 0u, static_cast<UINT>(GamePad::Type::XboxWirelessController)));
+	g_gamepadType = static_cast<GamePad::Type>(std::clamp(GetPrivateProfileIntW(L"Screenshot", L"GamepadType", 0, path), 0u, static_cast<UINT>(GamePad::Type::NintendoSwitchProController)));
 }

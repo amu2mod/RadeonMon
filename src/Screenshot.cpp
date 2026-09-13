@@ -1,433 +1,521 @@
 #include "radeonmon/Screenshot.hpp"
 #include "radeonmon/logging.hpp"
 
-bool Screenshot::GetScreenshot()
+bool Screenshot::CaptureScreenshot(ScreenshotBuffer &output)
 {
-    if (IsPathEmpty())
-    {
-        LOG_ERROR("[Screenshot] path empty");
-        return false;
-    }
+	HWND hwnd = GetForegroundWindow();
 
-    const DWORD now = GetTickCount();
-    if (lastScreenshotTime != 0 && (now - lastScreenshotTime) < MIN_INTERVAL_MS)
-    {
-        LOG_WARN("[Screenhot] Antispam triggered");
-        return false; // Too soon;
-    }
+	if (!hwnd)
+		return false;
 
-    // Get the foreground window
-    HWND hwnd = GetForegroundWindow();
-    if (!hwnd)
-    {
-        LOG_ERROR("[Screenhot] GetForegroundWindow failed");
-        return false;
-    }
+	RECT clientRect{};
 
-    // Get the client area dimensions
-    RECT clientRect{};
-    if (!GetClientRect(hwnd, &clientRect))
-    {
-        LOG_ERROR("[Screenhot] GetClientRect failed. Error: %d", GetLastError());
-        return false;
-    }
+	if (!GetClientRect(hwnd, &clientRect))
+		return false;
 
-    const int width = clientRect.right - clientRect.left;
-    const int height = clientRect.bottom - clientRect.top;
+	const int width = clientRect.right - clientRect.left;
+	const int height = clientRect.bottom - clientRect.top;
 
-    if (width <= 0 || height <= 0)
-    {
-        LOG_ERROR("[Screenhot] Invalid client dimensions: %dx%d", width, height);
-        return false;
-    }
+	if (width <= 0 || height <= 0)
+		return false;
 
-    // Convert client (0,0) to screen coordinates
-    POINT screenPos{clientRect.left, clientRect.top};
+	POINT screenPos{clientRect.left, clientRect.top};
 
-    if (!ClientToScreen(hwnd, &screenPos))
-    {
-        LOG_ERROR("[Screenhot] ClientToScreen failed. Error: %d", GetLastError());
-        return false;
-    }
+	if (!ClientToScreen(hwnd, &screenPos))
+		return false;
 
-    // Get screen DC
-    HDC hScreenDC = GetDC(nullptr);
-    if (!hScreenDC)
-    {
-        LOG_ERROR("[Screenhot] GetDC failed");
-        return false;
-    }
+	HDC hScreenDC = GetDC(nullptr);
 
-    // Create memory DC
-    HDC hMemDC = CreateCompatibleDC(hScreenDC);
-    if (!hMemDC)
-    {
-        LOG_ERROR("[Screenhot] CreateCompatibleDC failed. Error: %d", GetLastError());
-        ReleaseDC(nullptr, hScreenDC);
-        return false;
-    }
+	if (!hScreenDC)
+		return false;
 
-    // Create bitmap matching the client area
-    HBITMAP hBitmap = CreateCompatibleBitmap(hScreenDC, width, height);
+	HDC hMemDC = CreateCompatibleDC(hScreenDC);
 
-    if (!hBitmap)
-    {
-        LOG_ERROR("[Screenhot] CreateCompatibleBitmap failed. Error: %d", GetLastError());
-        DeleteDC(hMemDC);
-        ReleaseDC(nullptr, hScreenDC);
-        return false;
-    }
+	if (!hMemDC)
+	{
+		ReleaseDC(nullptr, hScreenDC);
+		return false;
+	}
 
-    // Select bitmap into memory DC
-    HGDIOBJ oldBitmap = SelectObject(hMemDC, hBitmap);
+	HBITMAP hBitmap = CreateCompatibleBitmap(hScreenDC, width, height);
 
-    if (!oldBitmap)
-    {
-        LOG_ERROR("[Screenhot] SelectObject failed. Error: %d", GetLastError());
-        DeleteObject(hBitmap);
-        DeleteDC(hMemDC);
-        ReleaseDC(nullptr, hScreenDC);
-        return false;
-    }
+	if (!hBitmap)
+	{
+		DeleteDC(hMemDC);
+		ReleaseDC(nullptr, hScreenDC);
+		return false;
+	}
 
-    // Capture only the client/game area
-    BOOL result = BitBlt(hMemDC, 0, 0, width, height, hScreenDC, screenPos.x, screenPos.y, SRCCOPY | CAPTUREBLT);
+	HGDIOBJ oldBitmap = SelectObject(hMemDC, hBitmap);
 
-    auto end = std::chrono::steady_clock::now();
+	const BOOL result = BitBlt(hMemDC, 0, 0, width, height, hScreenDC, screenPos.x, screenPos.y, SRCCOPY | CAPTUREBLT);
 
-    if (!result)
-        LOG_ERROR("[Screenhot] BitBlt failed. Error: %d", GetLastError());
+	if (!result)
+	{
+		DeleteObject(hBitmap);
+		DeleteDC(hMemDC);
+		ReleaseDC(nullptr, hScreenDC);
+		return false;
+	}
 
-    // Save bitmap
-    UpdateFilenameWithForegroundProcess(hwnd);
-    std::wstring fullPath = std::wstring(path) + filename;
+	BITMAPINFOHEADER bi{};
+	bi.biSize = sizeof(BITMAPINFOHEADER);
+	bi.biWidth = width;
+	bi.biHeight = -height;
+	bi.biPlanes = 1;
+	bi.biBitCount = 32;
+	bi.biCompression = BI_RGB;
 
-    if (!SaveBitmapToFile(hBitmap, fullPath.c_str()))
-        LOG_ERROR("[Screenhot] SaveBitmapToFile failed");
-    else
-    {
-        if (m_format == JPEG)
-        {
-            if (!EncodeFileAsJPEG(fullPath.c_str()))
-                LOG_ERROR("Failed to queue JPEG encoding: %ls", fullPath.c_str());
-        }
-        else if (m_format == PNG)
-        {
-            if (!EncodeFileAsPNG(fullPath.c_str()))
-                LOG_ERROR("Failed to queue JPEG encoding: %ls", fullPath.c_str());
-        }
-    }
+	const size_t imageSize = static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
 
-    // Restore original bitmap
-    SelectObject(hMemDC, oldBitmap);
+	output.pixels.resize(imageSize);
 
-    // Cleanup
-    DeleteObject(hBitmap);
-    DeleteDC(hMemDC);
-    ReleaseDC(nullptr, hScreenDC);
+	const int scanLines = GetDIBits(hScreenDC, hBitmap, 0, height, output.pixels.data(), reinterpret_cast<BITMAPINFO *>(&bi), DIB_RGB_COLORS);
 
-    lastScreenshotTime = now;
+	SelectObject(hMemDC, oldBitmap);
+	DeleteObject(hBitmap);
+	DeleteDC(hMemDC);
+	ReleaseDC(nullptr, hScreenDC);
 
-    return true;
+	if (scanLines != height)
+	{
+		output.pixels.clear();
+		return false;
+	}
+
+	output.width = width;
+	output.height = height;
+
+	UpdateFilenameWithForegroundProcess(hwnd);
+
+	output.filename = m_filename;
+
+	return true;
 }
 
 bool Screenshot::SetPath(const wchar_t *newPath)
 {
-    if (newPath == nullptr || newPath[0] == L'\0')
-        return false;
+	if (newPath == nullptr || newPath[0] == L'\0')
+		return false;
 
-    const size_t len = wcslen(newPath);
+	const size_t len = wcslen(newPath);
 
-    // Check that the path exists and is a directory.
-    const DWORD attributes = GetFileAttributesW(newPath);
-    if (attributes == INVALID_FILE_ATTRIBUTES ||
-        !(attributes & FILE_ATTRIBUTE_DIRECTORY))
-        return false;
+	// Check that the path exists and is a directory.
+	const DWORD attributes = GetFileAttributesW(newPath);
+	if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY))
+		return false;
 
-    // Check write access before modifying the path.
-    if (_waccess_s(newPath, 2) != 0)
-        return false;
+	// Check write access before modifying the path.
+	if (_waccess_s(newPath, 2) != 0)
+		return false;
 
-    // Copy the path, appending '\' if necessary.
-    if (len > 0 && (newPath[len - 1] == L'\\' || newPath[len - 1] == L'/'))
-    {
-        if (wcscpy_s(path, _countof(path), newPath) != 0)
-            return false;
-    }
-    else
-    {
-        if (wcscpy_s(path, _countof(path), newPath) != 0)
-            return false;
+	// Copy the path, appending '\' if necessary.
+	if (len > 0 && (newPath[len - 1] == L'\\' || newPath[len - 1] == L'/'))
+	{
+		if (wcscpy_s(m_path, _countof(m_path), newPath) != 0)
+			return false;
+	}
+	else
+	{
+		if (wcscpy_s(m_path, _countof(m_path), newPath) != 0)
+			return false;
 
-        if (wcscat_s(path, _countof(path), L"\\") != 0)
-            return false;
-    }
+		if (wcscat_s(m_path, _countof(m_path), L"\\") != 0)
+			return false;
+	}
 
-    return true;
+	return true;
 }
 
-bool Screenshot::SaveBitmapToFile(HBITMAP hBitmap, const wchar_t *filePath)
+bool Screenshot::SaveBitmapToFile(const ScreenshotBuffer &screenshot, const wchar_t *filePath)
 {
-    if (!hBitmap || !filePath)
-        return false;
+	if (filePath == nullptr)
+		return false;
 
-    BITMAP bmp{};
-    if (GetObject(hBitmap, sizeof(BITMAP), &bmp) == 0)
-    {
-        LOG_ERROR("[Screenhot] GetObject failed. Error: {%d}", GetLastError());
-        return false;
-    }
+	const int width = screenshot.width;
+	const int height = screenshot.height;
 
-    const int width = bmp.bmWidth;
-    const int height = bmp.bmHeight;
+	if (width <= 0 || height <= 0)
+	{
+		LOG_ERROR("[Screenshot] Invalid bitmap dimensions: %dx%d", width, height);
+		return false;
+	}
 
-    if (width <= 0 || height <= 0)
-    {
-        LOG_ERROR("[Screenhot] Invalid bitmap dimensions: %dx%d", width, height);
-        return false;
-    }
+	const size_t rowSize = static_cast<size_t>(width) * 4;
+	const size_t imageSize = rowSize * static_cast<size_t>(height);
 
-    // LOG_DEBUG("[Screenhot] Saving bitmap: %dx%d", width, height);
+	if (screenshot.pixels.size() != imageSize)
+	{
+		LOG_ERROR("[Screenshot] Invalid pixel buffer size: %zu, expected %zu", screenshot.pixels.size(), imageSize);
+		return false;
+	}
 
-    // 32-bit top-down bitmap.
-    BITMAPINFOHEADER bi{};
-    bi.biSize = sizeof(BITMAPINFOHEADER);
-    bi.biWidth = width;
-    bi.biHeight = -height; // Top-down
-    bi.biPlanes = 1;
-    bi.biBitCount = 32;
-    bi.biCompression = BI_RGB;
+	BITMAPINFOHEADER bi{};
+	bi.biSize = sizeof(BITMAPINFOHEADER);
+	bi.biWidth = width;
+	bi.biHeight = -height; // Top-down
+	bi.biPlanes = 1;
+	bi.biBitCount = 32;
+	bi.biCompression = BI_RGB;
+	bi.biSizeImage = static_cast<DWORD>(imageSize);
 
-    const DWORD rowSize = static_cast<DWORD>(width) * 4;
-    const DWORD imageSize = rowSize * static_cast<DWORD>(height);
+	BITMAPFILEHEADER bmfHeader{};
+	bmfHeader.bfType = 0x4D42; // "BM"
+	bmfHeader.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
 
-    BYTE *lpBits = new BYTE[imageSize];
+	bmfHeader.bfSize = bmfHeader.bfOffBits + static_cast<DWORD>(imageSize);
 
-    // Get a DC for GetDIBits.
-    HDC hDC = GetDC(nullptr);
-    if (!hDC)
-    {
-        LOG_ERROR("[Screenhot] GetDC failed. Error: {%d}", GetLastError());
-        delete[] lpBits;
-        return false;
-    }
+	HANDLE hFile = CreateFileW(filePath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 
-    // Extract bitmap pixels.
-    int scanLines = GetDIBits(hDC, hBitmap, 0, height, lpBits, reinterpret_cast<BITMAPINFO *>(&bi), DIB_RGB_COLORS);
+	if (hFile == INVALID_HANDLE_VALUE)
+	{
+		LOG_ERROR("[Screenshot] CreateFileW failed. Error: %lu", GetLastError());
+		return false;
+	}
 
-    ReleaseDC(nullptr, hDC);
+	bool success = true;
+	DWORD written = 0;
 
-    if (scanLines == 0)
-    {
-        LOG_ERROR("[Screenhot] GetDIBits failed. Error: {%d}", GetLastError());
-        delete[] lpBits;
-        return false;
-    }
+	// Write BMP file header.
+	if (!WriteFile(hFile, &bmfHeader, sizeof(bmfHeader), &written, nullptr) || written != sizeof(bmfHeader))
+	{
+		success = false;
+	}
 
-    // Create output file.
-    HANDLE hFile = CreateFileW(filePath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+	// Write DIB header.
+	if (success)
+		if (!WriteFile(hFile, &bi, sizeof(bi), &written, nullptr) || written != sizeof(bi))
+			success = false;
 
-    if (hFile == INVALID_HANDLE_VALUE)
-    {
-        LOG_ERROR("[Screenhot] CreateFileW failed. Error: {%d}", GetLastError());
-        delete[] lpBits;
-        return false;
-    }
+	// Write pixel data.
+	if (success)
+		if (!WriteFile(hFile, screenshot.pixels.data(), static_cast<DWORD>(imageSize), &written, nullptr) || written != imageSize)
+			success = false;
 
-    BITMAPFILEHEADER bmfHeader{};
-    bmfHeader.bfType = 0x4D42; // "BM"
+	const DWORD error = success ? ERROR_SUCCESS : GetLastError();
 
-    bmfHeader.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
-    bmfHeader.bfSize = bmfHeader.bfOffBits + imageSize;
+	CloseHandle(hFile);
 
-    DWORD written = 0;
-    bool success = true;
+	if (!success)
+	{
+		LOG_ERROR("[Screenshot] WriteFile failed. Error: %lu", error);
+		return false;
+	}
 
-    // Write BMP file header.
-    if (!WriteFile(hFile, &bmfHeader, sizeof(bmfHeader), &written, nullptr) || written != sizeof(bmfHeader))
-        success = false;
+	LOG_INFO("[Screenshot] Successfully saved as %ls", screenshot.filename.c_str());
 
-    // Write DIB header.
-    if (success)
-        if (!WriteFile(hFile, &bi, sizeof(bi), &written, nullptr) || written != sizeof(bi))
-            success = false;
-
-    // Write pixel data.
-    if (success)
-        if (!WriteFile(hFile, lpBits, imageSize, &written, nullptr) || written != imageSize)
-            success = false;
-
-    CloseHandle(hFile);
-    delete[] lpBits;
-
-    if (!success)
-    {
-        LOG_ERROR("[Screenhot] WriteFile failed. Error: {%d}", GetLastError());
-        return false;
-    }
-
-    LOG_INFO("[Screenhot] Successfully saved as %ls", filename);
-
-    return true;
+	return true;
 }
 
-bool Screenshot::EncodeFileAsJPEG(const wchar_t *filePath)
-{
-    return m_jpegEncoder.Queue(filePath);
-}
+bool Screenshot::EncodeFileAsJPEG(const wchar_t *filePath) { return m_jpegEncoder.Queue(filePath); }
 
-bool Screenshot::EncodeFileAsPNG(const wchar_t *filePath)
-{
-    return m_pngEncoder.Queue(filePath);
-}
+bool Screenshot::EncodeFileAsPNG(const wchar_t *filePath) { return m_pngEncoder.Queue(filePath); }
 
 void Screenshot::UpdateFilenameWithForegroundProcess(HWND hwnd)
 {
-    SYSTEMTIME st;
-    GetLocalTime(&st);
+	SYSTEMTIME st;
+	GetLocalTime(&st);
 
-    if (hwnd == nullptr)
-    {
-        LOG_ERROR("[Screenshot] handle parameter is null");
-        return;
-    }
+	if (hwnd == nullptr)
+	{
+		LOG_ERROR("[Screenshot] handle parameter is null");
+		return;
+	}
 
-    // START_CHRONO(getname);
-    const wchar_t *processName = GetCachedProcessName(hwnd);
-    // END_CHRONO(getname, "GetCachedProcessName");
+	// START_CHRONO(getname);
+	const wchar_t *processName = GetCachedProcessName(hwnd);
+	// END_CHRONO(getname, "GetCachedProcessName");
 
-    swprintf_s(filename,
-               L"%ls_%04d-%02d-%02d_%02d-%02d-%02d-%03d.bmp",
-               processName,
-               st.wYear,
-               st.wMonth,
-               st.wDay,
-               st.wHour,
-               st.wMinute,
-               st.wSecond,
-               st.wMilliseconds);
+	swprintf_s(m_filename, L"%ls_%04d-%02d-%02d_%02d-%02d-%02d-%03d.bmp", processName, st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 }
 
 Screenshot::Screenshot()
 {
-    HMODULE win32u = LoadLibraryW(L"win32u.dll");
+	HMODULE win32u = LoadLibraryW(L"win32u.dll");
 
-    if (!win32u)
-    {
-        LOG_ERROR("win32u.dll not found");
-        return;
-    }
+	if (!win32u)
+	{
+		LOG_ERROR("win32u.dll not found");
+		return;
+	}
 
-    m_NtUserQueryWindow = reinterpret_cast<NtUserQueryWindow_t>(GetProcAddress(win32u, "NtUserQueryWindow"));
+	m_NtUserQueryWindow = reinterpret_cast<NtUserQueryWindow_t>(GetProcAddress(win32u, "NtUserQueryWindow"));
 
-    if (!m_NtUserQueryWindow)
-    {
-        LOG_ERROR("NtUserQueryWindow not found");
-        return;
-    }
+	if (!m_NtUserQueryWindow)
+	{
+		LOG_ERROR("NtUserQueryWindow not found");
+		return;
+	}
 }
 
 DWORD Screenshot::GetProcessIdFromWindow(HWND hwnd)
 {
-    DWORD pid = 0;
+	DWORD pid = 0;
 
-    // Fast (documented path)
-    if (GetWindowThreadProcessId(hwnd, &pid) && pid)
-        return pid;
+	// Fast (documented path)
+	if (GetWindowThreadProcessId(hwnd, &pid) && pid)
+		return pid;
 
-    // Undocumented Fallback
-    if (m_NtUserQueryWindow)
-    {
-        pid = static_cast<DWORD>(m_NtUserQueryWindow(hwnd, 0)); // 0 for window PID
+	// Undocumented Fallback
+	if (m_NtUserQueryWindow)
+	{
+		pid = static_cast<DWORD>(m_NtUserQueryWindow(hwnd, 0)); // 0 for window PID
 
-        if (pid)
-            return pid;
-    }
+		if (pid)
+			return pid;
+	}
 
-    return 0;
+	return 0;
 }
 
 const wchar_t *Screenshot::GetCachedProcessName(HWND hwnd)
 {
-    if (hwnd == nullptr)
-        return L"unknown";
+	if (hwnd == nullptr)
+		return L"unknown";
 
-    // Same window as last time.
-    if (hwnd == m_lastHwnd)
-        return m_lastProcessName;
+	// Same window as last time.
+	if (hwnd == m_lastHwnd)
+		return m_lastProcessName;
 
-    m_lastHwnd = hwnd;
+	m_lastHwnd = hwnd;
 
-    DWORD processId = GetProcessIdFromWindow(hwnd);
+	DWORD processId = GetProcessIdFromWindow(hwnd);
 
-    wcscpy_s(m_lastProcessName, LASTPROCESSNAMECOUNT, L"unknown");
+	wcscpy_s(m_lastProcessName, LASTPROCESSNAMECOUNT, L"unknown");
 
-    if (processId == 0)
-    {
-        LOG_ERROR("[Screenshot] GetProcessIdFromWindow failed: error %lu", GetLastError());
-        return m_lastProcessName;
-    }
+	if (processId == 0)
+	{
+		LOG_ERROR("[Screenshot] GetProcessIdFromWindow failed: error %lu", GetLastError());
+		return m_lastProcessName;
+	}
 
-    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+	HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
 
-    if (!process)
-        return m_lastProcessName;
+	if (!process)
+		return m_lastProcessName;
 
-    wchar_t processPath[MAX_PATH] = {};
-    DWORD pathSize = _countof(processPath);
+	wchar_t processPath[MAX_PATH] = {};
+	DWORD pathSize = _countof(processPath);
 
-    if (QueryFullProcessImageNameW(process, 0, processPath, &pathSize))
-    {
-        const wchar_t *name = wcsrchr(processPath, L'\\');
-        name = name ? name + 1 : processPath;
+	if (QueryFullProcessImageNameW(process, 0, processPath, &pathSize))
+	{
+		const wchar_t *name = wcsrchr(processPath, L'\\');
+		name = name ? name + 1 : processPath;
 
-        wcscpy_s(m_lastProcessName, LASTPROCESSNAMECOUNT, name);
+		wcscpy_s(m_lastProcessName, LASTPROCESSNAMECOUNT, name);
 
-        // Strip ".exe"
-        wchar_t *extension = wcsrchr(m_lastProcessName, L'.');
+		// Strip ".exe"
+		wchar_t *extension = wcsrchr(m_lastProcessName, L'.');
 
-        if (extension && _wcsicmp(extension, L".exe") == 0)
-            *extension = L'\0';
+		if (extension && _wcsicmp(extension, L".exe") == 0)
+			*extension = L'\0';
 
-        StripUnrealSuffix(m_lastProcessName);
-    }
+		StripUnrealSuffix(m_lastProcessName);
+	}
 
-    CloseHandle(process);
+	CloseHandle(process);
 
-    return m_lastProcessName;
+	return m_lastProcessName;
 }
 
 void Screenshot::StripUnrealSuffix(wchar_t *name)
 {
-    static constexpr struct
-    {
-        const wchar_t *value;
-        size_t length;
-    } suffixes[] =
-        {
-            {L"-Win64-Shipping", _countof(L"-Win64-Shipping") - 1},
-            {L"-Win64-Test", _countof(L"-Win64-Test") - 1},
-            {L"-Win64-Development", _countof(L"-Win64-Development") - 1},
-            {L"-Win64-DebugGame", _countof(L"-Win64-DebugGame") - 1},
-            {L"-Win64-Debug", _countof(L"-Win64-Debug") - 1},
-        };
+	static constexpr struct
+	{
+		const wchar_t *value;
+		size_t length;
+	} suffixes[] = {
+		{L"-Win64-Shipping", _countof(L"-Win64-Shipping") - 1}, {L"-Win64-Test", _countof(L"-Win64-Test") - 1}, {L"-Win64-Development", _countof(L"-Win64-Development") - 1}, {L"-Win64-DebugGame", _countof(L"-Win64-DebugGame") - 1}, {L"-Win64-Debug", _countof(L"-Win64-Debug") - 1},
+	};
 
-    static constexpr size_t suffixCount = _countof(suffixes);
-    static constexpr size_t minSuffixLength = 11; // "-Win64-Test"
+	static constexpr size_t suffixCount = _countof(suffixes);
+	static constexpr size_t minSuffixLength = 11; // "-Win64-Test"
 
-    const size_t nameLength = wcslen(name);
+	const size_t nameLength = wcslen(name);
 
-    if (nameLength < minSuffixLength)
-        return;
+	if (nameLength < minSuffixLength)
+		return;
 
-    for (size_t i = 0; i < suffixCount; ++i)
-    {
-        const auto &suffix = suffixes[i];
+	for (size_t i = 0; i < suffixCount; ++i)
+	{
+		const auto &suffix = suffixes[i];
 
-        if (nameLength >= suffix.length && _wcsicmp(name + nameLength - suffix.length, suffix.value) == 0)
-        {
-            name[nameLength - suffix.length] = L'\0';
-            return;
-        }
-    }
+		if (nameLength >= suffix.length && _wcsicmp(name + nameLength - suffix.length, suffix.value) == 0)
+		{
+			name[nameLength - suffix.length] = L'\0';
+			return;
+		}
+	}
+}
+
+bool Screenshot::BurstScreenshot(int n)
+{
+	const DWORD now = GetTickCount();
+
+	// antispam
+	if (m_lastBurstTime != 0 && (now - m_lastBurstTime) < BURST_INTERVAL_MS)
+	{
+		LOG_WARN("[Screenshot] Burst antispam triggered");
+		return false;
+	}
+
+	if (n <= 0)
+	{
+		LOG_ERROR("[Screenshot] Invalid burst count: %d", n);
+		return false;
+	}
+
+	if (IsPathEmpty())
+	{
+		LOG_ERROR("[Screenshot] path empty");
+		return false;
+	}
+
+	// Prevent unreasonable memory usage.
+	// Adjust this limit as appropriate for your application.
+	constexpr int MAX_BURST_SCREENSHOTS = 60;
+
+	if (n > MAX_BURST_SCREENSHOTS)
+	{
+		LOG_ERROR("[Screenshot] Burst count too large: %d (max %d)", n, MAX_BURST_SCREENSHOTS);
+		return false;
+	}
+
+	std::vector<ScreenshotBuffer> screenshots;
+	screenshots.reserve(n);
+
+	// ---------------------------------------------------------
+	// 1. CAPTURE ALL FRAMES INTO MEMORY
+	// ---------------------------------------------------------
+
+	const auto start = std::chrono::steady_clock::now();
+
+	// Use a floating-point duration so 60 FPS is ~16.667 ms
+	// rather than being truncated to 16 ms.
+	const auto interval = std::chrono::duration<double>(1.0 / static_cast<double>(n));
+
+	for (int i = 0; i < n; ++i)
+	{
+		ScreenshotBuffer screenshot;
+
+		if (!CaptureScreenshot(screenshot))
+		{
+			LOG_ERROR("[Screenshot] Burst capture failed at frame %d/%d", i + 1, n);
+			return false;
+		}
+
+		screenshots.emplace_back(std::move(screenshot));
+
+		// Keep capture timing independent from previous capture duration.
+		if (i + 1 < n)
+		{
+			const auto target = start + interval * static_cast<double>(i + 1);
+
+			std::this_thread::sleep_until(target);
+		}
+	}
+
+	// ---------------------------------------------------------
+	// 2. WRITE ALL BMPs
+	// ---------------------------------------------------------
+
+	for (size_t i = 0; i < screenshots.size(); ++i)
+	{
+		const auto &screenshot = screenshots[i];
+
+		const std::wstring fullPath = std::wstring(m_path) + screenshot.filename;
+
+		if (!SaveBitmapToFile(screenshot, fullPath.c_str()))
+		{
+			LOG_ERROR("[Screenshot] Failed to save BMP %zu/%zu: %ls", i + 1, screenshots.size(), fullPath.c_str());
+
+			return false;
+		}
+	}
+
+	// ---------------------------------------------------------
+	// 3. QUEUE ALL ENCODING
+	// ---------------------------------------------------------
+
+	for (size_t i = 0; i < screenshots.size(); ++i)
+	{
+		const auto &screenshot = screenshots[i];
+
+		const std::wstring fullPath = std::wstring(m_path) + screenshot.filename;
+
+		if (m_format == JPEG)
+		{
+			if (!EncodeFileAsJPEG(fullPath.c_str()))
+			{
+				LOG_ERROR("[Screenshot] Failed to queue JPEG %zu/%zu: %ls", i + 1, screenshots.size(), fullPath.c_str());
+			}
+		}
+		else if (m_format == PNG)
+		{
+			if (!EncodeFileAsPNG(fullPath.c_str()))
+			{
+				LOG_ERROR("[Screenshot] Failed to queue PNG %zu/%zu: %ls", i + 1, screenshots.size(), fullPath.c_str());
+			}
+		}
+	}
+
+	m_lastScreenshotTime = GetTickCount();
+
+	return true;
+}
+
+bool Screenshot::GetScreenshot()
+{
+	if (IsPathEmpty())
+	{
+		LOG_ERROR("[Screenshot] path empty");
+		return false;
+	}
+
+	const DWORD now = GetTickCount();
+
+	if (m_lastScreenshotTime != 0 && (now - m_lastScreenshotTime) < MIN_INTERVAL_MS)
+	{
+		LOG_WARN("[Screenshot] Antispam triggered");
+		return false;
+	}
+
+	ScreenshotBuffer screenshot;
+
+	if (!CaptureScreenshot(screenshot))
+	{
+		LOG_ERROR("[Screenshot] CaptureScreenshot failed");
+		return false;
+	}
+
+	const std::wstring fullPath = std::wstring(m_path) + screenshot.filename;
+
+	// Always dump the BMP first.
+	if (!SaveBitmapToFile(screenshot, fullPath.c_str()))
+	{
+		LOG_ERROR("[Screenshot] SaveBitmapToFile failed: %ls", fullPath.c_str());
+		return false;
+	}
+
+	// Then queue the encoder.
+	if (m_format == JPEG)
+	{
+		if (!EncodeFileAsJPEG(fullPath.c_str()))
+		{
+			LOG_ERROR("[Screenshot] Failed to queue JPEG encoding: %ls", fullPath.c_str());
+			return false;
+		}
+	}
+	else if (m_format == PNG)
+	{
+		if (!EncodeFileAsPNG(fullPath.c_str()))
+		{
+			LOG_ERROR("[Screenshot] Failed to queue PNG encoding: %ls", fullPath.c_str());
+			return false;
+		}
+	}
+
+	m_lastScreenshotTime = GetTickCount();
+
+	return true;
 }

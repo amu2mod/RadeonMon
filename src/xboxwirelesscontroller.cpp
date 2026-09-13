@@ -61,8 +61,7 @@ bool XboxWirelessController::Start()
 
 	std::unique_lock<std::mutex> lock(m_stateMutex);
 
-	m_stateCv.wait(lock, [this]
-				   { return m_initialized; });
+	m_stateCv.wait(lock, [this] { return m_initialized; });
 
 	const bool success = m_initSuccess;
 
@@ -354,12 +353,7 @@ void XboxWirelessController::HandleRawInput(HRAWINPUT hRawInput)
 	if (raw->header.dwType != RIM_TYPEHID)
 		return;
 
-	HidInfo info{};
-
-	if (!GetHidInfo(raw->header.hDevice, info))
-		return;
-
-	if (!IsXboxDevice(info))
+	if (raw->header.hDevice != m_hidDevice)
 		return;
 
 	const RAWHID &hid = raw->data.hid;
@@ -490,6 +484,9 @@ void XboxWirelessController::EnumerateDevices()
 			bluetoothAddress = info.bluetoothAddress;
 			m_bluetoothAddress = info.bluetoothAddress;
 		}
+
+		m_hidDevice = devices[i].hDevice;
+		m_hidInfo = info;
 
 		++xboxCount;
 
@@ -643,8 +640,7 @@ bool XboxWirelessController::InitializeBattery(uint64_t address)
 		LOGXBX_D("[XboxWC] Battery level characteristic found");
 
 		m_batteryCharacteristic = characteristics.GetAt(0);
-		m_batteryValueChangedToken = m_batteryCharacteristic.ValueChanged([this](auto const &characteristic, auto const &args)
-																		  { OnBatteryValueChanged(characteristic, args); });
+		m_batteryValueChangedToken = m_batteryCharacteristic.ValueChanged([this](auto const &characteristic, auto const &args) { OnBatteryValueChanged(characteristic, args); });
 
 		LOGXBX_D("[XboxWC] Battery notifications subscribed");
 
@@ -796,7 +792,6 @@ void XboxWirelessController::SetConnected(bool connected, Transport transport)
 
 	{
 		std::lock_guard<std::mutex> lock(m_stateMutex);
-
 		m_transport = connected ? transport : Transport::None;
 	}
 
@@ -811,8 +806,6 @@ void XboxWirelessController::SetConnected(bool connected, Transport transport)
 		FireDisconnected();
 	}
 }
-
-bool XboxWirelessController::IsConnected() const { return m_connected.load(); }
 
 GamePad::Transport XboxWirelessController::GetTransport() const
 {
@@ -842,37 +835,39 @@ void XboxWirelessController::HandleDeviceChange(WPARAM wParam, LPARAM lParam)
 		if (!IsXboxDevice(info))
 			return;
 
+		m_hidDevice = device;
+		m_hidInfo = info;
+
 		Transport transport = Transport::None;
 
 		if (info.pid == XBOX_PID_BLUETOOTH)
 		{
 			transport = Transport::Bluetooth;
-
 			m_bluetoothAddress = info.bluetoothAddress;
 		}
 		else if (info.pid == XBOX_PID_USB)
-		{
 			transport = Transport::USB;
-		}
 
 		SetConnected(true, transport);
 
 		if (transport == Transport::Bluetooth && m_bluetoothAddress != 0)
-		{
 			InitializeBattery(m_bluetoothAddress);
-		}
 	}
 	else if (wParam == GIDC_REMOVAL)
 	{
+		if (device == m_hidDevice)
+		{
+			m_hidDevice = nullptr;
+			m_hidInfo = {};
+		}
+
 		SetConnected(false, Transport::None);
-
 		ShutdownBattery();
-
 		m_bluetoothAddress = 0;
 	}
 }
 
-void XboxWirelessController::SetOnCreateButtonPressed(Callback callback)
+void XboxWirelessController::SetOnButtonPressed(Callback callback)
 {
 	std::lock_guard<std::mutex> lock(m_stateMutex);
 	m_onCreateButtonPressed = std::move(callback);

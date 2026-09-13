@@ -23,6 +23,7 @@
 #include "radeonmon/gamepad.hpp"
 #include "radeonmon/dualsense.hpp"
 #include "radeonmon/xboxwirelesscontroller.hpp"
+#include "radeonmon/switchprocontroller.hpp"
 
 inline UINT g_dpi = 96;
 inline GdiBackBuffer g_backBuffer;
@@ -133,3 +134,7 @@ inline void *g_screenshotSoundData = nullptr;
 inline GamePad::Type g_gamepadType = GamePad::Type::None;
 inline GamePad *g_gamepad = nullptr;
 inline XboxWirelessController g_xboxWC;
+inline SwitchProController g_switchPC;
+
+inline HBRUSH g_borderBrush = nullptr;
+inline HBRUSH g_bgBrush = nullptr;

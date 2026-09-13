@@ -118,9 +118,6 @@ bool DualSense::Start()
 {
 	std::lock_guard<std::mutex> lock(m_stateMutex);
 
-	if (m_running)
-		return true;
-
 	m_stopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
 
 	if (!m_stopEvent)
@@ -129,22 +126,12 @@ bool DualSense::Start()
 		return false;
 	}
 
-	m_running = true;
 	m_worker = std::thread(&DualSense::WorkerThread, this);
 	return true;
 }
 
 void DualSense::Stop()
 {
-	{
-		std::lock_guard<std::mutex> lock(m_stateMutex);
-
-		if (!m_running)
-			return;
-
-		m_running = false;
-	}
-
 	// Wake the worker.
 	if (m_stopEvent)
 		SetEvent(m_stopEvent);
@@ -170,7 +157,7 @@ void DualSense::Stop()
 	}
 }
 
-void DualSense::SetOnCreateButtonPressed(Callback callback)
+void DualSense::SetOnButtonPressed(Callback callback)
 {
 	std::lock_guard<std::mutex> lock(m_callbackMutex);
 	m_onCreateButtonPressed = std::move(callback);
@@ -186,18 +173,6 @@ void DualSense::SetOnDisconnected(Callback callback)
 {
 	std::lock_guard<std::mutex> lock(m_callbackMutex);
 	m_onDisconnected = std::move(callback);
-}
-
-bool DualSense::IsRunning() const
-{
-	std::lock_guard<std::mutex> lock(m_stateMutex);
-	return m_running;
-}
-
-bool DualSense::IsConnected() const
-{
-	std::lock_guard<std::mutex> lock(m_deviceMutex);
-	return m_device != INVALID_HANDLE_VALUE;
 }
 
 void DualSense::WorkerThread()
@@ -919,10 +894,8 @@ LRESULT CALLBACK DualSense::WindowProc(HWND hwnd, UINT message, WPARAM wParam, L
 		}
 
 		if (self)
-		{
 			if (wParam == DBT_DEVICEARRIVAL || wParam == DBT_DEVICEREMOVECOMPLETE || wParam == DBT_DEVNODES_CHANGED)
 				PostMessageW(hwnd, WM_DUALSENSE_DEVICE_CHANGE, DEVICE_CHANGE_GENERIC, 0); // Posting a message so the HID scan happens cleanly on the worker thread
-		}
 
 		return TRUE;
 	}

@@ -10,7 +10,8 @@
                 "ENABLE_LOGWM": "ON",
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_CXX_COMPILER": "cl",
-                "ENABLE_LOGDS": "OFF"
+                "ENABLE_LOGDS": "OFF",
+                "ENABLE_LOGSW": "OFF"
             }
         },
         {
@@ -26,7 +27,8 @@
                 "ENABLE_LOGFPS": "OFF",
                 "ENABLE_LOGVRR": "OFF",
                 "ENABLE_LOGDS": "ON",
-                "ENABLE_LOGXBX": "ON"
+                "ENABLE_LOGXBX": "OFF",
+                "ENABLE_LOGSW": "ON"
             }
         },
         {

@@ -24,6 +24,9 @@
 #define LOGXBX_E(fmt, ...) ((void)0)
 #endif
 
+/**
+ * Windows API: Raw Input + WinRT
+ */
 class XboxWirelessController : public GamePad
 {
   public:
@@ -40,9 +43,8 @@ class XboxWirelessController : public GamePad
 
 	bool IsCharging() const override;
 	Transport GetTransport() const override;
-	bool IsConnected() const override;
 
-	void SetOnCreateButtonPressed(Callback callback) override;
+	void SetOnButtonPressed(Callback callback) override;
 	void SetOnConnected(Callback callback) override;
 	void SetOnDisconnected(Callback callback) override;
 
@@ -56,88 +58,55 @@ class XboxWirelessController : public GamePad
 	static constexpr USHORT XBOX_VID = 0x045E;
 	static constexpr USHORT XBOX_PID_BLUETOOTH = 0x0B13;
 	static constexpr USHORT XBOX_PID_USB = 0x02FF;
-
 	static constexpr UINT WM_DEBUG = WM_APP + 1;
 
 	static const wchar_t *WindowClassName() { return L"XboxWirelessControllerRawInputWindow"; }
 
-	struct HidInfo
-	{
-		DWORD vid = 0;
-		DWORD pid = 0;
-
-		USHORT usagePage = 0;
-		USHORT usage = 0;
-
-		USHORT inputReportLength = 0;
-		USHORT outputReportLength = 0;
-		USHORT featureReportLength = 0;
-		USHORT featureValueCaps = 0;
-
-		std::wstring deviceName;
-
-		uint64_t bluetoothAddress = 0;
-	};
-
 	std::atomic<bool> m_running{false};
 	std::atomic<bool> m_liveReport{false};
 	std::atomic<int> m_batteryLevel{-1};
-
 	std::atomic<bool> m_connected{false};
-
+	std::atomic<DWORD> m_inputValidSince{0};
 	std::thread m_worker;
-
 	DWORD m_workerThreadId = 0;
 	HWND m_hwnd = nullptr;
-
 	Transport m_transport = Transport::None;
-
 	mutable std::mutex m_stateMutex;
 	std::condition_variable m_stateCv;
-
 	bool m_initialized = false;
 	bool m_initSuccess = false;
-
 	uint64_t m_bluetoothAddress = 0;
+	HANDLE m_hidDevice = nullptr;
+	HidInfo m_hidInfo{};
 
 	winrt::Windows::Devices::Bluetooth::BluetoothLEDevice m_bluetoothDevice{nullptr};
-
 	winrt::Windows::Devices::Bluetooth::GenericAttributeProfile::GattCharacteristic m_batteryCharacteristic{nullptr};
-
 	winrt::event_token m_batteryValueChangedToken{};
 
 	Callback m_onCreateButtonPressed;
 	Callback m_onConnected;
 	Callback m_onDisconnected;
 
-	void WorkerMain();
-	void RunMessageLoop();
-
 	static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+	void WorkerMain();
+	void RunMessageLoop();
 	bool RegisterRawInput();
 	void HandleRawInput(HRAWINPUT hRawInput);
 	void HandleDeviceChange(WPARAM wParam, LPARAM lParam);
-
 	static bool GetHidInfo(HANDLE device, HidInfo &info);
 	void EnumerateDevices();
-
 	static bool IsXboxDevice(const HidInfo &info);
 	static void DumpHex(const BYTE *data, UINT size);
 	void ParseSpecialButtons(const BYTE *report, UINT size);
 	static bool ExtractBluetoothAddress(const std::wstring &path, uint64_t &address);
-
 	HWND GetWindowHandle() const;
-
 	void SetConnected(bool connected, Transport transport);
-
 	void FireCreateButtonPressed();
 	void FireConnected();
 	void FireDisconnected();
-
 	bool InitializeBattery(uint64_t address);
 	int ReadBatteryValue();
 	void ShutdownBattery();
-
 	void OnBatteryValueChanged(winrt::Windows::Devices::Bluetooth::GenericAttributeProfile::GattCharacteristic const &sender, winrt::Windows::Devices::Bluetooth::GenericAttributeProfile::GattValueChangedEventArgs const &args);
 };

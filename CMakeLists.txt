@@ -82,6 +82,7 @@ add_executable(radeonmon WIN32
     # src/ScreenshotKeyBinder.cpp
     src/dualsense.cpp
     src/xboxwirelesscontroller.cpp
+    src/switchprocontroller.cpp
 )
 
 option(ENABLE_TESTMODE "Enable TEST preprocessor define" OFF)
@@ -92,6 +93,7 @@ option(ENABLE_FPSLOG "Enable ENABLE_FPSLOG preprocessor define" OFF)
 option(ENABLE_LOGVRR "Enable ENABLE_LOGVRR preprocessor define" OFF)
 option(ENABLE_LOGDS "Enable ENABLE_LOGDS preprocessor define" OFF)
 option(ENABLE_LOGXBX "Enable ENABLE_LOGXBX preprocessor define" OFF)
+option(ENABLE_LOGSW "Enable ENABLE_LOGSW preprocessor define" OFF)
 
 
 
@@ -129,6 +131,10 @@ endif()
 
 if(ENABLE_LOGXBX)
     target_compile_definitions(radeonmon PRIVATE LOGXBX)
+endif()
+
+if(ENABLE_LOGSW)
+    target_compile_definitions(radeonmon PRIVATE LOGSW)
 endif()
 
 
