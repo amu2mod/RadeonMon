@@ -36,17 +36,25 @@
  * - HID reads are performed asynchronously on the worker thread.
  * - The worker uses MsgWaitForMultipleObjects() so the same thread can both
  *   wait for HID input and process the notification window's Windows messages.
- *
- * TODO: Switch to Raw Input API
  */
 class DualSense : public GamePad
 {
-  public:
+public:
+	enum class Button : uint8_t
+	{
+		Create,
+		Options,
+		PS,
+		Mute,
+
+		Count
+	};
+
 	static const char *TransportName(Transport transport);
 	int m_batteryLevel = -1;
 	bool m_isCharging = false;
 
-  public:
+public:
 	DualSense() = default;
 	inline ~DualSense() { Stop(); }
 	DualSense(const DualSense &) = delete;
@@ -63,8 +71,10 @@ class DualSense : public GamePad
 	void SetOnButtonPressed(Callback callback) override;
 	void SetOnConnected(Callback callback) override;
 	void SetOnDisconnected(Callback callback) override;
+	inline void SetButton(Button b) { m_button = b; }
+	inline Button GetButton() { return m_button; }
 
-  private:
+private:
 	enum class ReadResult
 	{
 		Disconnected,
@@ -72,7 +82,7 @@ class DualSense : public GamePad
 		Stopped
 	};
 
-  private:
+private:
 	static constexpr USHORT DUALSENSE_VID = 0x054C;
 	static constexpr USHORT DUALSENSE_PID = 0x0CE6;
 	static constexpr DWORD REPORT_THROTTLE_MS = 50;
@@ -99,6 +109,7 @@ class DualSense : public GamePad
 	DWORD m_reportSize = 0;
 	Transport m_transport = Transport::None;
 	bool m_switchTransportRequested = false;
+	Button m_button = Button::Create;
 
 	HWND m_hwnd = nullptr;
 
@@ -115,7 +126,16 @@ class DualSense : public GamePad
 	Callback m_onConnected;
 	Callback m_onDisconnected;
 
-  private:
+	static constexpr ButtonInfo BUTTON_MAPPING[] = {
+		{0, 0x10, "Create"},
+		{0, 0x20, "Options"},
+		{1, 0x01, "PS"},
+		{1, 0x04, "Mute"},
+	};
+
+	static_assert(static_cast<size_t>(Button::Count) == _countof(BUTTON_MAPPING), "Button::Count does not match BUTTON_MAPPING");
+
+private:
 	bool InitializeDualSense(HANDLE);
 	void WorkerThread();
 	HANDLE FindDualSense(Transport &selectedTransport);

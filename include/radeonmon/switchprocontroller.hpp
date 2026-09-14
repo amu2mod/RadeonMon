@@ -29,43 +29,53 @@
 class SwitchProController : public GamePad
 {
 public:
+	enum class Button : uint8_t
+	{
+		Minus,
+		Plus,
+		Capture,
+		HOME,
+
+		Count
+	};
+
 	SwitchProController();
 	~SwitchProController() override;
-
 	SwitchProController(const SwitchProController &) = delete;
 	SwitchProController &operator=(const SwitchProController &) = delete;
 
 	bool Start() override;
 	void Stop() override;
-
 	int BatteryLevel() const override;
-
 	bool IsCharging() const override;
 	Transport GetTransport() const override;
-
 	void SetOnButtonPressed(Callback callback) override;
 	void SetOnConnected(Callback callback) override;
 	void SetOnDisconnected(Callback callback) override;
+	inline void SetButton(Button b) { m_button = b; }
+	inline Button GetButton() { return m_button; }
 
-	// Debugging method: enables live HID report printing
-	bool LiveReport();
-
-	// Prints controller/HID information.
-	void Debug();
+	void Debug(); // Prints controller/HID information
 
 private:
 	static constexpr USHORT SWITCH_PRO_CONTROLLER_VID = 0x057E;
 	static constexpr USHORT SWITCH_PRO_CONTROLLER_PID = 0x2009;
-
 	static constexpr UINT SWITCH_PRO_USB_INPUT_REPORT_LENGTH = 64;
 	static constexpr UINT SWITCH_PRO_BLUETOOTH_INPUT_REPORT_LENGTH = 362;
-
 	static constexpr UINT WM_DEBUG = WM_APP + 1;
+
+	static constexpr ButtonInfo BUTTON_MAPPING[] = {
+		{0, 0x01, "-"},
+		{0, 0x02, "+"},
+		{0, 0x20, "Capture"},
+		{0, 0x10, "HOME"},
+	};
+
+	static_assert(static_cast<size_t>(Button::Count) == _countof(BUTTON_MAPPING), "Button::Count does not match BUTTON_MAPPING");
 
 	static const wchar_t *WindowClassName() { return L"SwitchProControllerRawInputWindow"; }
 
 	std::atomic<bool> m_running{false};
-	std::atomic<bool> m_liveReport{false};
 	std::atomic<int> m_batteryLevel{-1};
 	std::atomic<bool> m_charging{false};
 	std::atomic<bool> m_connected{false};
@@ -81,6 +91,7 @@ private:
 	HANDLE m_hidDevice = nullptr;
 	HidInfo m_hidInfo{};
 	std::chrono::steady_clock::time_point m_lastCapture{};
+	Button m_button = Button::Capture;
 
 	Callback m_onCreateButtonPressed;
 	Callback m_onConnected;

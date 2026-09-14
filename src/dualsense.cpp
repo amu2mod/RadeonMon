@@ -723,19 +723,15 @@ DualSense::ReadResult DualSense::ReadInputReports()
 		//////
 
 		////// Special buttons
-		const BYTE buttons = m_buffer[buttonOffset];
+		// DualSense auto mapped button
+		const auto &mappedButton = BUTTON_MAPPING[static_cast<uint8_t>(m_button)];
 
-		// DualSense Create button
-		if (buttons & 0x10)
+		if (m_buffer[buttonOffset + mappedButton.reportBitOffset] & mappedButton.reportMask)
 		{
-			LOGDS_D("[DualSense] Create button pressed [%s]", bytesRead == 78 ? "BT" : "USB");
+			LOGDS_D("[DualSense] %s button pressed [%s]", mappedButton.name, bytesRead == 78 ? "BT" : "USB");
 			InvokeCreateButton();
 			screenshotCooldownUntil = now + std::chrono::milliseconds(SCREENSHOT_COOLDOWN_MS);
 		}
-
-		// DualSense Options button is using the same byte
-		// if (buttons & 0x20)
-		//     LOGDS_D("[DualSense] Options button pressed");
 		//////
 	}
 

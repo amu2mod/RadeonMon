@@ -1,17 +1,9 @@
 #define WIN32_LEAN_AND_MEAN
-#define _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
 
 #include "radeonmon/switchprocontroller.hpp"
 #include "radeonmon/Screenshot.hpp"
 
 #include <hidsdi.h>
-#include <winrt/base.h>
-#include <winrt/Windows.Foundation.h>
-#include <winrt/Windows.Foundation.Collections.h>
-#include <winrt/Windows.Devices.Enumeration.h>
-#include <winrt/Windows.Devices.Bluetooth.h>
-#include <winrt/Windows.Devices.Bluetooth.GenericAttributeProfile.h>
-#include <winrt/Windows.Storage.Streams.h>
 
 #include <cstdio>
 #include <cwctype>
@@ -74,7 +66,6 @@ bool SwitchProController::Start()
 void SwitchProController::Stop()
 {
 	m_running.store(false);
-	m_liveReport.store(false);
 	m_batteryLevel.store(-1);
 	m_charging.store(false);
 
@@ -95,21 +86,6 @@ void SwitchProController::Stop()
 	}
 }
 
-bool SwitchProController::LiveReport()
-{
-	if (!m_running.load())
-	{
-		LOGSW_E("[SwitchProCtl] LiveReport(): controller is not open");
-		return false;
-	}
-
-	m_liveReport.store(true);
-
-	LOGSW_D("[SwitchProCtl] Live reporting enabled");
-
-	return true;
-}
-
 void SwitchProController::Debug()
 {
 	if (!m_running.load())
@@ -128,8 +104,6 @@ void SwitchProController::Debug()
 
 void SwitchProController::WorkerMain()
 {
-	winrt::init_apartment(winrt::apartment_type::multi_threaded);
-
 	m_workerThreadId = GetCurrentThreadId();
 
 	const HINSTANCE instance = GetModuleHandleW(nullptr);
@@ -247,7 +221,6 @@ void SwitchProController::WorkerMain()
 	}
 
 	m_running.store(false);
-	m_liveReport.store(false);
 }
 
 void SwitchProController::RunMessageLoop()
@@ -588,25 +561,17 @@ void SwitchProController::ParseUsbReport(const BYTE *report, UINT size)
 	const BYTE buttons = report[4];
 
 	const auto now = std::chrono::steady_clock::now();
+	const auto &mappedButton = BUTTON_MAPPING[static_cast<uint8_t>(m_button)];
 
-	if (buttons & 0x20)
+	if (buttons & mappedButton.reportMask)
 	{
 		if (now - m_lastCapture >= std::chrono::milliseconds(Screenshot::MIN_INTERVAL_MS))
 		{
 			m_lastCapture = now;
-			LOGSW_D("[SwitchProCtl] Capture pressed");
+			LOGSW_D("[SwitchProCtl] %s button pressed [USB]", mappedButton.name);
 			FireCaptureButtonPressed();
 		}
 	}
-
-	// if (buttons & 0x10)
-	// 	LOGSW_D("[SwitchProCtl] Home pressed");
-
-	// if (buttons & 0x01)
-	// 	LOGSW_D("[SwitchProCtl] - pressed");
-
-	// if (buttons & 0x02)
-	// 	LOGSW_D("[SwitchProCtl] + pressed");
 }
 
 void SwitchProController::ParseBluetoothReport(const BYTE *report, UINT size, const HidInfo &info)
@@ -637,25 +602,17 @@ void SwitchProController::ParseBluetoothReport(const BYTE *report, UINT size, co
 		m_charging.store(false);
 
 		const auto now = std::chrono::steady_clock::now();
+		const auto &mappedButton = BUTTON_MAPPING[static_cast<uint8_t>(m_button)];
 
-		if (buttons & 0x20)
+		if (buttons & mappedButton.reportMask)
 		{
 			if (now - m_lastCapture >= std::chrono::milliseconds(Screenshot::MIN_INTERVAL_MS))
 			{
 				m_lastCapture = now;
-				LOGSW_D("[SwitchProCtl] Capture pressed");
+				LOGSW_D("[SwitchProCtl] %s button pressed [BT]", mappedButton.name);
 				FireCaptureButtonPressed();
 			}
 		}
-
-		// if (buttons & 0x10)
-		// 	LOGSW_D("[SwitchProCtl] Home pressed");
-
-		// if (buttons & 0x01)
-		// 	LOGSW_D("[SwitchProCtl] - pressed");
-
-		// if (buttons & 0x02)
-		// 	LOGSW_D("[SwitchProCtl] + pressed");
 
 		break;
 	}
@@ -697,25 +654,17 @@ void SwitchProController::ParseBluetoothReport(const BYTE *report, UINT size, co
 		const BYTE buttons = report[4];
 
 		const auto now = std::chrono::steady_clock::now();
+		const auto &mappedButton = BUTTON_MAPPING[static_cast<uint8_t>(m_button)];
 
-		if (buttons & 0x20)
+		if (buttons & mappedButton.reportMask)
 		{
 			if (now - m_lastCapture >= std::chrono::milliseconds(Screenshot::MIN_INTERVAL_MS))
 			{
 				m_lastCapture = now;
-				LOGSW_D("[SwitchProCtl] Capture pressed");
+				LOGSW_D("[SwitchProCtl] %s button pressed [BT]", mappedButton.name);
 				FireCaptureButtonPressed();
 			}
 		}
-
-		// if (buttons & 0x10)
-		// 	LOGSW_D("[SwitchProCtl] Home pressed");
-
-		// if (buttons & 0x01)
-		// 	LOGSW_D("[SwitchProCtl] - pressed");
-
-		// if (buttons & 0x02)
-		// 	LOGSW_D("[SwitchProCtl] + pressed");
 
 		break;
 	}

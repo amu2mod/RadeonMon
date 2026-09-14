@@ -61,7 +61,8 @@ bool XboxWirelessController::Start()
 
 	std::unique_lock<std::mutex> lock(m_stateMutex);
 
-	m_stateCv.wait(lock, [this] { return m_initialized; });
+	m_stateCv.wait(lock, [this]
+				   { return m_initialized; });
 
 	const bool success = m_initSuccess;
 
@@ -76,7 +77,6 @@ bool XboxWirelessController::Start()
 void XboxWirelessController::Stop()
 {
 	m_running.store(false);
-	m_liveReport.store(false);
 
 	const HWND hwnd = GetWindowHandle();
 
@@ -95,21 +95,6 @@ void XboxWirelessController::Stop()
 		m_initialized = false;
 		m_initSuccess = false;
 	}
-}
-
-bool XboxWirelessController::LiveReport()
-{
-	if (!m_running.load())
-	{
-		LOGXBX_E("[XboxWC] LiveReport(): controller is not open");
-		return false;
-	}
-
-	m_liveReport.store(true);
-
-	LOGXBX_D("[XboxWC] Live reporting enabled");
-
-	return true;
 }
 
 void XboxWirelessController::Debug()
@@ -249,7 +234,6 @@ void XboxWirelessController::WorkerMain()
 	}
 
 	m_running.store(false);
-	m_liveReport.store(false);
 
 	winrt::uninit_apartment();
 }
@@ -361,6 +345,7 @@ void XboxWirelessController::HandleRawInput(HRAWINPUT hRawInput)
 	for (UINT i = 0; i < hid.dwCount; ++i)
 	{
 		const BYTE *report = hid.bRawData + (i * hid.dwSizeHid);
+		// DumpHex(report, hid.dwSizeHid);
 		ParseSpecialButtons(report, hid.dwSizeHid);
 	}
 }
@@ -508,10 +493,45 @@ void XboxWirelessController::EnumerateDevices()
 	(void)bluetoothAddress;
 }
 
-void XboxWirelessController::DumpHex([[maybe_unused]] const BYTE *data, UINT size)
+void XboxWirelessController::DumpHex(const BYTE *data, UINT size, UINT intervalMs)
 {
-	for (UINT i = 0; i < size; ++i)
-		LOGXBX_D("[XboxWC] %02X", data[i]);
+	if (data == nullptr || size == 0)
+		return;
+
+	static auto lastDump = std::chrono::steady_clock::now();
+	const auto now = std::chrono::steady_clock::now();
+
+	if (now - lastDump < std::chrono::milliseconds(intervalMs))
+		return;
+
+	lastDump = now;
+
+	UINT actualSize = size;
+
+	////// DEBUG
+	// Zero Trimming: ignore trailing zero padding
+	// while (actualSize > 0 && data[actualSize - 1] == 0x00)
+	// 	--actualSize;
+
+	// if (actualSize == 0)
+	// 	return;
+	//////
+
+	std::string hex;
+	hex.reserve(actualSize * 3);
+
+	char byte[4];
+
+	for (UINT i = 0; i < actualSize; ++i)
+	{
+		if (i != 0)
+			hex += ' ';
+
+		std::snprintf(byte, sizeof(byte), "%02X", data[i]);
+		hex += byte;
+	}
+
+	LOGXBX_D("[%u bytes] %s", actualSize, hex.c_str());
 }
 
 bool XboxWirelessController::IsXboxDevice(const HidInfo &info)
@@ -640,7 +660,8 @@ bool XboxWirelessController::InitializeBattery(uint64_t address)
 		LOGXBX_D("[XboxWC] Battery level characteristic found");
 
 		m_batteryCharacteristic = characteristics.GetAt(0);
-		m_batteryValueChangedToken = m_batteryCharacteristic.ValueChanged([this](auto const &characteristic, auto const &args) { OnBatteryValueChanged(characteristic, args); });
+		m_batteryValueChangedToken = m_batteryCharacteristic.ValueChanged([this](auto const &characteristic, auto const &args)
+																		  { OnBatteryValueChanged(characteristic, args); });
 
 		LOGXBX_D("[XboxWC] Battery notifications subscribed");
 
@@ -771,19 +792,14 @@ void XboxWirelessController::ParseSpecialButtons(const BYTE *report, UINT size)
 	if (report == nullptr || size < 13)
 		return;
 
-	const BYTE byte11 = report[11];
-	const BYTE byte12 = report[12];
+	const auto &mappedButton = BUTTON_MAPPING[static_cast<uint8_t>(m_button)];
 
-	if (byte12 & 0x08)
+	if (report[mappedButton.reportBitOffset] & mappedButton.reportMask)
+	{
+		LOGXBX_D("[XboxWC] %s button pressed [%s]", mappedButton.name, m_transport == Transport::USB ? "USB" : "BT");
 		FireCreateButtonPressed();
-
-	// if (byte11 & 0x40)
-	// 	LOGXBX_D("[XboxWC] View pressed");
-
-	// if (byte11 & 0x80)
-	// 	LOGXBX_D("[XboxWC] Menu pressed");
-
-	(void)byte11;
+		// screenshotCooldownUntil = now + std::chrono::milliseconds(SCREENSHOT_COOLDOWN_MS);
+	}
 }
 
 void XboxWirelessController::SetConnected(bool connected, Transport transport)

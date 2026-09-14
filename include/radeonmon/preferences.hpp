@@ -51,8 +51,11 @@ inline void SavePreferences()
 	swprintf_s(buffer, L"%d", static_cast<int>(g_screenshot.m_format));
 	WritePrivateProfileStringW(L"Screenshot", L"Format", buffer, path);
 
-	swprintf_s(buffer, L"%d", g_gamepadType);
-	WritePrivateProfileStringW(L"Screenshot", L"GamepadType", buffer, path);
+	swprintf_s(buffer, L"%d", g_gamepadIndex);
+	WritePrivateProfileStringW(L"Screenshot", L"GamepadIndex", buffer, path);
+
+	swprintf_s(buffer, L"%d", g_screenshotRate);
+	WritePrivateProfileStringW(L"Screenshot", L"CaptureRate", buffer, path);
 }
 
 inline void LoadPreferences()
@@ -95,5 +98,6 @@ inline void LoadPreferences()
 	else
 		g_screenshot.m_format = static_cast<Screenshot::Format>(f);
 
-	g_gamepadType = static_cast<GamePad::Type>(std::clamp(GetPrivateProfileIntW(L"Screenshot", L"GamepadType", 0, path), 0u, static_cast<UINT>(GamePad::Type::NintendoSwitchProController)));
+	g_gamepadIndex = static_cast<uint8_t>(std::clamp(GetPrivateProfileIntW(L"Screenshot", L"GamepadIndex", 0, path), 0u, 12u));
+	g_screenshotRate = static_cast<uint8_t>(std::clamp(GetPrivateProfileIntW(L"Screenshot", L"CaptureRate", 0, path), 1u, 3u));
 }

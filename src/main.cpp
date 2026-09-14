@@ -305,15 +305,17 @@ void ClearScreenshotIcon(HDC hdc) { FillRect(hdc, &g_border.screeshotIcon, g_bor
 
 void OnScreenshotAction(HWND hwnd)
 {
-	if (g_screenshot.GetScreenshot())
-	// if (g_screenshot.BurstScreenshot(10))
+	const bool success = (g_screenshotRate == 1) ? g_screenshot.GetScreenshot() : g_screenshot.BurstScreenshot(g_screenshotRate);
+
+	if (!success)
 	{
-		PlayScreenshotSound();
-		DrawScreenshotIcon(hwnd, g_backBuffer.memDC);
-		SetTimer(hwnd, SCREENSHOT_ICON_ID, 1000, nullptr);
-	}
-	else
 		LOG_ERROR("[App] failed to get a screenshot");
+		return;
+	}
+
+	PlayScreenshotSound();
+	DrawScreenshotIcon(hwnd, g_backBuffer.memDC);
+	SetTimer(hwnd, SCREENSHOT_ICON_ID, 1000, nullptr);
 }
 
 void SetDisplayLine(const DisplayInfo &display, HWND hwnd = nullptr)
@@ -1476,6 +1478,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			if (!snapshot.valid)
 				return 0;
 
+			// Screenshot autocleaner
+			g_screenshot.Update();
+
 			// GPU Temp
 			if (snapshot.temperature.isSupported && GetPropertyValueAtIndex(MetricsIndex::Temp) != snapshot.temperature.value)
 			{
@@ -1719,14 +1724,41 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		AppendMenuW(hSaveFolderMenu, MF_SEPARATOR, 0, nullptr);
 		AppendMenuW(hSaveFolderMenu, MF_STRING, IDM_SCREENSHOT_SAVE_FOLDER, L"Select Folder...");
 
-		// DualSense submenu
-		HMENU hDualSenseMenu = CreatePopupMenu();
+		// Gamepad submenu
+		HMENU hGamepadMenu = CreatePopupMenu();
 
-		AppendMenuW(hScreenshotMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hDualSenseMenu), L"Gamepad Capture");
-		AppendMenuW(hDualSenseMenu, MF_STRING | (g_gamepadType == GamePad::Type::None) ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED, IDM_ENABLEGAMEPAD_BASE, L"Off");
-		AppendMenuW(hDualSenseMenu, MF_STRING | (g_gamepadType == GamePad::Type::DualSense) ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED, IDM_ENABLEGAMEPAD_BASE + 1, L"DualSense");
-		AppendMenuW(hDualSenseMenu, MF_STRING | (g_gamepadType == GamePad::Type::XboxWirelessController) ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED, IDM_ENABLEGAMEPAD_BASE + 2, L"Xbox Wireless Controller");
-		AppendMenuW(hDualSenseMenu, MF_STRING | (g_gamepadType == GamePad::Type::NintendoSwitchProController) ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED, IDM_ENABLEGAMEPAD_BASE + 3, L"Nintendo Switch Pro Controller");
+		AppendMenuW(hScreenshotMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hGamepadMenu), L"Gamepad Capture");
+
+		auto AddGamepadOption = [&](UINT id, const wchar_t *label, bool selected)
+		{
+			const UINT flags = MF_STRING | (selected ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED);
+			AppendMenuW(hGamepadMenu, flags, id, label);
+		};
+
+		auto AddGamepadButtonOption = [&](UINT id, const wchar_t *label, GamePad::Type type, auto button, auto &gamepad) { AddGamepadOption(id, label, g_gamepadType == type && gamepad.GetButton() == button); };
+
+		AddGamepadOption(IDM_ENABLEGAMEPAD_BASE, L"Off", g_gamepadType == GamePad::Type::None);
+		AddGamepadButtonOption(IDM_ENABLEGAMEPAD_BASE + 1, L"DualSense (Create)", GamePad::Type::DualSense, DualSense::Button::Create, g_dualsense);
+		AddGamepadButtonOption(IDM_ENABLEGAMEPAD_BASE + 2, L"DualSense (Options)", GamePad::Type::DualSense, DualSense::Button::Options, g_dualsense);
+		AddGamepadButtonOption(IDM_ENABLEGAMEPAD_BASE + 3, L"DualSense (PS)", GamePad::Type::DualSense, DualSense::Button::PS, g_dualsense);
+		AddGamepadButtonOption(IDM_ENABLEGAMEPAD_BASE + 4, L"DualSense (Mute)", GamePad::Type::DualSense, DualSense::Button::Mute, g_dualsense);
+		AddGamepadButtonOption(IDM_ENABLEGAMEPAD_BASE + 5, L"Xbox Wireless Controller (View)", GamePad::Type::XboxWirelessController, XboxWirelessController::Button::View, g_xboxWC);
+		AddGamepadButtonOption(IDM_ENABLEGAMEPAD_BASE + 6, L"Xbox Wireless Controller (Menu)", GamePad::Type::XboxWirelessController, XboxWirelessController::Button::Menu, g_xboxWC);
+		AddGamepadButtonOption(IDM_ENABLEGAMEPAD_BASE + 7, L"Xbox Wireless Controller (XBOX)", GamePad::Type::XboxWirelessController, XboxWirelessController::Button::XBOX, g_xboxWC);
+		AddGamepadButtonOption(IDM_ENABLEGAMEPAD_BASE + 8, L"Xbox Wireless Controller (Share)", GamePad::Type::XboxWirelessController, XboxWirelessController::Button::Share, g_xboxWC);
+		AddGamepadButtonOption(IDM_ENABLEGAMEPAD_BASE + 9, L"Nintendo Switch Pro Controller (-)", GamePad::Type::NintendoSwitchProController, SwitchProController::Button::Minus, g_switchPC);
+		AddGamepadButtonOption(IDM_ENABLEGAMEPAD_BASE + 10, L"Nintendo Switch Pro Controller (+)", GamePad::Type::NintendoSwitchProController, SwitchProController::Button::Plus, g_switchPC);
+		AddGamepadButtonOption(IDM_ENABLEGAMEPAD_BASE + 11, L"Nintendo Switch Pro Controller (Capture)", GamePad::Type::NintendoSwitchProController, SwitchProController::Button::Capture, g_switchPC);
+		AddGamepadButtonOption(IDM_ENABLEGAMEPAD_BASE + 12, L"Nintendo Switch Pro Controller (HOME)", GamePad::Type::NintendoSwitchProController, SwitchProController::Button::HOME, g_switchPC);
+
+		// Capture Rate
+		HMENU hBurstMenu = CreatePopupMenu();
+
+		AppendMenuW(hScreenshotMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hBurstMenu), L"Capture Rate");
+
+		AppendMenuW(hBurstMenu, MF_STRING | (g_screenshotRate == 1u ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_RATE_BASE, L"1 image");
+		AppendMenuW(hBurstMenu, MF_STRING | (g_screenshotRate == 2u ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_RATE_BASE + 1, L"2 images");
+		AppendMenuW(hBurstMenu, MF_STRING | (g_screenshotRate == 3u ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_RATE_BASE + 2, L"3 images");
 
 		///////////////////////////////
 
@@ -2035,10 +2067,34 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					InvalidateRect(hwnd, &vrrTagRc, FALSE);
 				}
 			}
+
+			// Screenshot Capture Rate
+			else if (LOWORD(wParam) == IDM_SCREENSHOT_RATE_BASE || LOWORD(wParam) <= (IDM_SCREENSHOT_RATE_BASE + 2))
+			{
+				const int index = LOWORD(wParam) - IDM_SCREENSHOT_RATE_BASE;
+
+				switch (index)
+				{
+				case 0:
+					g_screenshotRate = 1;
+					break;
+				case 1:
+					g_screenshotRate = 2;
+					break;
+				case 2:
+					g_screenshotRate = 3;
+					break;
+				default:
+					g_screenshotRate = 1;
+				}
+				return 0;
+			}
+
 			// Gamepad Screenshot Capture
-			else if (LOWORD(wParam) >= IDM_ENABLEGAMEPAD_BASE || LOWORD(wParam) <= (IDM_ENABLEGAMEPAD_BASE + 3))
+			else if (LOWORD(wParam) >= IDM_ENABLEGAMEPAD_BASE && LOWORD(wParam) < IDM_CHECK_VERSION)
 			{
 				const int index = LOWORD(wParam) - IDM_ENABLEGAMEPAD_BASE;
+				g_gamepadIndex = static_cast<uint8_t>(index);
 
 				switch (index)
 				{
@@ -2048,18 +2104,87 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					break;
 
 				case 1:
-					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for DualSense");
-					SelectGamePad(GamePad::Type::DualSense, hwnd);
+					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for DualSense (Create)");
+					if (g_gamepadType != GamePad::Type::DualSense)
+						SelectGamePad(GamePad::Type::DualSense, hwnd);
+					g_dualsense.SetButton(DualSense::Button::Create);
 					break;
 
 				case 2:
-					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for Xbox");
-					SelectGamePad(GamePad::Type::XboxWirelessController, hwnd);
+					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for DualSense (Options)");
+					if (g_gamepadType != GamePad::Type::DualSense)
+						SelectGamePad(GamePad::Type::DualSense, hwnd);
+					g_dualsense.SetButton(DualSense::Button::Options);
 					break;
 
 				case 3:
-					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for Nintendo");
-					SelectGamePad(GamePad::Type::NintendoSwitchProController, hwnd);
+					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for DualSense (PS)");
+					if (g_gamepadType != GamePad::Type::DualSense)
+						SelectGamePad(GamePad::Type::DualSense, hwnd);
+					g_dualsense.SetButton(DualSense::Button::PS);
+					break;
+
+				case 4:
+					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for DualSense (Mute)");
+					if (g_gamepadType != GamePad::Type::DualSense)
+						SelectGamePad(GamePad::Type::DualSense, hwnd);
+					g_dualsense.SetButton(DualSense::Button::Mute);
+					break;
+
+				case 5:
+					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for Xbox (View)");
+					if (g_gamepadType != GamePad::Type::XboxWirelessController)
+						SelectGamePad(GamePad::Type::XboxWirelessController, hwnd);
+					g_xboxWC.SetButton(XboxWirelessController::Button::View);
+					break;
+
+				case 6:
+					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for Xbox (Menu)");
+					if (g_gamepadType != GamePad::Type::XboxWirelessController)
+						SelectGamePad(GamePad::Type::XboxWirelessController, hwnd);
+					g_xboxWC.SetButton(XboxWirelessController::Button::Menu);
+					break;
+
+				case 7:
+					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for Xbox (XBOX)");
+					if (g_gamepadType != GamePad::Type::XboxWirelessController)
+						SelectGamePad(GamePad::Type::XboxWirelessController, hwnd);
+					g_xboxWC.SetButton(XboxWirelessController::Button::XBOX);
+					break;
+
+				case 8:
+					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for Xbox (Share)");
+					if (g_gamepadType != GamePad::Type::XboxWirelessController)
+						SelectGamePad(GamePad::Type::XboxWirelessController, hwnd);
+					g_xboxWC.SetButton(XboxWirelessController::Button::Share);
+					break;
+
+				case 9:
+					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for Switch Pro Ctl (-)");
+					if (g_gamepadType != GamePad::Type::NintendoSwitchProController)
+						SelectGamePad(GamePad::Type::NintendoSwitchProController, hwnd);
+					g_switchPC.SetButton(SwitchProController::Button::Minus);
+					break;
+
+				case 10:
+					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for Switch Pro Ctl (+)");
+					if (g_gamepadType != GamePad::Type::NintendoSwitchProController)
+						SelectGamePad(GamePad::Type::NintendoSwitchProController, hwnd);
+					g_switchPC.SetButton(SwitchProController::Button::Plus);
+					break;
+
+				case 11:
+					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for Switch Pro Ctl (Capture)");
+					if (g_gamepadType != GamePad::Type::NintendoSwitchProController)
+						SelectGamePad(GamePad::Type::NintendoSwitchProController, hwnd);
+					g_switchPC.SetButton(SwitchProController::Button::Capture);
+					break;
+
+				case 12:
+					LOG_DEBUG("[App] Gamepad Screenshot Capture Enabled for Switch Pro Ctl (HOME)");
+					if (g_gamepadType != GamePad::Type::NintendoSwitchProController)
+						SelectGamePad(GamePad::Type::NintendoSwitchProController, hwnd);
+					g_switchPC.SetButton(SwitchProController::Button::HOME);
 					break;
 
 				default:
@@ -2480,6 +2605,77 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
 	}
 
 	// Gamepad
+	switch (g_gamepadIndex)
+	{
+	case 0:
+		g_gamepadType = GamePad::Type::None;
+		break;
+
+	case 1:
+		g_gamepadType = GamePad::Type::DualSense;
+		g_dualsense.SetButton(DualSense::Button::Create);
+		break;
+
+	case 2:
+		g_gamepadType = GamePad::Type::DualSense;
+		g_dualsense.SetButton(DualSense::Button::Options);
+		break;
+
+	case 3:
+		g_gamepadType = GamePad::Type::DualSense;
+		g_dualsense.SetButton(DualSense::Button::PS);
+		break;
+
+	case 4:
+		g_gamepadType = GamePad::Type::DualSense;
+		g_dualsense.SetButton(DualSense::Button::Mute);
+		break;
+
+	case 5:
+		g_gamepadType = GamePad::Type::XboxWirelessController;
+		g_xboxWC.SetButton(XboxWirelessController::Button::View);
+		break;
+
+	case 6:
+		g_gamepadType = GamePad::Type::XboxWirelessController;
+		g_xboxWC.SetButton(XboxWirelessController::Button::Menu);
+		break;
+
+	case 7:
+		g_gamepadType = GamePad::Type::XboxWirelessController;
+		g_xboxWC.SetButton(XboxWirelessController::Button::XBOX);
+		break;
+
+	case 8:
+		g_gamepadType = GamePad::Type::XboxWirelessController;
+		g_xboxWC.SetButton(XboxWirelessController::Button::Share);
+		break;
+
+	case 9:
+		g_gamepadType = GamePad::Type::NintendoSwitchProController;
+		g_switchPC.SetButton(SwitchProController::Button::Minus);
+		break;
+
+	case 10:
+		g_gamepadType = GamePad::Type::NintendoSwitchProController;
+		g_switchPC.SetButton(SwitchProController::Button::Plus);
+		break;
+
+	case 11:
+		g_gamepadType = GamePad::Type::NintendoSwitchProController;
+		g_switchPC.SetButton(SwitchProController::Button::Capture);
+		break;
+
+	case 12:
+		g_gamepadType = GamePad::Type::NintendoSwitchProController;
+		g_switchPC.SetButton(SwitchProController::Button::HOME);
+		break;
+
+	default:
+		g_gamepadType = GamePad::Type::None;
+		break;
+	}
+
 	if (g_gamepadType != GamePad::Type::None)
 		SelectGamePad(g_gamepadType, hwnd);
 

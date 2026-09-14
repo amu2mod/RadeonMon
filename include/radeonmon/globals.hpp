@@ -124,7 +124,7 @@ inline bool g_isVRREnabled;
 inline int g_draggingX, g_draggingY;
 inline Screenshot g_screenshot;
 inline bool g_drawScreenshotIcon = false;
-inline int g_screenshotKey = VK_F11;
+inline int g_screenshotKey = VK_SCROLL;
 // inline ScreenshotKeyBinder g_screenshotKeyBinder(g_screenshotKey);
 inline DualSense g_dualsense;
 
@@ -138,3 +138,5 @@ inline SwitchProController g_switchPC;
 
 inline HBRUSH g_borderBrush = nullptr;
 inline HBRUSH g_bgBrush = nullptr;
+inline uint8_t g_gamepadIndex = 0u;
+inline uint8_t g_screenshotRate = 1u;

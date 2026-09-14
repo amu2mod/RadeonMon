@@ -29,41 +29,55 @@
  */
 class XboxWirelessController : public GamePad
 {
-  public:
+public:
+	enum class Button : uint8_t
+	{
+		View,
+		Menu,
+		XBOX,
+		Share,
+
+		Count
+	};
+
 	XboxWirelessController();
 	~XboxWirelessController() override;
-
 	XboxWirelessController(const XboxWirelessController &) = delete;
 	XboxWirelessController &operator=(const XboxWirelessController &) = delete;
 
 	bool Start() override;
 	void Stop() override;
-
 	int BatteryLevel() const override;
-
 	bool IsCharging() const override;
 	Transport GetTransport() const override;
-
 	void SetOnButtonPressed(Callback callback) override;
 	void SetOnConnected(Callback callback) override;
 	void SetOnDisconnected(Callback callback) override;
+	inline void SetButton(Button b) { m_button = b; }
+	inline Button GetButton() { return m_button; }
 
-	// Debugging method: enables live HID report printing
-	bool LiveReport();
+	void Debug(); // Prints controller/HID information.
 
-	// Prints controller/HID information.
-	void Debug();
-
-  private:
+private:
 	static constexpr USHORT XBOX_VID = 0x045E;
 	static constexpr USHORT XBOX_PID_BLUETOOTH = 0x0B13;
 	static constexpr USHORT XBOX_PID_USB = 0x02FF;
 	static constexpr UINT WM_DEBUG = WM_APP + 1;
 
+	static constexpr ButtonInfo BUTTON_MAPPING[] = {
+		{11, 0x40, "View"},
+		{11, 0x80, "Menu"},
+		{12, 0x04, "XBOX"},
+		{12, 0x08, "Share"},
+	};
+
+	static_assert(static_cast<size_t>(Button::Count) == _countof(BUTTON_MAPPING), "Button::Count does not match BUTTON_MAPPING");
+
+	Button m_button = Button::Share;
+
 	static const wchar_t *WindowClassName() { return L"XboxWirelessControllerRawInputWindow"; }
 
 	std::atomic<bool> m_running{false};
-	std::atomic<bool> m_liveReport{false};
 	std::atomic<int> m_batteryLevel{-1};
 	std::atomic<bool> m_connected{false};
 	std::atomic<DWORD> m_inputValidSince{0};
@@ -97,7 +111,7 @@ class XboxWirelessController : public GamePad
 	static bool GetHidInfo(HANDLE device, HidInfo &info);
 	void EnumerateDevices();
 	static bool IsXboxDevice(const HidInfo &info);
-	static void DumpHex(const BYTE *data, UINT size);
+	static void DumpHex(const BYTE *data, UINT size, UINT intervalMs = 100);
 	void ParseSpecialButtons(const BYTE *report, UINT size);
 	static bool ExtractBluetoothAddress(const std::wstring &path, uint64_t &address);
 	HWND GetWindowHandle() const;

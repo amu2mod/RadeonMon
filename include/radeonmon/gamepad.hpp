@@ -8,13 +8,20 @@
 class GamePad
 {
 public:
-	enum class Type
+	enum class Type : uint8_t
 	{
 		None,
 		DualSense,
 		XboxWirelessController,
 		NintendoSwitchProController,
 		NintendoSwitch2ProController
+	};
+
+	struct ButtonInfo
+	{
+		BYTE reportBitOffset;
+		BYTE reportMask;
+		const char *name;
 	};
 
 	struct HidInfo
