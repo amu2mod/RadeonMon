@@ -95,6 +95,8 @@ This is an independent personal project and is not affiliated with AMD Corporati
 - Highlights high temperatures with a warm color
 - Built-in local web server running on port `9090`
 - Additional metrics available through the web interface
+- Screen capture (HDR supported)
+- VRR and LFC detection
 
 ## How to use the local Web Server
 
