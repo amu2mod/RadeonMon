@@ -56,6 +56,9 @@ inline void SavePreferences()
 
 	swprintf_s(buffer, L"%d", g_screenshotRate);
 	WritePrivateProfileStringW(L"Screenshot", L"CaptureRate", buffer, path);
+
+	swprintf_s(buffer, L"%d", g_hdrMode);
+	WritePrivateProfileStringW(L"Screenshot", L"HDRMode", buffer, path);
 }
 
 inline void LoadPreferences()
@@ -100,4 +103,5 @@ inline void LoadPreferences()
 
 	g_gamepadIndex = static_cast<uint8_t>(std::clamp(GetPrivateProfileIntW(L"Screenshot", L"GamepadIndex", 0, path), 0u, 12u));
 	g_screenshotRate = static_cast<uint8_t>(std::clamp(GetPrivateProfileIntW(L"Screenshot", L"CaptureRate", 0, path), 1u, 3u));
+	g_hdrMode = static_cast<uint8_t>(std::clamp(GetPrivateProfileIntW(L"Screenshot", L"HDRMode", 0, path), 0u, 3u));
 }

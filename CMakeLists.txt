@@ -58,6 +58,8 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/resources/resources.rc
     PROPERTIES OBJECT_DEPENDS "${WEB_FILES}"
 )
 
+find_package(OpenMP REQUIRED)
+
 add_executable(radeonmon WIN32
     src/main.cpp
     src/adlx.cpp
@@ -137,7 +139,7 @@ if(ENABLE_LOGSW)
     target_compile_definitions(radeonmon PRIVATE LOGSW)
 endif()
 
-
+target_link_libraries(radeonmon PRIVATE OpenMP::OpenMP_CXX)
 
 configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/include/radeonmon/version.hpp.in

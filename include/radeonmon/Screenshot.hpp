@@ -25,14 +25,19 @@ class Screenshot
 		PNG
 	};
 
-	enum HDROutputMode
+	enum HDROutputMode : uint8_t
 	{
-		HDR_NATIVE,	   // write the full HDR data out (e.g. fp16 -> JPEG XR)
-		HDR_TONEMAPPED // tonemap down to the configured SDR Format instead.
+		HDR_NATIVE, // write the full HDR data out (e.g. fp16 -> JPEG XR)
+
+		HDR_TONEMAP_NATURAL,   // mild, faithful, lowest contrast boost
+		HDR_TONEMAP_CINEMATIC, // balanced / current look (recommended default)
+		HDR_TONEMAP_PUNCHY,	   // more contrast + stronger highlight rolloff
 	};
 
 	Format m_format = BMP;
 	HDROutputMode m_hdrOutputMode = HDR_NATIVE; // HDR is the default behavior
+
+	static constexpr DWORD MIN_INTERVAL_MS = 500; // Minimum 500 ms between shots (2 per second max)
 
 	Screenshot();
 	~Screenshot();
@@ -41,7 +46,7 @@ class Screenshot
 	inline const wchar_t *GetPath() const { return m_path; }
 	inline bool IsPathEmpty() const { return m_path[0] == '\0'; }
 	bool SetPath(const wchar_t *newPath);
-	static constexpr DWORD MIN_INTERVAL_MS = 500; // Minimum 500 ms between shots (2 per second max)
+	void Update(); // invoke autoclean
 
   private:
 	struct ScreenshotBuffer
@@ -93,6 +98,7 @@ class Screenshot
 
 	bool DetectHDR(HWND hwnd, HDRInfo &outInfo);
 	bool HDRCapture(HWND hwnd, const HDRInfo &info);
+	bool TonemapHDRToSDR(const uint8_t *hdrPixels, int width, int height, size_t hdrRowPitch, const HDRInfo &info, ScreenshotBuffer &sdrOutput, HDROutputMode);
 
 	ComPtr<ID3D11Device> m_dxgiDevice;
 	ComPtr<ID3D11DeviceContext> m_dxgiContext;
@@ -115,9 +121,5 @@ class Screenshot
 
 	// Autoclean
 	static constexpr ULONGLONG AUTO_CLEAN_INTERVAL_MS = 5 * 60 * 1000; // 5min
-
 	void AutoClean();
-
-  public:
-	void Update();
 };

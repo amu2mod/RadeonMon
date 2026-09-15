@@ -80,11 +80,12 @@ constexpr int IDM_SCREENSHOT_FORMAT_JPEG = 1113;
 constexpr int IDM_SCREENSHOT_FORMAT_PNG = 1114;
 constexpr int IDM_SCREENSHOT_SAVE_FOLDER = 1115;
 constexpr int IDM_SCREENSHOT_BINDKEY = 1116;
-constexpr int IDM_SCREENSHOT_RATE_BASE = 1117; // 1, 2, 3
-constexpr int IDM_ENABLEGAMEPAD_BASE = 1120;   // 10: none, DS x4, Xbox X4, Nintendo x4
-constexpr int IDM_CHECK_VERSION = 1133;
-constexpr int IDM_ABOUT = 1134;
-constexpr int IDM_EXIT = 1135;
+constexpr int IDM_SCREENSHOT_RATE_BASE = 1117;		 // 1, 2, 3
+constexpr int IDM_SCREENSHOT_HDR_OUTPUT_MODE = 1120; // [0-3]
+constexpr int IDM_ENABLEGAMEPAD_BASE = 1124;		 // 13: none, DS x4, Xbox X4, Nintendo x4
+constexpr int IDM_CHECK_VERSION = 1137;
+constexpr int IDM_ABOUT = 1138;
+constexpr int IDM_EXIT = 1139;
 
 // WM
 constexpr int WM_APP_LAYOUT = WM_APP + 1;

@@ -1,6 +1,8 @@
 #include "radeonmon/Screenshot.hpp"
 #include "radeonmon/logging.hpp"
 
+#include <algorithm>
+
 Screenshot::Screenshot()
 {
 	HMODULE win32u = LoadLibraryW(L"win32u.dll");
@@ -215,7 +217,11 @@ void Screenshot::StripUnrealSuffix(wchar_t *name)
 		const wchar_t *value;
 		size_t length;
 	} suffixes[] = {
-		{L"-Win64-Shipping", _countof(L"-Win64-Shipping") - 1}, {L"-Win64-Test", _countof(L"-Win64-Test") - 1}, {L"-Win64-Development", _countof(L"-Win64-Development") - 1}, {L"-Win64-DebugGame", _countof(L"-Win64-DebugGame") - 1}, {L"-Win64-Debug", _countof(L"-Win64-Debug") - 1},
+		{L"-Win64-Shipping", _countof(L"-Win64-Shipping") - 1},
+		{L"-Win64-Test", _countof(L"-Win64-Test") - 1},
+		{L"-Win64-Development", _countof(L"-Win64-Development") - 1},
+		{L"-Win64-DebugGame", _countof(L"-Win64-DebugGame") - 1},
+		{L"-Win64-Debug", _countof(L"-Win64-Debug") - 1},
 	};
 
 	static constexpr size_t suffixCount = _countof(suffixes);
@@ -1212,12 +1218,6 @@ bool Screenshot::HDRCapture(HWND hwnd, const HDRInfo &info)
 	if (!info.active)
 		return false;
 
-	if (m_hdrOutputMode != HDR_NATIVE)
-	{
-		LOG_WARN("[Screenshot] HDR tonemapping is not implemented yet");
-		return false;
-	}
-
 	/*
 	 * The normal DXGI path uses IDXGIOutput1::DuplicateOutput(),
 	 * which gives us BGRA8. That is not sufficient for native HDR.
@@ -1237,7 +1237,8 @@ bool Screenshot::HDRCapture(HWND hwnd, const HDRInfo &info)
 
 	// Always leave the DXGI duplication in a clean state. The next
 	// normal SDR capture will recreate the normal BGRA8 duplication.
-	const auto cleanup = [&]() { ShutdownDXGI(); };
+	const auto cleanup = [&]()
+	{ ShutdownDXGI(); };
 
 	RECT clientRect{};
 
@@ -1659,6 +1660,59 @@ bool Screenshot::HDRCapture(HWND hwnd, const HDRInfo &info)
 
 	m_dxgiContext->Unmap(hdrStagingTexture.Get(), 0);
 
+	// ---------------------------------------------------------------
+	// HDR → SDR tonemap path  (same file handling as normal SDR)
+	// ---------------------------------------------------------------
+	if (m_hdrOutputMode != HDR_NATIVE)
+	{
+		ScreenshotBuffer sdr;
+
+		const size_t hdrRowPitch = static_cast<size_t>(width) * 8; // tightly packed
+
+		if (!TonemapHDRToSDR(pixels.data(), width, height, hdrRowPitch, info, sdr, m_hdrOutputMode))
+		{
+			LOG_ERROR("[Screenshot] HDR → SDR tonemap failed");
+			cleanup();
+			return false;
+		}
+
+		// Same naming as the normal path
+		sdr.filename = CreateFilenameForWindow(hwnd);
+
+		const std::wstring fullPath = std::wstring(m_path) + sdr.filename;
+
+		if (!SaveBitmapToFile(sdr, fullPath.c_str()))
+		{
+			LOG_ERROR("[Screenshot] SaveBitmapToFile (tonemapped) failed: %ls", fullPath.c_str());
+			cleanup();
+			return false;
+		}
+
+		if (m_format == JPEG)
+		{
+			if (!EncodeFileAsJPEG(fullPath.c_str()))
+			{
+				LOG_ERROR("[Screenshot] Failed to queue JPEG encoding (tonemapped): %ls", fullPath.c_str());
+				cleanup();
+				return false;
+			}
+		}
+		else if (m_format == PNG)
+		{
+			if (!EncodeFileAsPNG(fullPath.c_str()))
+			{
+				LOG_ERROR("[Screenshot] Failed to queue PNG encoding (tonemapped): %ls", fullPath.c_str());
+				cleanup();
+				return false;
+			}
+		}
+		// BMP is already done
+
+		LOG_INFO("[Screenshot] HDR tonemapped → SDR saved: %ls", fullPath.c_str());
+		cleanup();
+		return true;
+	}
+
 	/*
 	 * Build the .jxr filename.
 	 */
@@ -1787,15 +1841,6 @@ bool Screenshot::HDRCapture(HWND hwnd, const HDRInfo &info)
 	return success;
 }
 
-// void Screenshot::AutoClean()
-// {
-// 	LOG_DEBUG("[Screenshot] Auto-cleaning staging texture");
-
-// 	m_dxgiStagingTexture.Reset();
-// 	m_dxgiStagingWidth = 0;
-// 	m_dxgiStagingHeight = 0;
-// }
-
 void Screenshot::AutoClean()
 {
 	LOG_DEBUG("[Screenshot] AutoClean: releasing all DXGI resources");
@@ -1823,4 +1868,150 @@ void Screenshot::Update()
 		AutoClean();
 		m_lastScreenshotTime = 0;
 	}
+}
+
+/**
+ * Tonemap native HDR (R16G16B16A16_FLOAT scRGB) → SDR BGRA8.
+ *
+ * - Uses the display's max luminance from HDRInfo when available.
+ * - Falls back to a reasonable default (1000 nits) if the value is missing/zero.
+ * - Simple ACES-like curve + mild desaturation of highlights.
+ * - Pure CPU, no extra GPU resources required.
+ *
+ * Returns true on success. On failure output is left unmodified.
+ */
+bool Screenshot::TonemapHDRToSDR(const uint8_t *hdrPixels, int width, int height, size_t hdrRowPitch, const HDRInfo &info, ScreenshotBuffer &sdrOutput, HDROutputMode mode)
+{
+	if (!hdrPixels || width <= 0 || height <= 0)
+		return false;
+
+	const float peakNits = (info.maxLuminance > 1.0f) ? info.maxLuminance : 1000.0f;
+	const float paperWhite = 80.0f;
+	const float exposure = paperWhite / peakNits;
+
+	const size_t sdrRowSize = static_cast<size_t>(width) * 4;
+	const size_t sdrSize = sdrRowSize * static_cast<size_t>(height);
+
+	sdrOutput.pixels.resize(sdrSize);
+	sdrOutput.width = width;
+	sdrOutput.height = height;
+
+	uint8_t *dst = sdrOutput.pixels.data();
+
+	// --- preset parameters ---
+	float whitePoint, satStart, satEnd, exposureScale;
+
+	switch (mode)
+	{
+	case HDR_TONEMAP_NATURAL:
+		whitePoint = 3.0f;
+		satStart = 1.5f;
+		satEnd = 3.2f;
+		exposureScale = 1.6f;
+		break;
+
+	case HDR_TONEMAP_CINEMATIC:
+		whitePoint = 1.8f;
+		satStart = 1.2f;
+		satEnd = 2.8f;
+		exposureScale = 1.0f;
+		break;
+
+	case HDR_TONEMAP_PUNCHY:
+		whitePoint = 1.35f;
+		satStart = 0.9f;
+		satEnd = 2.2f;
+		exposureScale = 0.92f;
+		break;
+
+	default:
+		return false;
+	}
+
+	const float finalExposure = exposure * exposureScale;
+	const float whitePointSq = whitePoint * whitePoint;
+
+	// Fast + accurate half → float
+	auto halfToFloat = [](uint16_t h) -> float
+	{
+		union
+		{
+			uint32_t u;
+			float f;
+		} v;
+		const uint32_t sign = (h & 0x8000u) << 16;
+		const uint32_t exp = (h >> 10) & 0x1Fu;
+		const uint32_t mant = h & 0x3FFu;
+
+		if (exp == 0)
+		{
+			if (mant == 0)
+				return sign ? -0.0f : 0.0f;
+			// denormal
+			const float f = std::ldexp(static_cast<float>(mant), -24);
+			return sign ? -f : f;
+		}
+		if (exp == 31)
+			return sign ? -1e5f : 1e5f;
+
+		v.u = sign | ((exp + (127 - 15)) << 23) | (mant << 13);
+		return v.f;
+	};
+
+	auto smoothstep = [](float edge0, float edge1, float x) -> float
+	{
+		x = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+		return x * x * (3.0f - 2.0f * x);
+	};
+
+	auto tonemap = [whitePointSq](float x) -> float
+	{
+		x = x * (1.0f + x / whitePointSq) / (1.0f + x);
+		return std::clamp(x, 0.0f, 1.0f);
+	};
+
+	auto toSRGB = [](float v) -> uint8_t
+	{
+		v = std::clamp(v, 0.0f, 1.0f);
+		if (v <= 0.0031308f)
+			v *= 12.92f;
+		else
+			v = 1.055f * std::pow(v, 1.0f / 2.4f) - 0.055f;
+		return static_cast<uint8_t>(std::round(v * 255.0f));
+	};
+
+// Parallel over rows
+#pragma omp parallel for schedule(dynamic)
+	for (int y = 0; y < height; ++y)
+	{
+		const uint8_t *srcRow = hdrPixels + static_cast<size_t>(y) * hdrRowPitch;
+		uint8_t *dstRow = dst + static_cast<size_t>(y) * sdrRowSize;
+
+		for (int x = 0; x < width; ++x)
+		{
+			const uint16_t *p = reinterpret_cast<const uint16_t *>(srcRow + x * 8);
+
+			float r = halfToFloat(p[0]) * finalExposure;
+			float g = halfToFloat(p[1]) * finalExposure;
+			float b = halfToFloat(p[2]) * finalExposure;
+
+			const float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+			const float sat = 1.0f - smoothstep(satStart, satEnd, luma);
+
+			r = luma + sat * (r - luma);
+			g = luma + sat * (g - luma);
+			b = luma + sat * (b - luma);
+
+			r = tonemap(r);
+			g = tonemap(g);
+			b = tonemap(b);
+
+			dstRow[x * 4 + 0] = toSRGB(b);
+			dstRow[x * 4 + 1] = toSRGB(g);
+			dstRow[x * 4 + 2] = toSRGB(r);
+			dstRow[x * 4 + 3] = 255;
+		}
+	}
+
+	return true;
 }
