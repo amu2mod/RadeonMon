@@ -95,7 +95,9 @@ This is an independent personal project and is not affiliated with AMD Corporati
 - Highlights high temperatures with a warm color
 - Built-in local web server running on port `9090`
 - Additional metrics available through the web interface
-- Screen capture (HDR supported)
+- Screen capture with HDR support and gamepad hotkey capture
+- Support for Sony DualSense, Xbox Wireless Controller, and Nintendo Switch Pro Controller
+- Gamepad battery level detection over Bluetooth
 - VRR and LFC detection
 
 ## How to use the local Web Server
