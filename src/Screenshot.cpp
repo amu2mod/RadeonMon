@@ -1,6 +1,7 @@
 #include "radeonmon/Screenshot.hpp"
 #include "radeonmon/logging.hpp"
 
+#include <cmath>
 #include <algorithm>
 
 Screenshot::Screenshot()
