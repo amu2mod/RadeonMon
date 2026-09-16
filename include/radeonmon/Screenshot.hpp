@@ -29,9 +29,9 @@ class Screenshot
 	{
 		HDR_NATIVE, // write the full HDR data out (e.g. fp16 -> JPEG XR)
 
-		HDR_TONEMAP_NATURAL,   // mild, faithful, lowest contrast boost
-		HDR_TONEMAP_CINEMATIC, // balanced / current look (recommended default)
-		HDR_TONEMAP_PUNCHY,	   // more contrast + stronger highlight rolloff
+		HDR_TONEMAP_BRIGHT, // use high paper white thresholds to keep the image bright, tradeoff: some highlights might clip
+		HDR_TONEMAP_MID,	// use in-between paper white
+		HDR_TONEMAP_DARK,	// use low paper white to avoid highlight clipping, tradeoff: the overall image is dim
 	};
 
 	Format m_format = BMP;
@@ -98,7 +98,8 @@ class Screenshot
 
 	bool DetectHDR(HWND hwnd, HDRInfo &outInfo);
 	bool HDRCapture(HWND hwnd, const HDRInfo &info);
-	bool TonemapHDRToSDR(const uint8_t *hdrPixels, int width, int height, size_t hdrRowPitch, const HDRInfo &info, ScreenshotBuffer &sdrOutput, HDROutputMode);
+	// bool TonemapHDRToSDR(const uint8_t *hdrPixels, int width, int height, size_t hdrRowPitch, const HDRInfo &info, ScreenshotBuffer &sdrOutput, HDROutputMode);
+	bool TonemapHDRToSDR2(const uint8_t *hdrPixels, int width, int height, size_t hdrRowPitch, const HDRInfo &info, ScreenshotBuffer &sdrOutput, HDROutputMode);
 
 	ComPtr<ID3D11Device> m_dxgiDevice;
 	ComPtr<ID3D11DeviceContext> m_dxgiContext;
@@ -116,8 +117,6 @@ class Screenshot
 	// can be queried/invalidated independently of duplication setup.
 	HMONITOR m_hdrMonitor = nullptr;
 	HDRInfo m_hdrInfo{};
-
-	// TODO: HDR-SDR tonemapper
 
 	// Autoclean
 	static constexpr ULONGLONG AUTO_CLEAN_INTERVAL_MS = 5 * 60 * 1000; // 5min

@@ -1765,9 +1765,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		HMENU hHDROutputMode = CreatePopupMenu();
 		AppendMenuW(hScreenshotMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hHDROutputMode), L"HDR Output Mode");
 		AppendMenuW(hHDROutputMode, MF_STRING | (g_hdrMode == 0u ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_HDR_OUTPUT_MODE, L"HDR Native (JXR)");
-		AppendMenuW(hHDROutputMode, MF_STRING | (g_hdrMode == 1u ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_HDR_OUTPUT_MODE + 1, L"Natural Tonemapping");
-		AppendMenuW(hHDROutputMode, MF_STRING | (g_hdrMode == 2u ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_HDR_OUTPUT_MODE + 2, L"Cinematic Tonemapping");
-		AppendMenuW(hHDROutputMode, MF_STRING | (g_hdrMode == 3u ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_HDR_OUTPUT_MODE + 3, L"Punchy Tonemapping");
+		AppendMenuW(hHDROutputMode, MF_STRING | (g_hdrMode == 1u ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_HDR_OUTPUT_MODE + 1, L"Tone Map - Bright");
+		AppendMenuW(hHDROutputMode, MF_STRING | (g_hdrMode == 2u ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_HDR_OUTPUT_MODE + 2, L"Tone Map - Mid");
+		AppendMenuW(hHDROutputMode, MF_STRING | (g_hdrMode == 3u ? MF_CHECKED | MF_DISABLED : MF_UNCHECKED), IDM_SCREENSHOT_HDR_OUTPUT_MODE + 3, L"Tone Mapping - Dark");
 
 		///////////////////////////////
 
@@ -2113,15 +2113,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					break;
 				case 1:
 					g_hdrMode = 1;
-					g_screenshot.m_hdrOutputMode = Screenshot::HDR_TONEMAP_NATURAL;
+					g_screenshot.m_hdrOutputMode = Screenshot::HDR_TONEMAP_BRIGHT;
 					break;
 				case 2:
 					g_hdrMode = 2;
-					g_screenshot.m_hdrOutputMode = Screenshot::HDR_TONEMAP_CINEMATIC;
+					g_screenshot.m_hdrOutputMode = Screenshot::HDR_TONEMAP_MID;
 					break;
 				case 3:
 					g_hdrMode = 3;
-					g_screenshot.m_hdrOutputMode = Screenshot::HDR_TONEMAP_PUNCHY;
+					g_screenshot.m_hdrOutputMode = Screenshot::HDR_TONEMAP_DARK;
 					break;
 				default:
 					break;

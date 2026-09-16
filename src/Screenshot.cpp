@@ -218,11 +218,7 @@ void Screenshot::StripUnrealSuffix(wchar_t *name)
 		const wchar_t *value;
 		size_t length;
 	} suffixes[] = {
-		{L"-Win64-Shipping", _countof(L"-Win64-Shipping") - 1},
-		{L"-Win64-Test", _countof(L"-Win64-Test") - 1},
-		{L"-Win64-Development", _countof(L"-Win64-Development") - 1},
-		{L"-Win64-DebugGame", _countof(L"-Win64-DebugGame") - 1},
-		{L"-Win64-Debug", _countof(L"-Win64-Debug") - 1},
+		{L"-Win64-Shipping", _countof(L"-Win64-Shipping") - 1}, {L"-Win64-Test", _countof(L"-Win64-Test") - 1}, {L"-Win64-Development", _countof(L"-Win64-Development") - 1}, {L"-Win64-DebugGame", _countof(L"-Win64-DebugGame") - 1}, {L"-Win64-Debug", _countof(L"-Win64-Debug") - 1},
 	};
 
 	static constexpr size_t suffixCount = _countof(suffixes);
@@ -1238,8 +1234,7 @@ bool Screenshot::HDRCapture(HWND hwnd, const HDRInfo &info)
 
 	// Always leave the DXGI duplication in a clean state. The next
 	// normal SDR capture will recreate the normal BGRA8 duplication.
-	const auto cleanup = [&]()
-	{ ShutdownDXGI(); };
+	const auto cleanup = [&]() { ShutdownDXGI(); };
 
 	RECT clientRect{};
 
@@ -1670,7 +1665,8 @@ bool Screenshot::HDRCapture(HWND hwnd, const HDRInfo &info)
 
 		const size_t hdrRowPitch = static_cast<size_t>(width) * 8; // tightly packed
 
-		if (!TonemapHDRToSDR(pixels.data(), width, height, hdrRowPitch, info, sdr, m_hdrOutputMode))
+		// if (!TonemapHDRToSDR(pixels.data(), width, height, hdrRowPitch, info, sdr, m_hdrOutputMode))
+		if (!TonemapHDRToSDR2(pixels.data(), width, height, hdrRowPitch, info, sdr, m_hdrOutputMode))
 		{
 			LOG_ERROR("[Screenshot] HDR → SDR tonemap failed");
 			cleanup();
@@ -1881,15 +1877,12 @@ void Screenshot::Update()
  *
  * Returns true on success. On failure output is left unmodified.
  */
-bool Screenshot::TonemapHDRToSDR(const uint8_t *hdrPixels, int width, int height, size_t hdrRowPitch, const HDRInfo &info, ScreenshotBuffer &sdrOutput, HDROutputMode mode)
+bool Screenshot::TonemapHDRToSDR2(const uint8_t *hdrPixels, int width, int height, size_t hdrRowPitch, const HDRInfo &info, ScreenshotBuffer &sdrOutput, HDROutputMode mode)
 {
 	if (!hdrPixels || width <= 0 || height <= 0)
 		return false;
 
 	const float peakNits = (info.maxLuminance > 1.0f) ? info.maxLuminance : 1000.0f;
-	const float paperWhite = 80.0f;
-	const float exposure = paperWhite / peakNits;
-
 	const size_t sdrRowSize = static_cast<size_t>(width) * 4;
 	const size_t sdrSize = sdrRowSize * static_cast<size_t>(height);
 
@@ -1899,40 +1892,11 @@ bool Screenshot::TonemapHDRToSDR(const uint8_t *hdrPixels, int width, int height
 
 	uint8_t *dst = sdrOutput.pixels.data();
 
-	// --- preset parameters ---
-	float whitePoint, satStart, satEnd, exposureScale;
+	const float whitePoint = 1.5f;
+	const float whitePoint2 = 2.2f; // higher threshold for bright scene with clouds
+	const float exposureScale = 1.0f;
 
-	switch (mode)
-	{
-	case HDR_TONEMAP_NATURAL:
-		whitePoint = 3.0f;
-		satStart = 1.5f;
-		satEnd = 3.2f;
-		exposureScale = 1.6f;
-		break;
-
-	case HDR_TONEMAP_CINEMATIC:
-		whitePoint = 1.8f;
-		satStart = 1.2f;
-		satEnd = 2.8f;
-		exposureScale = 1.0f;
-		break;
-
-	case HDR_TONEMAP_PUNCHY:
-		whitePoint = 1.35f;
-		satStart = 0.9f;
-		satEnd = 2.2f;
-		exposureScale = 0.92f;
-		break;
-
-	default:
-		return false;
-	}
-
-	const float finalExposure = exposure * exposureScale;
-	const float whitePointSq = whitePoint * whitePoint;
-
-	// Fast + accurate half → float
+	// Fast + accurate half -> float
 	auto halfToFloat = [](uint16_t h) -> float
 	{
 		union
@@ -1948,7 +1912,6 @@ bool Screenshot::TonemapHDRToSDR(const uint8_t *hdrPixels, int width, int height
 		{
 			if (mant == 0)
 				return sign ? -0.0f : 0.0f;
-			// denormal
 			const float f = std::ldexp(static_cast<float>(mant), -24);
 			return sign ? -f : f;
 		}
@@ -1959,11 +1922,77 @@ bool Screenshot::TonemapHDRToSDR(const uint8_t *hdrPixels, int width, int height
 		return v.f;
 	};
 
-	auto smoothstep = [](float edge0, float edge1, float x) -> float
+	// --- Pass 1: measure scene brightness (arithmetic mean, converted to nits) ---
+	// Assumes buffer is scRGB linear (1.0 = 80 nits), standard for R16G16B16A16_FLOAT HDR capture.
+	const float scRGBToNits = 80.0f;
+	const int sampleStride = 4;
+
+	double sum = 0.0;
+	size_t sampleCount = 0;
+
+	for (int y = 0; y < height; y += sampleStride)
 	{
-		x = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
-		return x * x * (3.0f - 2.0f * x);
+		const uint8_t *srcRow = hdrPixels + static_cast<size_t>(y) * hdrRowPitch;
+		for (int x = 0; x < width; x += sampleStride)
+		{
+			const uint16_t *p = reinterpret_cast<const uint16_t *>(srcRow + x * 8);
+			const float r = halfToFloat(p[0]);
+			const float g = halfToFloat(p[1]);
+			const float b = halfToFloat(p[2]);
+			const float luma = (0.2126f * r + 0.7152f * g + 0.0722f * b) * scRGBToNits;
+			sum += static_cast<double>(max(luma, 0.0f));
+			++sampleCount;
+		}
+	}
+
+	const float avgLumNits = (sampleCount > 0) ? static_cast<float>(sum / static_cast<double>(sampleCount)) : 0.0f;
+
+	const float darkAnchorNits = 5.0f;	   // ~ your dark scene (4.7)
+	const float brightAnchorNits = 140.0f; // ~ your bright scene (140)
+
+	const float sceneEV = std::log2(max(avgLumNits, 0.01f));
+	const float darkEV = std::log2(darkAnchorNits);
+	const float brightEV = std::log2(brightAnchorNits);
+
+	float t = std::clamp((sceneEV - darkEV) / (brightEV - darkEV), 0.0f, 1.0f);
+
+	// Bias curve: keeps mid-tone scenes closer to MAX, only pulls toward
+	// MIN  as the scene approaches the bright anchor. Tune curvePower:
+	//   1.0 = linear (current behavior)
+	//   2-4 = MAX holds longer, natural kicks in later
+	const float curvePower = 3.0f;
+	t = std::pow(t, curvePower);
+
+	float paperWhiteMin; // value used to avoid clipping in bright scenes
+	float paperWhiteMax; // value used to avoid black crush in dark scenes
+
+	switch (mode)
+	{
+	case HDR_TONEMAP_BRIGHT:
+		paperWhiteMin = 140.0f;
+		paperWhiteMax = 300.0f;
+		break;
+	case HDR_TONEMAP_MID:
+		paperWhiteMin = 110.0f;
+		paperWhiteMax = 250.0f;
+		break;
+	case HDR_TONEMAP_DARK:
+		paperWhiteMin = 80.0f;
+		paperWhiteMax = 200.0f;
+		break;
+	default:
+		paperWhiteMin = 110.0f;
+		paperWhiteMax = 250.0f;
 	};
+
+	const float paperWhite = std::lerp(paperWhiteMax, paperWhiteMin, t); // dynamically adjust paper white based on the power curve
+
+	LOG_DEBUG("[HDR] paperWhite=%.0f, avgLum=%.1f", paperWhite, avgLumNits);
+
+	const float exposure = paperWhite / peakNits;
+	const float finalExposure = exposure * exposureScale;
+	const float wp = paperWhite == paperWhiteMin ? whitePoint2 : whitePoint;
+	const float whitePointSq = wp * wp;
 
 	auto tonemap = [whitePointSq](float x) -> float
 	{
@@ -1981,7 +2010,7 @@ bool Screenshot::TonemapHDRToSDR(const uint8_t *hdrPixels, int width, int height
 		return static_cast<uint8_t>(std::round(v * 255.0f));
 	};
 
-// Parallel over rows
+// --- Pass 2: full tonemap, parallel over rows ---
 #pragma omp parallel for schedule(dynamic)
 	for (int y = 0; y < height; ++y)
 	{
@@ -1995,13 +2024,6 @@ bool Screenshot::TonemapHDRToSDR(const uint8_t *hdrPixels, int width, int height
 			float r = halfToFloat(p[0]) * finalExposure;
 			float g = halfToFloat(p[1]) * finalExposure;
 			float b = halfToFloat(p[2]) * finalExposure;
-
-			const float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
-			const float sat = 1.0f - smoothstep(satStart, satEnd, luma);
-
-			r = luma + sat * (r - luma);
-			g = luma + sat * (g - luma);
-			b = luma + sat * (b - luma);
 
 			r = tonemap(r);
 			g = tonemap(g);
