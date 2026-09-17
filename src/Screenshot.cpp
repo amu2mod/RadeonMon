@@ -1,6 +1,8 @@
 #include "radeonmon/Screenshot.hpp"
 #include "radeonmon/logging.hpp"
 
+#include <omp.h>
+
 #include <cmath>
 #include <algorithm>
 
@@ -218,7 +220,11 @@ void Screenshot::StripUnrealSuffix(wchar_t *name)
 		const wchar_t *value;
 		size_t length;
 	} suffixes[] = {
-		{L"-Win64-Shipping", _countof(L"-Win64-Shipping") - 1}, {L"-Win64-Test", _countof(L"-Win64-Test") - 1}, {L"-Win64-Development", _countof(L"-Win64-Development") - 1}, {L"-Win64-DebugGame", _countof(L"-Win64-DebugGame") - 1}, {L"-Win64-Debug", _countof(L"-Win64-Debug") - 1},
+		{L"-Win64-Shipping", _countof(L"-Win64-Shipping") - 1},
+		{L"-Win64-Test", _countof(L"-Win64-Test") - 1},
+		{L"-Win64-Development", _countof(L"-Win64-Development") - 1},
+		{L"-Win64-DebugGame", _countof(L"-Win64-DebugGame") - 1},
+		{L"-Win64-Debug", _countof(L"-Win64-Debug") - 1},
 	};
 
 	static constexpr size_t suffixCount = _countof(suffixes);
@@ -341,7 +347,7 @@ bool Screenshot::GetScreenshot()
 		return false;
 	}
 
-	const DWORD now = GetTickCount();
+	const ULONGLONG now = GetTickCount64();
 
 	if (m_lastScreenshotTime != 0 && (now - m_lastScreenshotTime) < MIN_INTERVAL_MS)
 	{
@@ -359,45 +365,54 @@ bool Screenshot::GetScreenshot()
 
 	HDRInfo hdrInfo{};
 
+	bool success = false;
+
 	if (DetectHDR(hwnd, hdrInfo) && hdrInfo.active)
-		return HDRCapture(hwnd, hdrInfo);
-
-	ScreenshotBuffer screenshot;
-
-	if (!DXGICapture(screenshot, hwnd))
 	{
-		LOG_ERROR("[Screenshot] CaptureScreenshot failed");
-		return false;
+		success = HDRCapture(hwnd, hdrInfo);
 	}
-
-	const std::wstring fullPath = std::wstring(m_path) + screenshot.filename;
-
-	if (!SaveBitmapToFile(screenshot, fullPath.c_str()))
+	else
 	{
-		LOG_ERROR("[Screenshot] SaveBitmapToFile failed: %ls", fullPath.c_str());
-		return false;
-	}
+		ScreenshotBuffer screenshot;
 
-	if (m_format == JPEG)
-	{
-		if (!EncodeFileAsJPEG(fullPath.c_str()))
+		if (!DXGICapture(screenshot, hwnd))
 		{
-			LOG_ERROR("[Screenshot] Failed to queue JPEG encoding: %ls", fullPath.c_str());
+			LOG_ERROR("[Screenshot] CaptureScreenshot failed");
 			return false;
 		}
-	}
-	else if (m_format == PNG)
-	{
-		if (!EncodeFileAsPNG(fullPath.c_str()))
+
+		const std::wstring fullPath = std::wstring(m_path) + screenshot.filename;
+
+		if (!SaveBitmapToFile(screenshot, fullPath.c_str()))
 		{
-			LOG_ERROR("[Screenshot] Failed to queue PNG encoding: %ls", fullPath.c_str());
+			LOG_ERROR("[Screenshot] SaveBitmapToFile failed: %ls", fullPath.c_str());
 			return false;
 		}
+
+		if (m_format == JPEG)
+		{
+			if (!EncodeFileAsJPEG(fullPath.c_str()))
+			{
+				LOG_ERROR("[Screenshot] Failed to queue JPEG encoding: %ls", fullPath.c_str());
+				return false;
+			}
+		}
+		else if (m_format == PNG)
+		{
+			if (!EncodeFileAsPNG(fullPath.c_str()))
+			{
+				LOG_ERROR("[Screenshot] Failed to queue PNG encoding: %ls", fullPath.c_str());
+				return false;
+			}
+		}
+
+		success = true;
 	}
 
-	m_lastScreenshotTime = GetTickCount64();
+	if (success)
+		m_lastScreenshotTime = GetTickCount64();
 
-	return true;
+	return success;
 }
 
 std::wstring Screenshot::CreateFilenameForWindow(HWND hwnd, const wchar_t *tag)
@@ -1234,7 +1249,8 @@ bool Screenshot::HDRCapture(HWND hwnd, const HDRInfo &info)
 
 	// Always leave the DXGI duplication in a clean state. The next
 	// normal SDR capture will recreate the normal BGRA8 duplication.
-	const auto cleanup = [&]() { ShutdownDXGI(); };
+	const auto cleanup = [&]()
+	{ ShutdownDXGI(); };
 
 	RECT clientRect{};
 
@@ -1872,8 +1888,8 @@ void Screenshot::Update()
  *
  * - Uses the display's max luminance from HDRInfo when available.
  * - Falls back to a reasonable default (1000 nits) if the value is missing/zero.
- * - Simple ACES-like curve + mild desaturation of highlights.
- * - Pure CPU, no extra GPU resources required.
+ * - Extended Reinhard tone mapper
+ * - Pure CPU compute with OpenMP speed up
  *
  * Returns true on success. On failure output is left unmodified.
  */
@@ -1994,11 +2010,34 @@ bool Screenshot::TonemapHDRToSDR2(const uint8_t *hdrPixels, int width, int heigh
 	const float wp = paperWhite == paperWhiteMin ? whitePoint2 : whitePoint;
 	const float whitePointSq = wp * wp;
 
+	// Extended Reinhard
 	auto tonemap = [whitePointSq](float x) -> float
 	{
 		x = x * (1.0f + x / whitePointSq) / (1.0f + x);
 		return std::clamp(x, 0.0f, 1.0f);
 	};
+
+	// Simple Reinhard
+	// auto tonemap = [](float x) -> float
+	// {
+	// 	x = x / (1.0f + x);
+	// 	return std::clamp(x, 0.0f, 1.0f);
+	// };
+
+	// Reinhard /w shoulder
+	// auto tonemap = [whitePointSq](float x) -> float
+	// {
+	// 	constexpr float shoulderStart = 0.8f;
+	// 	constexpr float blendWidth = 0.3f; // how wide the transition zone is
+
+	// 	float shoulderT = std::clamp((x - shoulderStart) / blendWidth, 0.0f, 1.0f);
+	// 	float smoothT = shoulderT * shoulderT * (3.0f - 2.0f * shoulderT); // smoothstep
+
+	// 	float linear = x;
+	// 	float compressed = shoulderStart + (1.0f - shoulderStart) * ((x - shoulderStart) / (whitePointSq - shoulderStart)) / (1.0f + (x - shoulderStart) / (whitePointSq - shoulderStart));
+
+	// 	return std::clamp(linear * (1.0f - smoothT) + compressed * smoothT, 0.0f, 1.0f);
+	// };
 
 	auto toSRGB = [](float v) -> uint8_t
 	{
@@ -2010,7 +2049,11 @@ bool Screenshot::TonemapHDRToSDR2(const uint8_t *hdrPixels, int width, int heigh
 		return static_cast<uint8_t>(std::round(v * 255.0f));
 	};
 
-// --- Pass 2: full tonemap, parallel over rows ---
+	// --- Pass 2: full tonemap, parallel over rows ---
+	static int half_cores = omp_get_num_procs() / 2;
+	omp_set_num_threads(half_cores);
+	omp_set_dynamic(1);
+	// START_CHRONO(tonemapping);
 #pragma omp parallel for schedule(dynamic)
 	for (int y = 0; y < height; ++y)
 	{
@@ -2035,6 +2078,7 @@ bool Screenshot::TonemapHDRToSDR2(const uint8_t *hdrPixels, int width, int heigh
 			dstRow[x * 4 + 3] = 255;
 		}
 	}
+	// END_CHRONO(tonemapping, "hdr_tonemmaping");
 
 	return true;
 }
