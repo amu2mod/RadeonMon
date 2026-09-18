@@ -52,25 +52,34 @@ void SelectGamePad(GamePad::Type type, HWND hwnd)
 
 	case GamePad::Type::DualSense:
 		g_gamepad = &g_dualsense;
-		g_gamepad->SetOnConnected([]() { LOG_INFO("[APP] DualSense connected"); });
-		g_gamepad->SetOnDisconnected([]() { LOG_INFO("[APP] DualSense disconnected"); });
-		g_gamepad->SetOnButtonPressed([hwnd]() { OnScreenshotAction(hwnd); });
+		g_gamepad->SetOnConnected([]()
+								  { LOG_INFO("[APP] DualSense connected"); });
+		g_gamepad->SetOnDisconnected([]()
+									 { LOG_INFO("[APP] DualSense disconnected"); });
+		g_gamepad->SetOnButtonPressed([hwnd]()
+									  { OnScreenshotAction(hwnd); });
 		g_gamepad->Start();
 		break;
 
 	case GamePad::Type::XboxWirelessController:
 		g_gamepad = &g_xboxWC;
-		g_gamepad->SetOnConnected([]() { LOG_INFO("[APP] Xbox Wireless Controller connected"); });
-		g_gamepad->SetOnDisconnected([]() { LOG_INFO("[APP] Xbox Wireless Controller disconnected"); });
-		g_gamepad->SetOnButtonPressed([hwnd]() { OnScreenshotAction(hwnd); });
+		g_gamepad->SetOnConnected([]()
+								  { LOG_INFO("[APP] Xbox Wireless Controller connected"); });
+		g_gamepad->SetOnDisconnected([]()
+									 { LOG_INFO("[APP] Xbox Wireless Controller disconnected"); });
+		g_gamepad->SetOnButtonPressed([hwnd]()
+									  { OnScreenshotAction(hwnd); });
 		g_gamepad->Start();
 		break;
 
 	case GamePad::Type::NintendoSwitchProController:
 		g_gamepad = &g_switchPC;
-		g_gamepad->SetOnConnected([]() { LOG_INFO("[APP] Switch Pro Controller connected"); });
-		g_gamepad->SetOnDisconnected([]() { LOG_INFO("[APP] Switch Pro Controller disconnected"); });
-		g_gamepad->SetOnButtonPressed([hwnd]() { OnScreenshotAction(hwnd); });
+		g_gamepad->SetOnConnected([]()
+								  { LOG_INFO("[APP] Switch Pro Controller connected"); });
+		g_gamepad->SetOnDisconnected([]()
+									 { LOG_INFO("[APP] Switch Pro Controller disconnected"); });
+		g_gamepad->SetOnButtonPressed([hwnd]()
+									  { OnScreenshotAction(hwnd); });
 		g_gamepad->Start();
 		break;
 
@@ -323,7 +332,8 @@ void SetDisplayLine(const DisplayInfo &display, HWND hwnd = nullptr)
 	PropertyItem &prop = g_props[MetricsIndex::Display];
 	const std::wstring label = L"Display " + std::to_wstring(display.index + 1);
 	int widthToDisplay = display.isPortrait ? display.width : display.height;
-	std::wstring resolution = widthToDisplay == 4320 ? L"8K @" : widthToDisplay == 2160 ? L"4K @" : std::to_wstring(widthToDisplay) + L"p @";
+	std::wstring resolution = widthToDisplay == 4320 ? L"8K @" : widthToDisplay == 2160 ? L"4K @"
+																						: std::to_wstring(widthToDisplay) + L"p @";
 	std::wstring value = resolution + std::to_wstring(display.frequency) + L"Hz";
 
 	if (value.length() < MAXTXTVALUE_LENGTH)
@@ -422,7 +432,8 @@ LayoutMetrics CalculateLayoutMetrics(HDC hdc)
 
 	const float fontScale = static_cast<float>(fontHeight) / static_cast<float>(FONTSIZE);
 
-	auto ScaleFontMetric = [&](int value) -> int { return max(1, static_cast<int>(roundf(value * fontScale))); };
+	auto ScaleFontMetric = [&](int value) -> int
+	{ return max(1, static_cast<int>(roundf(value * fontScale))); };
 
 	LOG_DEBUG("[UI] fontHeight=%ld scale=%.2f", fontHeight, fontScale);
 
@@ -1335,13 +1346,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 			TOOLINFO ti = {};
 			ti.cbSize = sizeof(ti);
-			ti.uFlags = TTF_SUBCLASS;
+			ti.uFlags = TTF_SUBCLASS | TTF_TRACK;
 			ti.hwnd = hwnd;
 			ti.uId = TOOLID_GPUINFO;
 			ti.rect = textRect;
 
 			SendMessage(g_hwndTooltip, TTM_ADDTOOL, 0, (LPARAM)&ti);
-			SendMessage(g_hwndTooltip, TTM_SETDELAYTIME, TTDT_INITIAL, 0); // starts immediatly
+			SendMessage(g_hwndTooltip, TTM_SETDELAYTIME, TTDT_INITIAL, 0); // show immediately
+
 			UpdateToolTipRect(hwnd, TOOLID_GPUINFO, g_cardName.valueRc);
 		}
 		/////////////////////
@@ -1487,7 +1499,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				dirty = true;
 				wchar_t tempBuffer[16];
 				FormatTemperature(tempBuffer, static_cast<int>(snapshot.temperature.value));
-				TextLevel level = snapshot.temperature.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.temperature.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning : TextLevel::Neutral;
+				TextLevel level = snapshot.temperature.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.temperature.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning
+																																											 : TextLevel::Neutral;
 				SetPropertyValueAtIndex(MetricsIndex::Temp, static_cast<int>(snapshot.temperature.value), tempBuffer, 16, level);
 			}
 
@@ -1497,7 +1510,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				dirty = true;
 				wchar_t hotspotBuffer[16];
 				FormatHotspot(hotspotBuffer, static_cast<int>(snapshot.temperature.value), static_cast<int>(snapshot.hotspot.value));
-				TextLevel level = snapshot.hotspot.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.hotspot.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning : TextLevel::Neutral;
+				TextLevel level = snapshot.hotspot.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.hotspot.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning
+																																									 : TextLevel::Neutral;
 				SetPropertyValueAtIndex(MetricsIndex::Hotspot, static_cast<int>(snapshot.hotspot.value), hotspotBuffer, 16, level);
 			}
 
@@ -1507,7 +1521,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				dirty = true;
 				wchar_t vramBuffer[16];
 				FormatTemperature(vramBuffer, static_cast<int>(snapshot.memoryTemperature.value));
-				TextLevel level = snapshot.memoryTemperature.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.memoryTemperature.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning : TextLevel::Neutral;
+				TextLevel level = snapshot.memoryTemperature.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.memoryTemperature.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning
+																																														 : TextLevel::Neutral;
 				SetPropertyValueAtIndex(MetricsIndex::Vram, static_cast<int>(snapshot.memoryTemperature.value), vramBuffer, 16, level);
 			}
 
@@ -1562,7 +1577,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					dirty = true;
 					wchar_t cpuBuffer[20];
 					FormatCpuMetrics(cpuBuffer, cpuIntegerTemp, cpuIntegerPower);
-					TextLevel level = cpuIntegerTemp >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : cpuIntegerTemp >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning : TextLevel::Neutral;
+					TextLevel level = cpuIntegerTemp >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : cpuIntegerTemp >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning
+																																						 : TextLevel::Neutral;
 					SetPropertyValueAtIndex(MetricsIndex::Cpu, cpuIntegerTemp, cpuBuffer, 16, level);
 					SetPropertyValue2OnlyAtIndex(MetricsIndex::Cpu, cpuIntegerPower);
 				}
@@ -1584,7 +1600,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				wchar_t fpsBuffer[16];
 				int delta = current - old;
 				FormatFPS(fpsBuffer, current, old);
-				TextLevel level = delta <= -20 ? TextLevel::Alert : delta <= -10 ? TextLevel::Warning : TextLevel::Neutral;
+				TextLevel level = delta <= -20 ? TextLevel::Alert : delta <= -10 ? TextLevel::Warning
+																				 : TextLevel::Neutral;
 				SetPropertyValueAtIndex(MetricsIndex::Fps, snapshot.fps, fpsBuffer, 16, level);
 			}
 
@@ -1735,7 +1752,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			AppendMenuW(hGamepadMenu, flags, id, label);
 		};
 
-		auto AddGamepadButtonOption = [&](UINT id, const wchar_t *label, GamePad::Type type, auto button, auto &gamepad) { AddGamepadOption(id, label, g_gamepadType == type && gamepad.GetButton() == button); };
+		auto AddGamepadButtonOption = [&](UINT id, const wchar_t *label, GamePad::Type type, auto button, auto &gamepad)
+		{ AddGamepadOption(id, label, g_gamepadType == type && gamepad.GetButton() == button); };
 
 		AddGamepadOption(IDM_ENABLEGAMEPAD_BASE, L"Off", g_gamepadType == GamePad::Type::None);
 		AppendMenu(hGamepadMenu, MF_SEPARATOR, 0, nullptr);
@@ -2386,13 +2404,73 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				SetCursor(LoadCursor(nullptr, IDC_HAND));
 			else if (PtInRect(&g_props[MetricsIndex::Display].textLabelRc, pt) || PtInRect(&g_props[MetricsIndex::Display].valueRc, pt)) // display label
 				SetCursor(LoadCursor(nullptr, IDC_HAND));
-
-			else
+			else if (PtInRect(&g_cardName.valueRc, pt))
 			{
-				SetCursor(LoadCursor(nullptr, IDC_ARROW));
+				// Convert to screen coords for TTM_TRACKPOSITION
+				POINT ptScreen = pt;
+				ClientToScreen(hwnd, &ptScreen);
+
+				if (!g_gpuTooltipVisible)
+				{
+					TRACKMOUSEEVENT tme = {sizeof(tme)};
+					tme.dwFlags = TME_LEAVE;
+					tme.hwndTrack = hwnd;
+					TrackMouseEvent(&tme); // still needed to catch cursor leaving the app entirely
+
+					TOOLINFO ti = {};
+					ti.cbSize = sizeof(ti);
+					ti.hwnd = hwnd;
+					ti.uId = TOOLID_GPUINFO;
+					SendMessage(g_hwndTooltip, TTM_TRACKACTIVATE, TRUE, (LPARAM)&ti);
+					AnimateWindow(g_hwndTooltip, 150, AW_BLEND);
+
+					g_gpuTooltipVisible = true;
+				}
+
+				static POINT s_lastTooltipPos = {-1, -1};
+
+				// inside the PtInRect branch, after computing ptScreen:
+				const int kMoveThreshold = 5; // pixels
+				if (abs(ptScreen.x - s_lastTooltipPos.x) > kMoveThreshold || abs(ptScreen.y - s_lastTooltipPos.y) > kMoveThreshold)
+				{
+					SendMessage(g_hwndTooltip, TTM_TRACKPOSITION, 0, (LPARAM)MAKELONG(ptScreen.x + 16, ptScreen.y + 16));
+					s_lastTooltipPos = ptScreen;
+				}
 			}
+			else if (g_gpuTooltipVisible)
+			{
+				TOOLINFO ti = {};
+				ti.cbSize = sizeof(ti);
+				ti.hwnd = hwnd;
+				ti.uId = TOOLID_GPUINFO;
+
+				AnimateWindow(g_hwndTooltip, 250, AW_BLEND | AW_HIDE);
+				SendMessage(g_hwndTooltip, TTM_TRACKACTIVATE, FALSE, (LPARAM)&ti);
+
+				g_gpuTooltipVisible = false;
+			}
+			break;
 		}
 		return 0;
+	}
+
+	case WM_MOUSELEAVE:
+	{
+		// Cursor left the whole window — make sure tooltip is hidden even if
+		// it was somehow still active (fast mouse movement can skip the rect check)
+		if (g_gpuTooltipVisible)
+		{
+			TOOLINFO ti = {};
+			ti.cbSize = sizeof(ti);
+			ti.hwnd = hwnd;
+			ti.uId = TOOLID_GPUINFO;
+
+			AnimateWindow(g_hwndTooltip, 250, AW_BLEND | AW_HIDE);
+			SendMessage(g_hwndTooltip, TTM_TRACKACTIVATE, FALSE, (LPARAM)&ti);
+
+			g_gpuTooltipVisible = false;
+		}
+		break;
 	}
 
 	case WM_LBUTTONUP:
@@ -2410,6 +2488,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				if (g_draggingX != rc.left || g_draggingY != rc.top)
 					LOG_DEBUG("[App] moved to {%d,%d}", rc.left, rc.top);
 			}
+
+			SetCursor(LoadCursor(nullptr, IDC_ARROW));
 		}
 		return 0;
 	}

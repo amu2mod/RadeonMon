@@ -141,3 +141,4 @@ inline HBRUSH g_bgBrush = nullptr;
 inline uint8_t g_gamepadIndex = 0u;
 inline uint8_t g_screenshotRate = 1u;
 inline uint8_t g_hdrMode = 0u;
+inline bool g_gpuTooltipVisible = false;
