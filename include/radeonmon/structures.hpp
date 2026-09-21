@@ -13,6 +13,9 @@
 #include <vector>
 #include <regex>
 #include <cstring>
+#include <unordered_map>
+#include <functional>
+#include <unordered_set>
 
 #include <ifdef.h>
 #include <iphlpapi.h>
@@ -1497,21 +1500,74 @@ namespace RadeonMon::Hardware
 	{
 		int index = -1;
 		wchar_t name[256] = {};
+
 		uint16_t width = 0;
 		uint16_t height = 0;
 		uint16_t frequency = 0;
-		bool isPortrait;
 
-		void Log() { LOG_INFO("\t[%d] : %ls, %dx%d @%dHz, portrait=%s", index, name, width, height, frequency, isPortrait ? "yes" : "no"); }
+		std::wstring monitorDevicePath; // stable session identifier
+
+		bool isPortrait = false;
+		bool hdr = false;
+
+		bool isLockOn = false;
+		uint16_t lockedFrequency = 0;
+
+		std::vector<uint16_t> supportedFrequencies;
+
+		void Log()
+		{
+			LOG_INFO("[%d] : %ls, %dx%d @%dHz, portrait=%s, HDR=%s", index, name, width, height, frequency, isPortrait ? "yes" : "no", hdr ? "yes" : "no");
+			// LOG_DEBUG("%ls", monitorDevicePath.c_str());
+			LOG_INFO("  Supported frequencies:");
+
+			for (uint16_t hz : supportedFrequencies)
+				LOG_INFO("    %d Hz%s", hz, frequency == hz ? " <-" : "");
+		}
 	};
 
 	class DisplayManager
 	{
 	public:
 		void Add(const DisplayInfo &display) { m_displays.push_back(display); }
+		std::vector<DisplayInfo> &GetDisplays() { return m_displays; }
 
-		void Discover()
+		using Callback = std::function<void(int index, uint16_t freq)>;
+		void setRestoreLockedFrequencyCallback(Callback callback) { m_callback = std::move(callback); }
+
+		void Discover(std::unordered_map<std::wstring, int> *map = nullptr)
 		{
+			m_displays.clear();
+
+			std::unordered_set<std::wstring> currentDisplays;
+
+			UINT32 pathCount = 0;
+			UINT32 modeCount = 0;
+
+			LONG result = GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount, &modeCount);
+
+			if (result != ERROR_SUCCESS)
+			{
+				LOG_INFO("GetDisplayConfigBufferSizes failed: %ld", result);
+				return;
+			}
+
+			std::vector<DISPLAYCONFIG_PATH_INFO> paths(pathCount);
+			std::vector<DISPLAYCONFIG_MODE_INFO> modes(modeCount);
+
+			result = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pathCount, paths.data(), &modeCount, modes.data(), nullptr);
+
+			if (result != ERROR_SUCCESS)
+			{
+				LOG_INFO("QueryDisplayConfig failed: %ld", result);
+				return;
+			}
+
+			// QueryDisplayConfig can return fewer entries than the allocated buffers.
+			paths.resize(pathCount);
+			modes.resize(modeCount);
+
+			// Enumerate Win32 display devices so we can retain the device name  (\\.\DISPLAY1, \\.\DISPLAY2, ...).
 			for (DWORD i = 0;; ++i)
 			{
 				DISPLAY_DEVICE dd = {};
@@ -1520,31 +1576,121 @@ namespace RadeonMon::Hardware
 				if (!EnumDisplayDevices(nullptr, i, &dd, 0))
 					break;
 
-				// Skip inactive displays if desired
 				if (!(dd.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP))
 					continue;
 
 				DisplayInfo di;
+				di.index = static_cast<int>(i);
+
+				wcscpy_s(di.name, dd.DeviceName);
 
 				DEVMODE dm = {};
 				dm.dmSize = sizeof(dm);
 
-				if (EnumDisplaySettings(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm))
-				{
-					di.index = i;
-					wcscpy_s(di.name, dd.DeviceName);
-					di.width = static_cast<uint16_t>(dm.dmPelsWidth);
-					di.height = static_cast<uint16_t>(dm.dmPelsHeight);
-					di.frequency = static_cast<uint16_t>(dm.dmDisplayFrequency);
-					di.isPortrait = dm.dmPelsHeight >= dm.dmPelsWidth;
+				if (!EnumDisplaySettings(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm))
+					continue;
 
-					Add(di);
+				di.width = static_cast<uint16_t>(dm.dmPelsWidth);
+				di.height = static_cast<uint16_t>(dm.dmPelsHeight);
+				di.frequency = static_cast<uint16_t>(dm.dmDisplayFrequency);
+				di.isPortrait = dm.dmPelsHeight >= dm.dmPelsWidth;
+
+				// Supported refresh rates.
+				for (DWORD j = 0; EnumDisplaySettingsW(dd.DeviceName, j, &dm); ++j)
+					if (dm.dmPelsWidth == di.width && dm.dmPelsHeight == di.height)
+						di.supportedFrequencies.push_back(static_cast<uint16_t>(dm.dmDisplayFrequency));
+				std::sort(di.supportedFrequencies.begin(), di.supportedFrequencies.end());
+				di.supportedFrequencies.erase(std::unique(di.supportedFrequencies.begin(), di.supportedFrequencies.end()), di.supportedFrequencies.end());
+
+				for (const auto &path : paths)
+				{
+					// Get the source device name for this path  \\.\DISPLAY1, \\.\DISPLAY2, ...
+					DISPLAYCONFIG_SOURCE_DEVICE_NAME sourceName = {};
+
+					sourceName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+					sourceName.header.size = sizeof(sourceName);
+					sourceName.header.adapterId = path.sourceInfo.adapterId;
+					sourceName.header.id = path.sourceInfo.id;
+
+					if (DisplayConfigGetDeviceInfo(&sourceName.header) != ERROR_SUCCESS)
+						continue;
+
+					// Compare with
+					if (wcscmp(sourceName.viewGdiDeviceName, dd.DeviceName) != 0)
+						continue;
+
+					// Query HDR Advanced Color state.
+					DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO colorInfo = {};
+					colorInfo.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+					colorInfo.header.size = sizeof(colorInfo);
+					colorInfo.header.adapterId = path.targetInfo.adapterId;
+					colorInfo.header.id = path.targetInfo.id;
+
+					if (DisplayConfigGetDeviceInfo(&colorInfo.header) == ERROR_SUCCESS)
+						di.hdr = (colorInfo.value & DISPLAYCONFIG_ADVANCED_COLOR_MODE_HDR) != 0;
+
+					// monitorDevicePath as stable session identifier
+					DISPLAYCONFIG_TARGET_DEVICE_NAME targetName = {};
+					targetName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+					targetName.header.size = sizeof(targetName);
+					targetName.header.adapterId = path.targetInfo.adapterId;
+					targetName.header.id = path.targetInfo.id;
+					DisplayConfigGetDeviceInfo(&targetName.header);
+					di.monitorDevicePath = std::wstring(targetName.monitorDevicePath);
+					if (!di.monitorDevicePath.empty())
+						currentDisplays.insert(di.monitorDevicePath);
+
+					// use provided mapping to retrieve lock state
+					if (map)
+					{
+						if (map->contains(targetName.monitorDevicePath))
+						{
+							auto &storedFreq = map->at(targetName.monitorDevicePath);
+							di.isLockOn = storedFreq != -1;
+							if (di.isLockOn && di.frequency != storedFreq)
+							{
+								LOG_WARN("[DisplayManager] Current Display %d frequency (%dHz) differs from locked frequency. Reverting to %dHz in 10 seconds.", di.index + 1, di.frequency, storedFreq);
+								m_callback(di.index, static_cast<uint16_t>(storedFreq));
+							}
+						}
+						else
+							(*map)[di.monitorDevicePath] = -1;
+					}
+
+					break;
 				}
 
-				dd.cb = sizeof(dd); // Required before next call
+				Add(di);
 			}
 
 			LogAll();
+
+			// debug only
+			// for (auto &d : currentDisplays)
+			// 	LOG_DEBUG("%ls", d.c_str());
+			// LOG_DEBUG("---------------------------\n");
+
+			// trim stale data
+			if (map)
+			{
+				std::vector<std::wstring> toRemove;
+
+				for (const auto &[k, v] : *map)
+					if (!currentDisplays.contains(k))
+						toRemove.push_back(k);
+
+				for (const auto &k : toRemove)
+				{
+					LOG_DEBUG("Removing stale entry: %ls", k.c_str());
+					map->erase(k);
+				}
+			}
+
+			// debug only
+			// LOG_DEBUG("---------------------------\n");
+			// if (map)
+			// 	for (const auto &[key, value] : *map)
+			// 		LOG_DEBUG("%ls: %s", key.c_str(), value != -1 ? "ON" : "OFF");
 		}
 
 		void Clear()
@@ -1553,13 +1699,7 @@ namespace RadeonMon::Hardware
 			m_current = 0;
 		}
 
-		/**
-		 * Move the cursor to the next element of the list then returns the element.
-		 *
-		 * Usage:
-		 * auto display = manager.Next();
-		 * if (display.has_value()) { ... }
-		 */
+		// Move the cursor to the next element of the list then returns the element.
 		const std::optional<DisplayInfo> Next()
 		{
 			if (m_displays.empty())
@@ -1581,20 +1721,56 @@ namespace RadeonMon::Hardware
 			return m_displays[m_current];
 		}
 
-		size_t Size() const { return m_displays.size(); }
+		bool SetMonitorRefreshRate(int monitorIndex, uint16_t refreshRate)
+		{
+			if (monitorIndex >= m_displays.size())
+			{
+				LOG_ERROR("Invalid monitor index: %u", monitorIndex);
+				return false;
+			}
 
+			manuallyUpdatingRefreshRate = true; // Prevent cache update during manual change
+
+			const auto &monitor = m_displays[monitorIndex];
+
+			DEVMODEW dm = {};
+			dm.dmSize = sizeof(dm);
+
+			if (!EnumDisplaySettingsW(monitor.name, ENUM_CURRENT_SETTINGS, &dm))
+			{
+				LOG_ERROR("EnumDisplaySettingsW failed for %ls", monitor.name);
+				return false;
+			}
+
+			dm.dmFields |= DM_DISPLAYFREQUENCY;
+			dm.dmDisplayFrequency = refreshRate;
+
+			LONG result = ChangeDisplaySettingsExW(monitor.name, &dm, nullptr, CDS_UPDATEREGISTRY, nullptr);
+
+			if (result != DISP_CHANGE_SUCCESSFUL)
+			{
+				LOG_ERROR("Failed to set %ls to %u Hz (error=%ld)", monitor.name, refreshRate, result);
+				return false;
+			}
+
+			LOG_DEBUG("[DisplayManager] Monitor %u (%ls) set to %u Hz", monitor.index + 1, monitor.name, refreshRate);
+
+			return true;
+		}
+
+		size_t Size() const { return m_displays.size(); }
 		bool Empty() const { return m_displays.empty(); }
 
 		void LogAll()
 		{
 			LOGLN();
-			LOG_DEBUG("Displays");
-			LOG_DEBUG("---------------");
+			LOG_INFO("Active Displays");
+			LOG_INFO("---------------");
 
 			for (auto &d : m_displays)
 				d.Log();
 
-			LOG_DEBUG("---------------");
+			LOG_INFO("---------------");
 			LOGLN();
 		}
 
@@ -1603,6 +1779,8 @@ namespace RadeonMon::Hardware
 	private:
 		std::vector<DisplayInfo> m_displays;
 		size_t m_current = 0;
+		bool manuallyUpdatingRefreshRate = false;
+		Callback m_callback;
 	};
 } // namespace RadeonMon::Hardware
 

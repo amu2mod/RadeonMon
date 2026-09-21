@@ -63,6 +63,7 @@ constexpr int TEMPERATURE_ALERT_THRESHOLD = 100;
 constexpr UINT_PTR APP_POLLING_ID = 1;
 constexpr UINT_PTR NETWORK_TIMER_ID = 2;
 constexpr UINT_PTR SCREENSHOT_ICON_ID = 3;
+constexpr UINT_PTR RESTORE_LOCKED_FREQUENCY_ID = 4;
 
 // IDM
 constexpr int IDM_RESTART_AS_ADMIN = 1001;
@@ -86,6 +87,9 @@ constexpr int IDM_ENABLEGAMEPAD_BASE = 1124;		 // 13: none, DS x4, Xbox X4, Nint
 constexpr int IDM_CHECK_VERSION = 1137;
 constexpr int IDM_ABOUT = 1138;
 constexpr int IDM_EXIT = 1139;
+constexpr int IDM_DISPLAY_LOCK_BASE = 10000;	  // range 10k - 12k
+constexpr int IDM_DISPLAY_FREQUENCY_BASE = 12000; // range reserved: 12k -14k
+constexpr int IDM_DISPLAY_FREQUENCY_STRIDE = 100;
 
 // WM
 constexpr int WM_APP_LAYOUT = WM_APP + 1;

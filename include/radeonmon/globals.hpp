@@ -5,6 +5,7 @@
 #include <cstring>
 #include <vector>
 #include <mutex>
+#include <unordered_map>
 
 #include "radeonmon/structures.hpp"
 #include "radeonmon/adlx.hpp"
@@ -142,3 +143,4 @@ inline uint8_t g_gamepadIndex = 0u;
 inline uint8_t g_screenshotRate = 1u;
 inline uint8_t g_hdrMode = 0u;
 inline bool g_gpuTooltipVisible = false;
+inline std::unordered_map<std::wstring, int> g_monitorsLockMap; // mapping for locked frequencies, -1 = not set, positive value = locked freq

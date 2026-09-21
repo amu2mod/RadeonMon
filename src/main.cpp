@@ -38,6 +38,18 @@ using namespace RadeonMon::Hardware;
 void OnScreenshotAction(HWND hwnd);
 void ClearGamepadIcon(HDC hdc);
 
+void RestoreLockedFrequency(HWND hwnd, int index, uint16_t frequency)
+{
+	if (!IsWindow(hwnd))
+		return;
+
+	// inner window storage
+	SetProp(hwnd, L"RestoreIndex", reinterpret_cast<HANDLE>(static_cast<INT_PTR>(index)));
+	SetProp(hwnd, L"RestoreFrequency", reinterpret_cast<HANDLE>(static_cast<UINT_PTR>(frequency)));
+
+	SetTimer(hwnd, RESTORE_LOCKED_FREQUENCY_ID, 10000, nullptr);
+}
+
 void SelectGamePad(GamePad::Type type, HWND hwnd)
 {
 	if (g_gamepad)
@@ -474,8 +486,8 @@ LayoutMetrics CalculateLayoutMetrics(HDC hdc)
 
 	const int titleFontHeight = sz.cy;
 #ifdef _DEBUG
-	const int titleFontWidth = sz.cx;
-	LOG_DEBUG("titleFontWidth=%d", titleFontWidth);
+	// const int titleFontWidth = sz.cx;
+	// LOG_DEBUG("[App] titleFontWidth=%d", titleFontWidth);
 #endif
 
 	// Font-independent spacing: scale
@@ -1323,8 +1335,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		DeleteDC(measureDC);
 
 		LayoutProperties2(g_layoutMetrics);
-
-		g_layoutMetrics.Log();
+		// g_layoutMetrics.Log();
 
 		RECT rc{};
 		GetClientRect(hwnd, &rc);
@@ -1418,7 +1429,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		int w = LOWORD(lParam);
 		int h = HIWORD(lParam);
 
-		LOG_DEBUG("WM_SIZE: type=%d, w=%d, h=%d", (int)wParam, w, h);
+		LOG_DEBUG("[App] WM_SIZE: type=%d, w=%d, h=%d", (int)wParam, w, h);
 
 		if (w > 0 && h > 0)
 		{
@@ -1629,6 +1640,26 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			ClearScreenshotIcon(g_backBuffer.memDC);
 			break;
 		}
+		else if (wParam == RESTORE_LOCKED_FREQUENCY_ID)
+		{
+			KillTimer(hwnd, RESTORE_LOCKED_FREQUENCY_ID);
+
+			int index = static_cast<int>(reinterpret_cast<INT_PTR>(GetProp(hwnd, L"RestoreIndex")));
+			uint16_t frequency = static_cast<uint16_t>(reinterpret_cast<UINT_PTR>(GetProp(hwnd, L"RestoreFrequency")));
+
+			bool b = g_displayManager.SetMonitorRefreshRate(index, frequency);
+
+			// clean-up
+			RemoveProp(hwnd, L"RestoreIndex");
+			RemoveProp(hwnd, L"RestoreFrequency");
+
+			if (b)
+				LOG_INFO("[App] Restored locked frequency of display %d to %uHz", index + 1, frequency);
+			else
+				LOG_ERROR("[App] Failed to restore frequency of display %d to %uHz", index + 1, frequency);
+
+			break;
+		}
 		return 0;
 	}
 
@@ -1685,6 +1716,51 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 		AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hFPSMenu), L"FPS metric");
 		AppendMenu(hMenu, MF_SEPARATOR, 0, nullptr);
+		/////////////////////////////////
+
+		/////////////////////////////////
+		// Display menu
+
+		HMENU hDisplayMenu = CreatePopupMenu();
+
+		const auto &displays = g_displayManager.GetDisplays();
+
+		for (size_t displayIndex = 0; displayIndex < displays.size(); ++displayIndex)
+		{
+			const DisplayInfo &display = displays[displayIndex];
+
+			HMENU hDisplaySubMenu = CreatePopupMenu();
+
+			// Resolution - informational only
+			wchar_t resolutionText[64] = {};
+			swprintf_s(resolutionText, L"%dx%d", display.width, display.height);
+
+			AppendMenuW(hDisplaySubMenu, MF_STRING | MF_DISABLED, 0, resolutionText);
+
+			// Lock - implementation later
+			AppendMenuW(hDisplaySubMenu, MF_STRING | display.isLockOn ? MF_CHECKED : MF_UNCHECKED, IDM_DISPLAY_LOCK_BASE + static_cast<UINT>(displayIndex), L"Lock");
+			AppendMenuW(hDisplaySubMenu, MF_SEPARATOR, 0, nullptr);
+
+			// Frequencies
+			for (size_t frequencyIndex = 0; frequencyIndex < display.supportedFrequencies.size(); ++frequencyIndex)
+			{
+				const uint16_t frequency = display.supportedFrequencies[frequencyIndex];
+				wchar_t text[32] = {};
+				swprintf_s(text, L"%d Hz", frequency);
+				const UINT commandId = IDM_DISPLAY_FREQUENCY_BASE + static_cast<UINT>(displayIndex) * IDM_DISPLAY_FREQUENCY_STRIDE + static_cast<UINT>(frequencyIndex);
+				AppendMenuW(hDisplaySubMenu, MF_STRING | ((frequency == display.frequency) ? (MF_CHECKED | MF_DISABLED) : display.isLockOn ? MF_DISABLED
+																																		   : MF_UNCHECKED),
+							commandId, text);
+			}
+
+			// Display name
+			AppendMenuW(hDisplayMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hDisplaySubMenu), display.name + 4);
+		}
+
+		AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hDisplayMenu), L"Display");
+
+		AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+
 		/////////////////////////////////
 
 		/////////////////////////////////
@@ -2066,6 +2142,49 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 				LOG_DEBUG("FPS %s", g_isFpsEnabled ? "On" : "Off");
 			}
+
+			//// Display
+			// Lock On/Off
+			else if (LOWORD(wParam) >= IDM_DISPLAY_LOCK_BASE && LOWORD(wParam) < IDM_DISPLAY_LOCK_BASE + g_displayManager.GetDisplays().size())
+			{
+				const UINT id = LOWORD(wParam);
+				const size_t displayIndex = id - IDM_DISPLAY_LOCK_BASE;
+				auto &displays = g_displayManager.GetDisplays();
+
+				if (displayIndex < displays.size())
+				{
+					DisplayInfo &display = displays[displayIndex];
+					display.isLockOn = !display.isLockOn;
+					g_monitorsLockMap[display.monitorDevicePath] = display.isLockOn ? display.frequency : -1;
+
+					LOG_INFO("Lock display %d (%ls) : %s", display.index, display.name, display.isLockOn ? "ON" : "OFF");
+				}
+			}
+			// Setting new refresh rate
+			else if (LOWORD(wParam) >= IDM_DISPLAY_FREQUENCY_BASE && LOWORD(wParam) < IDM_DISPLAY_FREQUENCY_BASE + static_cast<UINT>(g_displayManager.GetDisplays().size() * IDM_DISPLAY_FREQUENCY_STRIDE))
+			{
+				const UINT commandId = LOWORD(wParam);
+				const UINT relativeId = commandId - IDM_DISPLAY_FREQUENCY_BASE;
+				const size_t displayIndex = relativeId / IDM_DISPLAY_FREQUENCY_STRIDE;
+				const size_t frequencyIndex = relativeId % IDM_DISPLAY_FREQUENCY_STRIDE;
+				const auto &displays = g_displayManager.GetDisplays();
+
+				if (displayIndex < displays.size())
+				{
+					const auto &display = displays[displayIndex];
+
+					if (frequencyIndex < display.supportedFrequencies.size())
+					{
+						const uint16_t frequency = display.supportedFrequencies[frequencyIndex];
+						LOG_DEBUG("Display %d: Setting %d Hz", display.index + 1, frequency);
+
+						// TODO: change display frequency
+						g_displayManager.SetMonitorRefreshRate(display.index, static_cast<uint16_t>(frequency));
+					}
+				}
+			}
+			////
+
 			// VRR On/Off
 			else if (LOWORD(wParam) == IDM_ENABLEVRR_BASE || LOWORD(wParam) == (IDM_ENABLEVRR_BASE + 1))
 			{
@@ -2499,7 +2618,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		LOG_WM("[App] WM_DISPLAYCHANGE");
 
 		g_displayManager.Clear();
-		g_displayManager.Discover();
+		g_displayManager.Discover(&g_monitorsLockMap);
 
 		if (g_currentDisplayIndex < g_displayManager.Size())
 			g_displayManager.SetCurrent(g_currentDisplayIndex); // resync for UI persistence
@@ -2818,7 +2937,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
 	g_AdlxGPUTelemetry.Discover();
 	g_AdlxGPUTelemetry.Probe();
 
+	g_displayManager.setRestoreLockedFrequencyCallback([hwnd](int index, uint16_t freq)
+													   { RestoreLockedFrequency(hwnd, index, freq); });
 	g_displayManager.Discover();
+	if (!g_displayManager.GetDisplays().empty())
+	{
+		for (DisplayInfo &d : g_displayManager.GetDisplays())
+			g_monitorsLockMap[d.monitorDevicePath] = -1;
+
+		// debug only
+		// for (const auto &[key, value] : g_monitorsLockMap)
+		// 	LOG_DEBUG("%ls: %s", key.c_str(), value == -1 ? "OFF" : "ON");
+	}
 
 	const RadeonMon::Hardware::DisplayManager &manager = g_displayManager;
 	const auto &display = manager.Current();
