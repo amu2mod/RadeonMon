@@ -610,1178 +610,1189 @@ struct LayoutMetrics
 
 namespace RadeonMon::Hardware
 {
-	struct MetricDouble
+struct MetricDouble
+{
+	bool isSupported = false;
+	double value = 0.0;
+	int min = 0;
+	int max = 0;
+
+	double minValue = 0.0;
+	double maxValue = 0.0;
+
+	bool hasChanged = true;
+
+	int RoundedValue() const { return static_cast<int>(std::lround(value)); }
+};
+
+struct MetricInt
+{
+	bool isSupported = false;
+	int value = 0;
+	int min = 0;
+	int max = 0;
+
+	int minValue = 0;
+	int maxValue = 0;
+
+	bool hasChanged = true;
+};
+
+struct FPSMetrics
+{
+	int current = 0;
+	int previous = 0;
+
+	void SetFPS(int fps)
 	{
-		bool isSupported = false;
-		double value = 0.0;
-		int min = 0;
-		int max = 0;
+		previous = current;
+		current = fps;
+	}
 
-		double minValue = 0.0;
-		double maxValue = 0.0;
+	int GetFPS() const { return current; }
 
-		bool hasChanged = true;
+	int Delta() const { return current - previous; }
+};
 
-		int RoundedValue() const { return static_cast<int>(std::lround(value)); }
-	};
+enum GPU_CAPS : uint32_t
+{
+	// V0
+	GPU_CAP_USAGE = 1 << 0,
+	GPU_CAP_CLOCK = 1 << 1,
+	GPU_CAP_VRAM_CLOCK = 1 << 2,
+	GPU_CAP_TEMP = 1 << 3,
+	GPU_CAP_HOTSPOT = 1 << 4,
+	GPU_CAP_POWER = 1 << 5,
+	GPU_CAP_BOARD_POWER = 1 << 6,
+	GPU_CAP_FAN_SPEED = 1 << 7,
+	GPU_CAP_VRAM_USAGE = 1 << 8,
+	GPU_CAP_VOLTAGE = 1 << 9,
+	GPU_CAP_INTAKE_TEMP = 1 << 10,
 
-	struct MetricInt
+	// V1
+	GPU_CAP_MEM_TEMP = 1 << 11,
+	GPU_CAP_NPU_FREQ = 1 << 12,
+	GPU_CAP_NPU_ACTIVITY = 1 << 13,
+
+	// V2
+	GPU_CAP_SHARED_MEMORY = 1 << 16,
+
+	// V3
+	GPU_CAP_FAN_DUTY = 1 << 17,
+
+	// Tuning
+	GPU_CAP_MANUAL_POWER_TUNING = 1 << 18
+};
+
+struct GpuMetricsSnapshot
+{
+	bool valid = false;
+
+	MetricDouble usage;
+	MetricInt clockSpeed;
+	MetricInt vramClockSpeed;
+
+	MetricDouble temperature;
+	MetricDouble hotspot;
+	MetricDouble memoryTemperature;
+	MetricDouble intakeTemperature;
+
+	MetricDouble power;
+	MetricDouble totalBoardPower;
+	MetricInt voltage;
+	MetricInt powerLimit; // Tuning setting
+	MetricInt powerLimitWatts;
+
+	MetricInt fanSpeed;
+	MetricInt fanDuty;
+
+	MetricInt vram;
+	MetricInt sharedMemory;
+
+	MetricInt npuFrequency;
+	MetricInt npuActivityLevel;
+
+	// FPSMetrics fps;
+	int fps = -1;
+
+	int64_t timestampMs = 0;
+
+	// Fast zero-allocation, snprintf-free JSON builder
+	int BuildJson(char *buffer, int bufferSize, const char *name) const
 	{
-		bool isSupported = false;
-		int value = 0;
-		int min = 0;
-		int max = 0;
-
-		int minValue = 0;
-		int maxValue = 0;
-
-		bool hasChanged = true;
-	};
-
-	struct FPSMetrics
-	{
-		int current = 0;
-		int previous = 0;
-
-		void SetFPS(int fps)
+		if (buffer == nullptr || bufferSize <= 1)
 		{
-			previous = current;
-			current = fps;
+			LOG_ERROR("Invalid JSON buffer");
+			return -1;
 		}
 
-		int GetFPS() const { return current; }
+		char *p = buffer;
+		const char *const end = buffer + bufferSize - 1;
 
-		int Delta() const { return current - previous; }
-	};
-
-	enum GPU_CAPS : uint32_t
-	{
-		// V0
-		GPU_CAP_USAGE = 1 << 0,
-		GPU_CAP_CLOCK = 1 << 1,
-		GPU_CAP_VRAM_CLOCK = 1 << 2,
-		GPU_CAP_TEMP = 1 << 3,
-		GPU_CAP_HOTSPOT = 1 << 4,
-		GPU_CAP_POWER = 1 << 5,
-		GPU_CAP_BOARD_POWER = 1 << 6,
-		GPU_CAP_FAN_SPEED = 1 << 7,
-		GPU_CAP_VRAM_USAGE = 1 << 8,
-		GPU_CAP_VOLTAGE = 1 << 9,
-		GPU_CAP_INTAKE_TEMP = 1 << 10,
-
-		// V1
-		GPU_CAP_MEM_TEMP = 1 << 11,
-		GPU_CAP_NPU_FREQ = 1 << 12,
-		GPU_CAP_NPU_ACTIVITY = 1 << 13,
-
-		// V2
-		GPU_CAP_SHARED_MEMORY = 1 << 16,
-
-		// V3
-		GPU_CAP_FAN_DUTY = 1 << 17,
-
-		// Tuning
-		GPU_CAP_MANUAL_POWER_TUNING = 1 << 18
-	};
-
-	struct GpuMetricsSnapshot
-	{
-		bool valid = false;
-
-		MetricDouble usage;
-		MetricInt clockSpeed;
-		MetricInt vramClockSpeed;
-
-		MetricDouble temperature;
-		MetricDouble hotspot;
-		MetricDouble memoryTemperature;
-		MetricDouble intakeTemperature;
-
-		MetricDouble power;
-		MetricDouble totalBoardPower;
-		MetricInt voltage;
-		MetricInt powerLimit; // Tuning setting
-		MetricInt powerLimitWatts;
-
-		MetricInt fanSpeed;
-		MetricInt fanDuty;
-
-		MetricInt vram;
-		MetricInt sharedMemory;
-
-		MetricInt npuFrequency;
-		MetricInt npuActivityLevel;
-
-		// FPSMetrics fps;
-		int fps = -1;
-
-		int64_t timestampMs = 0;
-
-		// Fast zero-allocation, snprintf-free JSON builder
-		int BuildJson(char *buffer, int bufferSize, const char *name) const
+		auto write = [&](const char *str) -> bool
 		{
-			if (buffer == nullptr || bufferSize <= 1)
+			while (*str)
 			{
-				LOG_ERROR("Invalid JSON buffer");
-				return -1;
+				if (p >= end)
+					return false;
+				*p++ = *str++;
+			}
+			return true;
+		};
+
+		auto writeChar = [&](char c) -> bool
+		{
+			if (p >= end)
+				return false;
+			*p++ = c;
+			return true;
+		};
+
+		auto writeJsonString = [&](const char *s)
+		{
+			if (p >= end)
+				return;
+
+			*p++ = '"';
+
+			while (*s && p < end)
+			{
+				switch (*s)
+				{
+				case '"':
+				case '\\':
+					if (p + 2 >= end)
+						break;
+					*p++ = '\\';
+					*p++ = *s;
+					break;
+
+				case '\n':
+					if (p + 2 >= end)
+						break;
+					*p++ = '\\';
+					*p++ = 'n';
+					break;
+
+				case '\r':
+					if (p + 2 >= end)
+						break;
+					*p++ = '\\';
+					*p++ = 'r';
+					break;
+
+				case '\t':
+					if (p + 2 >= end)
+						break;
+					*p++ = '\\';
+					*p++ = 't';
+					break;
+
+				default:
+					*p++ = *s;
+					break;
+				}
+
+				++s;
 			}
 
-			char *p = buffer;
-			const char *const end = buffer + bufferSize - 1;
-
-			auto write = [&](const char *str) -> bool
-			{
-				while (*str)
-				{
-					if (p >= end)
-						return false;
-					*p++ = *str++;
-				}
-				return true;
-			};
-
-			auto writeChar = [&](char c) -> bool
-			{
-				if (p >= end)
-					return false;
-				*p++ = c;
-				return true;
-			};
-
-			auto writeJsonString = [&](const char *s)
-			{
-				if (p >= end)
-					return;
-
+			if (p < end)
 				*p++ = '"';
+		};
 
-				while (*s && p < end)
-				{
-					switch (*s)
-					{
-					case '"':
-					case '\\':
-						if (p + 2 >= end)
-							break;
-						*p++ = '\\';
-						*p++ = *s;
-						break;
+		auto writeInt = [&](int64_t value) -> bool
+		{
+			if (value == 0)
+				return writeChar('0');
 
-					case '\n':
-						if (p + 2 >= end)
-							break;
-						*p++ = '\\';
-						*p++ = 'n';
-						break;
+			char tmp[24];
+			char *t = tmp + 23;
+			*t = '\0';
 
-					case '\r':
-						if (p + 2 >= end)
-							break;
-						*p++ = '\\';
-						*p++ = 'r';
-						break;
+			const bool neg = value < 0;
+			uint64_t v = neg ? uint64_t(-(value + 1)) + 1 : uint64_t(value);
 
-					case '\t':
-						if (p + 2 >= end)
-							break;
-						*p++ = '\\';
-						*p++ = 't';
-						break;
-
-					default:
-						*p++ = *s;
-						break;
-					}
-
-					++s;
-				}
-
-				if (p < end)
-					*p++ = '"';
-			};
-
-			auto writeInt = [&](int64_t value) -> bool
+			do
 			{
-				if (value == 0)
-					return writeChar('0');
+				*--t = '0' + (v % 10);
+				v /= 10;
+			} while (v > 0);
 
-				char tmp[24];
-				char *t = tmp + 23;
-				*t = '\0';
+			if (neg)
+				*--t = '-';
+			return write(t);
+		};
 
-				const bool neg = value < 0;
-				uint64_t v = neg ? uint64_t(-(value + 1)) + 1 : uint64_t(value);
-
-				do
-				{
-					*--t = '0' + (v % 10);
-					v /= 10;
-				} while (v > 0);
-
-				if (neg)
-					*--t = '-';
-				return write(t);
-			};
-
-			// Simple double to string (no snprintf)
-			auto writeDouble = [&](double value) -> bool
+		// Simple double to string (no snprintf)
+		auto writeDouble = [&](double value) -> bool
+		{
+			if (value < 0)
 			{
-				if (value < 0)
+				if (!writeChar('-'))
+					return false;
+				value = -value;
+			}
+
+			int64_t integral = static_cast<int64_t>(value);
+			if (!writeInt(integral))
+				return false;
+
+			if (!writeChar('.'))
+				return false;
+
+			double fractional = value - integral;
+			constexpr int precision = 1; // TODO: might need 2 for ryzen metrics
+
+			for (int i = 0; i < precision; ++i)
+			{
+				fractional *= 10;
+				int digit = static_cast<int>(fractional);
+				if (!writeChar(static_cast<char>('0' + digit)))
+					return false;
+				fractional -= digit;
+			}
+
+			return true;
+		};
+
+		// Unified metric writer
+		auto writeMetric = [&](const char *key, const auto &metric) -> bool
+		{
+			if (!write(",\""))
+				return false;
+			if (!write(key))
+				return false;
+			if (!write("\":{"))
+				return false;
+
+			if (!write("\"supported\":"))
+				return false;
+			if (!write(metric.isSupported ? "true" : "false"))
+				return false;
+
+			if (!write(",\"value\":"))
+				return false;
+			if (metric.isSupported)
+			{
+				if constexpr (std::is_same_v<std::decay_t<decltype(metric)>, MetricDouble>)
 				{
-					if (!writeChar('-'))
+					if (!writeDouble(metric.value))
 						return false;
-					value = -value;
-				}
-
-				int64_t integral = static_cast<int64_t>(value);
-				if (!writeInt(integral))
-					return false;
-
-				if (!writeChar('.'))
-					return false;
-
-				double fractional = value - integral;
-				constexpr int precision = 1; // TODO: might need 2 for ryzen metrics
-
-				for (int i = 0; i < precision; ++i)
-				{
-					fractional *= 10;
-					int digit = static_cast<int>(fractional);
-					if (!writeChar(static_cast<char>('0' + digit)))
-						return false;
-					fractional -= digit;
-				}
-
-				return true;
-			};
-
-			// Unified metric writer
-			auto writeMetric = [&](const char *key, const auto &metric) -> bool
-			{
-				if (!write(",\""))
-					return false;
-				if (!write(key))
-					return false;
-				if (!write("\":{"))
-					return false;
-
-				if (!write("\"supported\":"))
-					return false;
-				if (!write(metric.isSupported ? "true" : "false"))
-					return false;
-
-				if (!write(",\"value\":"))
-					return false;
-				if (metric.isSupported)
-				{
-					if constexpr (std::is_same_v<std::decay_t<decltype(metric)>, MetricDouble>)
-					{
-						if (!writeDouble(metric.value))
-							return false;
-					}
-					else
-					{
-						if (!writeInt(metric.value))
-							return false;
-					}
 				}
 				else
 				{
-					if (!write("null"))
+					if (!writeInt(metric.value))
 						return false;
 				}
-
-				if (!write(",\"min\":"))
+			}
+			else
+			{
+				if (!write("null"))
 					return false;
-				if (!writeInt(metric.min))
-					return false;
+			}
 
-				if (!write(",\"max\":"))
-					return false;
-				if (!writeInt(metric.max))
-					return false;
+			if (!write(",\"min\":"))
+				return false;
+			if (!writeInt(metric.min))
+				return false;
 
-				return writeChar('}');
-			};
+			if (!write(",\"max\":"))
+				return false;
+			if (!writeInt(metric.max))
+				return false;
 
-			// Build JSON
-			if (!write("{\"valid\":"))
-				goto overflow;
-			if (!write(valid ? "true" : "false"))
-				goto overflow;
-
-			if (!write(",\"name\":"))
-				goto overflow;
-			writeJsonString(name);
-
-			if (!writeMetric("usage", usage))
-				goto overflow;
-			if (!writeMetric("clock_speed", clockSpeed))
-				goto overflow;
-			if (!writeMetric("vram_clock_speed", vramClockSpeed))
-				goto overflow;
-
-			if (!writeMetric("temperature", temperature))
-				goto overflow;
-			if (!writeMetric("hotspot", hotspot))
-				goto overflow;
-			if (!writeMetric("memory_temperature", memoryTemperature))
-				goto overflow;
-			if (!writeMetric("intake_temperature", intakeTemperature))
-				goto overflow;
-
-			if (!writeMetric("power", power))
-				goto overflow;
-			if (!writeMetric("total_board_power", totalBoardPower))
-				goto overflow;
-			if (!writeMetric("voltage", voltage))
-				goto overflow;
-
-			if (!writeMetric("fan_speed", fanSpeed))
-				goto overflow;
-			if (!writeMetric("fan_duty", fanDuty))
-				goto overflow;
-
-			if (!writeMetric("vram", vram))
-				goto overflow;
-			if (!writeMetric("shared_memory", sharedMemory))
-				goto overflow;
-
-			if (!writeMetric("npu_frequency", npuFrequency))
-				goto overflow;
-			if (!writeMetric("npu_activity_level", npuActivityLevel))
-				goto overflow;
-
-			if (!write(",\"timestamp_ms\":"))
-				goto overflow;
-			if (!writeInt(timestampMs))
-				goto overflow;
-
-			if (!writeChar('}'))
-				goto overflow;
-
-			*p = '\0';
-			return static_cast<int>(p - buffer);
-
-		overflow:
-			*p = '\0';
-			LOG_ERROR("GPU metrics JSON buffer overflow (size=%d)", bufferSize);
-			return -1;
-		}
-	};
-
-	struct GPUInfo
-	{
-		// Identification
-		std::wstring vendorId;
-		std::wstring deviceId;
-		std::wstring revisionId;
-		std::wstring subSystemId;
-		std::wstring subSystemVendorId;
-		adlx_int uniqueId = 0;
-
-		// General information
-		adlx::ADLX_ASIC_FAMILY_TYPE asicFamilyType = adlx::ASIC_UNDEFINED;
-		adlx::ADLX_GPU_TYPE gpuType = adlx::GPUTYPE_UNDEFINED;
-		adlx_bool isExternal = false;
-
-		// Descriptive information
-		std::wstring name;
-		std::string strName;
-		std::wstring driverPath;
-		std::wstring pnpString;
-
-		// Precomputed for json
-		char shortName[32] = "";
-
-		// Memory
-		adlx_uint totalVRAMMB = 0;
-		std::wstring vramType;
-
-		// BIOS
-		std::wstring biosPartNumber;
-		std::wstring biosVersion;
-		std::wstring biosDate;
-
-		// Status
-		adlx_bool hasDesktops = false;
-
-		// ADLX GPU2 - AMD Software / Driver information
-		std::string amdSoftwareEdition;
-		std::string amdSoftwareVersion;
-		std::string driverVersion;
-		std::string amdWindowsDriverVersion;
-
-		adlx_uint amdSoftwareReleaseYear = 0;
-		adlx_uint amdSoftwareReleaseMonth = 0;
-		adlx_uint amdSoftwareReleaseDay = 0;
-
-		// Windows LUID
-		ADLX_LUID luid = {};
-
-		// ADLX GPU2 - Applications running on this GPU
-		struct GPUApplicationInfo
-		{
-			adlx_ulong processId = 0;
-
-			std::wstring name;
-			std::wstring fullPath;
-
-			ADLX_APP_GPU_DEPENDENCY dependency = ADLX_APP_GPU_DEPENDENCY::APP_GPU_UNKNOWN;
+			return writeChar('}');
 		};
 
-		std::vector<GPUApplicationInfo> applications;
+		// Build JSON
+		if (!write("{\"valid\":"))
+			goto overflow;
+		if (!write(valid ? "true" : "false"))
+			goto overflow;
 
-		adlx_bool applicationListSupported = false;
+		if (!write(",\"name\":"))
+			goto overflow;
+		writeJsonString(name);
 
-		// ADLX GPU3 - Architecture / VRAM information
-		std::wstring microArchitecture;
-		adlx_uint highestVRAMBandwidth = 0;
-		adlx_uint invisibleVRAM = 0;
-		adlx_uint visibleVRAM = 0;
-		adlx_uint vramVendorRevId = 0;
-		adlx_uint vramBandwidth = 0;
-		adlx_uint vramBitRate = 0;
+		if (!writeMetric("usage", usage))
+			goto overflow;
+		if (!writeMetric("clock_speed", clockSpeed))
+			goto overflow;
+		if (!writeMetric("vram_clock_speed", vramClockSpeed))
+			goto overflow;
 
-		// For tooltip
-		std::wstring tooltipText;
+		if (!writeMetric("temperature", temperature))
+			goto overflow;
+		if (!writeMetric("hotspot", hotspot))
+			goto overflow;
+		if (!writeMetric("memory_temperature", memoryTemperature))
+			goto overflow;
+		if (!writeMetric("intake_temperature", intakeTemperature))
+			goto overflow;
 
-		// Helpers
-		static std::wstring CharToWide(const char *value)
+		if (!writeMetric("power", power))
+			goto overflow;
+		if (!writeMetric("total_board_power", totalBoardPower))
+			goto overflow;
+		if (!writeMetric("voltage", voltage))
+			goto overflow;
+
+		if (!writeMetric("fan_speed", fanSpeed))
+			goto overflow;
+		if (!writeMetric("fan_duty", fanDuty))
+			goto overflow;
+
+		if (!writeMetric("vram", vram))
+			goto overflow;
+		if (!writeMetric("shared_memory", sharedMemory))
+			goto overflow;
+
+		if (!writeMetric("npu_frequency", npuFrequency))
+			goto overflow;
+		if (!writeMetric("npu_activity_level", npuActivityLevel))
+			goto overflow;
+
+		if (!write(",\"timestamp_ms\":"))
+			goto overflow;
+		if (!writeInt(timestampMs))
+			goto overflow;
+
+		if (!writeChar('}'))
+			goto overflow;
+
+		*p = '\0';
+		return static_cast<int>(p - buffer);
+
+	overflow:
+		*p = '\0';
+		LOG_ERROR("GPU metrics JSON buffer overflow (size=%d)", bufferSize);
+		return -1;
+	}
+};
+
+struct GPUInfo
+{
+	// Identification
+	std::wstring vendorId;
+	std::wstring deviceId;
+	std::wstring revisionId;
+	std::wstring subSystemId;
+	std::wstring subSystemVendorId;
+	adlx_int uniqueId = 0;
+
+	// General information
+	adlx::ADLX_ASIC_FAMILY_TYPE asicFamilyType = adlx::ASIC_UNDEFINED;
+	adlx::ADLX_GPU_TYPE gpuType = adlx::GPUTYPE_UNDEFINED;
+	adlx_bool isExternal = false;
+
+	// Descriptive information
+	std::wstring name;
+	std::string strName;
+	std::wstring driverPath;
+	std::wstring pnpString;
+
+	// Precomputed for json
+	char shortName[32] = "";
+
+	// Memory
+	adlx_uint totalVRAMMB = 0;
+	std::wstring vramType;
+
+	// BIOS
+	std::wstring biosPartNumber;
+	std::wstring biosVersion;
+	std::wstring biosDate;
+
+	// Status
+	adlx_bool hasDesktops = false;
+
+	// ADLX GPU2 - AMD Software / Driver information
+	std::string amdSoftwareEdition;
+	std::string amdSoftwareVersion;
+	std::string driverVersion;
+	std::string amdWindowsDriverVersion;
+
+	adlx_uint amdSoftwareReleaseYear = 0;
+	adlx_uint amdSoftwareReleaseMonth = 0;
+	adlx_uint amdSoftwareReleaseDay = 0;
+
+	// Windows LUID
+	ADLX_LUID luid = {};
+
+	// ADLX GPU2 - Applications running on this GPU
+	struct GPUApplicationInfo
+	{
+		adlx_ulong processId = 0;
+
+		std::wstring name;
+		std::wstring fullPath;
+
+		ADLX_APP_GPU_DEPENDENCY dependency = ADLX_APP_GPU_DEPENDENCY::APP_GPU_UNKNOWN;
+	};
+
+	std::vector<GPUApplicationInfo> applications;
+
+	adlx_bool applicationListSupported = false;
+
+	// ADLX GPU3 - Architecture / VRAM information
+	std::wstring microArchitecture;
+	adlx_uint highestVRAMBandwidth = 0;
+	adlx_uint invisibleVRAM = 0;
+	adlx_uint visibleVRAM = 0;
+	adlx_uint vramVendorRevId = 0;
+	adlx_uint vramBandwidth = 0;
+	adlx_uint vramBitRate = 0;
+
+	// For tooltip
+	std::wstring tooltipText;
+
+	// Helpers
+	static std::wstring CharToWide(const char *value)
+	{
+		if (!value || !*value)
+			return L"Unknown";
+
+		int length = MultiByteToWideChar(CP_UTF8, 0, value, -1, nullptr, 0);
+
+		if (length <= 0)
+			return L"Unknown";
+
+		std::wstring result(length - 1, L'\0');
+
+		MultiByteToWideChar(CP_UTF8, 0, value, -1, result.data(), length);
+
+		return result;
+	}
+
+	void SetVendorId(const char *value) { vendorId = CharToWide(value); }
+
+	void SetDeviceId(const char *value) { deviceId = CharToWide(value); }
+
+	void SetRevisionId(const char *value) { revisionId = CharToWide(value); }
+
+	void SetSubSystemId(const char *value) { subSystemId = CharToWide(value); }
+
+	void SetSubSystemVendorId(const char *value) { subSystemVendorId = CharToWide(value); }
+
+	void SetShortName(const char *value)
+	{
+		if (!value)
 		{
-			if (!value || !*value)
-				return L"Unknown";
-
-			int length = MultiByteToWideChar(CP_UTF8, 0, value, -1, nullptr, 0);
-
-			if (length <= 0)
-				return L"Unknown";
-
-			std::wstring result(length - 1, L'\0');
-
-			MultiByteToWideChar(CP_UTF8, 0, value, -1, result.data(), length);
-
-			return result;
+			shortName[0] = '\0';
+			return;
 		}
 
-		void SetVendorId(const char *value) { vendorId = CharToWide(value); }
+		std::string result(value);
 
-		void SetDeviceId(const char *value) { deviceId = CharToWide(value); }
+		// Remove common vendor prefixes
+		result = std::regex_replace(result, std::regex(R"(^\s*(AMD|NVIDIA|Intel)\s+)", std::regex::icase), "");
 
-		void SetRevisionId(const char *value) { revisionId = CharToWide(value); }
+		// Remove trademark / registration markers
+		result = std::regex_replace(result, std::regex(R"(\s*\((TM|R)\))", std::regex::icase), "");
 
-		void SetSubSystemId(const char *value) { subSystemId = CharToWide(value); }
+		// Remove generic suffixes
+		result = std::regex_replace(result, std::regex(R"(\s+(Graphics|GPU|Adapter)\s*$)", std::regex::icase), "");
 
-		void SetSubSystemVendorId(const char *value) { subSystemVendorId = CharToWide(value); }
+		// Normalize whitespace
+		result = std::regex_replace(result, std::regex(R"(\s+)"), " ");
 
-		void SetShortName(const char *value)
+		// Trim
+		if (!result.empty() && result.front() == ' ')
+			result.erase(0, 1);
+
+		if (!result.empty() && result.back() == ' ')
+			result.pop_back();
+
+		// Store in fixed-size buffer
+		strncpy_s(shortName, sizeof(shortName), result.c_str(), _TRUNCATE);
+
+		shortName[sizeof(shortName) - 1] = '\0';
+	}
+
+	void SetName(const char *value)
+	{
+		name = CharToWide(value);
+		strName = value ? value : "";
+		SetShortName(value);
+	}
+
+	void SetDriverPath(const char *value) { driverPath = CharToWide(value); }
+	void SetPnpString(const char *value) { pnpString = CharToWide(value); }
+	void SetVramType(const char *value) { vramType = CharToWide(value); }
+	void SetBiosPartNumber(const char *value) { biosPartNumber = CharToWide(value); }
+	void SetBiosVersion(const char *value) { biosVersion = CharToWide(value); }
+	void SetBiosDate(const char *value) { biosDate = CharToWide(value); }
+
+	// ADLX GPU2 setters
+	void SetAMDSoftwareEdition(const char *value) { amdSoftwareEdition = value ? value : ""; }
+	void SetAMDSoftwareVersion(const char *value) { amdSoftwareVersion = value ? value : ""; }
+	void SetDriverVersion(const char *value) { driverVersion = value ? value : ""; }
+	void SetAMDWindowsDriverVersion(const char *value) { amdWindowsDriverVersion = value ? value : ""; }
+
+	void SetAMDSoftwareReleaseDate(adlx_uint year, adlx_uint month, adlx_uint day)
+	{
+		amdSoftwareReleaseYear = year;
+		amdSoftwareReleaseMonth = month;
+		amdSoftwareReleaseDay = day;
+	}
+
+	void SetLuid(adlx_uint lowPart, adlx_uint highPart)
+	{
+		luid.lowPart = lowPart;
+		luid.highPart = highPart;
+	}
+
+	void AddGpuApplication(adlx_ulong processId, const wchar_t *process_name, const wchar_t *fullPath, ADLX_APP_GPU_DEPENDENCY dependency)
+	{
+		GPUApplicationInfo app;
+
+		app.processId = processId;
+
+		if (process_name)
+			app.name = process_name;
+
+		if (fullPath)
+			app.fullPath = fullPath;
+
+		app.dependency = dependency;
+
+		applications.push_back(std::move(app));
+	}
+
+	// ADLX GPU3 setters
+	void SetMicroArchitecture(const char *value) { microArchitecture = CharToWide(value); }
+	void SetHighestVRAMBandwidth(adlx_uint value) { highestVRAMBandwidth = value; }
+	void SetInvisibleVRAM(adlx_uint value) { invisibleVRAM = value; }
+	void SetVisibleVRAM(adlx_uint value) { visibleVRAM = value; }
+	void SetVRAMVendorRevId(adlx_uint value) { vramVendorRevId = value; }
+	void SetVRAMBandwidth(adlx_uint value) { vramBandwidth = value; }
+	void SetVRAMBitRate(adlx_uint value) { vramBitRate = value; }
+
+	void BuildToolTip() { tooltipText = GetTooltip(); }
+
+	static const wchar_t *AsicFamilyToString(adlx::ADLX_ASIC_FAMILY_TYPE family)
+	{
+		switch (family)
 		{
-			if (!value)
-			{
-				shortName[0] = '\0';
-				return;
-			}
+		case adlx::ASIC_UNDEFINED:
+			return L"Undefined";
 
-			std::string result(value);
+		case adlx::ASIC_RADEON:
+			return L"Radeon";
 
-			// Remove common vendor prefixes
-			result = std::regex_replace(result, std::regex(R"(^\s*(AMD|NVIDIA|Intel)\s+)", std::regex::icase), "");
+		case adlx::ASIC_FIREPRO:
+			return L"FirePro";
 
-			// Remove trademark / registration markers
-			result = std::regex_replace(result, std::regex(R"(\s*\((TM|R)\))", std::regex::icase), "");
+		case adlx::ASIC_FIREMV:
+			return L"FireMV";
 
-			// Remove generic suffixes
-			result = std::regex_replace(result, std::regex(R"(\s+(Graphics|GPU|Adapter)\s*$)", std::regex::icase), "");
+		case adlx::ASIC_FIRESTREAM:
+			return L"FireStream";
 
-			// Normalize whitespace
-			result = std::regex_replace(result, std::regex(R"(\s+)"), " ");
+		case adlx::ASIC_FUSION:
+			return L"Fusion";
 
-			// Trim
-			if (!result.empty() && result.front() == ' ')
-				result.erase(0, 1);
+		case adlx::ASIC_EMBEDDED:
+			return L"Embedded";
 
-			if (!result.empty() && result.back() == ' ')
-				result.pop_back();
-
-			// Store in fixed-size buffer
-			strncpy_s(shortName, sizeof(shortName), result.c_str(), _TRUNCATE);
-
-			shortName[sizeof(shortName) - 1] = '\0';
+		default:
+			return L"Unknown";
 		}
+	}
 
-		void SetName(const char *value)
+	static const wchar_t *GPUTypeToString(adlx::ADLX_GPU_TYPE type)
+	{
+		switch (type)
 		{
-			name = CharToWide(value);
-			strName = value ? value : "";
-			SetShortName(value);
+		case adlx::GPUTYPE_UNDEFINED:
+			return L"Undefined";
+
+		case adlx::GPUTYPE_INTEGRATED:
+			return L"Integrated";
+
+		case adlx::GPUTYPE_DISCRETE:
+			return L"Discrete";
+
+		default:
+			return L"Unknown";
 		}
+	}
 
-		void SetDriverPath(const char *value) { driverPath = CharToWide(value); }
-		void SetPnpString(const char *value) { pnpString = CharToWide(value); }
-		void SetVramType(const char *value) { vramType = CharToWide(value); }
-		void SetBiosPartNumber(const char *value) { biosPartNumber = CharToWide(value); }
-		void SetBiosVersion(const char *value) { biosVersion = CharToWide(value); }
-		void SetBiosDate(const char *value) { biosDate = CharToWide(value); }
-
-		// ADLX GPU2 setters
-		void SetAMDSoftwareEdition(const char *value) { amdSoftwareEdition = value ? value : ""; }
-		void SetAMDSoftwareVersion(const char *value) { amdSoftwareVersion = value ? value : ""; }
-		void SetDriverVersion(const char *value) { driverVersion = value ? value : ""; }
-		void SetAMDWindowsDriverVersion(const char *value) { amdWindowsDriverVersion = value ? value : ""; }
-
-		void SetAMDSoftwareReleaseDate(adlx_uint year, adlx_uint month, adlx_uint day)
+	static const wchar_t *GpuDependencyToString(ADLX_APP_GPU_DEPENDENCY dependency)
+	{
+		switch (dependency)
 		{
-			amdSoftwareReleaseYear = year;
-			amdSoftwareReleaseMonth = month;
-			amdSoftwareReleaseDay = day;
+		case ADLX_APP_GPU_DEPENDENCY::APP_GPU_BOUND:
+			return L"Bound";
+
+		case ADLX_APP_GPU_DEPENDENCY::APP_GPU_NOT_BOUND:
+			return L"Not Bound";
+
+		case ADLX_APP_GPU_DEPENDENCY::APP_GPU_UNKNOWN:
+		default:
+			return L"Unknown";
 		}
+	}
 
-		void SetLuid(adlx_uint lowPart, adlx_uint highPart)
+	static const wchar_t *VendorIdToString(const std::wstring &vendorId)
+	{
+		if (_wcsicmp(vendorId.c_str(), L"1002") == 0)
+			return L"AMD";
+
+		if (_wcsicmp(vendorId.c_str(), L"10DE") == 0)
+			return L"NVIDIA";
+
+		if (_wcsicmp(vendorId.c_str(), L"8086") == 0)
+			return L"Intel";
+
+		return L"Unknown";
+	}
+
+	void Log() const
+	{
+		LOGLN();
+		LOG_INFO("=== GPU Information ===");
+		LOG_INFO("Name:%ls", name.c_str());
+		LOG_INFO("ShortName:%s", shortName);
+		LOG_INFO("Vendor ID:%ls (%ls)", vendorId.c_str(), std::wstring(VendorIdToString(vendorId)).c_str());
+		LOG_INFO("Device ID:%ls", deviceId.c_str());
+		LOG_INFO("Revision ID:%ls", revisionId.c_str());
+		LOG_INFO("Subsystem ID:%ls", subSystemId.c_str());
+		LOG_INFO("Subsystem Vendor ID:%ls (%ls)", subSystemVendorId.c_str(), std::wstring(SubSystemVendorToString(subSystemVendorId)).c_str());
+		LOG_INFO("Unique ID: %d", uniqueId);
+		LOG_INFO("ASIC Family:%ls", AsicFamilyToString(asicFamilyType));
+		LOG_INFO("GPU Type:%ls", GPUTypeToString(gpuType));
+		LOG_INFO("External:%ls", isExternal ? L"Yes" : L"No");
+		LOG_INFO("Driver Path:%ls", driverPath.c_str());
+		LOG_INFO("PNP String:%ls", pnpString.c_str());
+		LOG_INFO("Total VRAM: %u MB", totalVRAMMB);
+		LOG_INFO("VRAM Type:%ls", vramType.c_str());
+		LOG_INFO("BIOS Part Number:%ls", biosPartNumber.c_str());
+		LOG_INFO("BIOS Version:%ls", biosVersion.c_str());
+		LOG_INFO("BIOS Date:%ls", biosDate.c_str());
+		LOG_INFO("Has Desktops:%ls", hasDesktops ? L"Yes" : L"No");
+
+		// GPU2
+		LOG_INFO("AMD Software Edition:%s", amdSoftwareEdition.c_str());
+		LOG_INFO("AMD Software Version:%s", amdSoftwareVersion.c_str());
+		LOG_INFO("Driver Version:%s", driverVersion.c_str());
+		LOG_INFO("AMD Windows Driver Version:%s", amdWindowsDriverVersion.c_str());
+		LOG_INFO("AMD Software Release Date: %u-%02u-%02u", amdSoftwareReleaseYear, amdSoftwareReleaseMonth, amdSoftwareReleaseDay);
+		LOG_INFO("LUID: LowPart:%lu HighPart:%lu", luid.lowPart, luid.highPart);
+		LOG_INFO("Application List Supported:%ls", applicationListSupported ? L"Yes" : L"No");
+		LOG_INFO("Applications:%zu", applications.size());
+		for (const auto &app : applications)
+			LOG_INFO("  PID:%lu Name:%ls Path:%ls Dependency:%ls", app.processId, app.name.c_str(), app.fullPath.c_str(), GpuDependencyToString(app.dependency));
+
+		// GPU3
+		LOG_INFO("Micro Architecture:%ls", microArchitecture.c_str());
+		LOG_INFO("Highest VRAM Bandwidth:%u MB/s", highestVRAMBandwidth);
+		LOG_INFO("Invisible VRAM:%u MB", invisibleVRAM);
+		LOG_INFO("Visible VRAM:%u MB", visibleVRAM);
+		LOG_INFO("VRAM Vendor ID: 0x%X (%ls)", vramVendorRevId, VRAMVendorToString(vramVendorRevId));
+		LOG_INFO("VRAM Bandwidth:%u MB/s", vramBandwidth);
+		LOG_INFO("VRAM Bit Rate:%u Mbps", vramBitRate);
+		LOG_INFO("=======================");
+		LOGLN();
+	}
+
+	int GetDriverPathTooltipWidth(HWND hwnd) const
+	{
+		std::wstring text = L"Driver Path: " + driverPath;
+		HDC hdc = GetDC(hwnd);
+		SIZE size = {};
+		GetTextExtentPoint32W(hdc, text.c_str(), static_cast<int>(text.length()), &size);
+		ReleaseDC(hwnd, hdc);
+		return size.cx;
+	}
+
+	static const wchar_t *VRAMVendorToString(adlx_uint vendorId)
+	{
+		switch (vendorId)
 		{
-			luid.lowPart = lowPart;
-			luid.highPart = highPart;
+		case 0x1:
+			return L"Samsung";
+
+		case 0x2:
+			return L"Infineon";
+
+		case 0x3:
+			return L"Elpida";
+
+		case 0x4:
+			return L"Etron";
+
+		case 0x5:
+			return L"Nanya";
+
+		case 0x6:
+			return L"Hynix (SK hynix)";
+
+		case 0x7:
+			return L"Mosel";
+
+		case 0x8:
+			return L"Winbond";
+
+		case 0x9:
+			return L"ESMT";
+
+		case 0xF:
+			return L"Micron";
+
+		default:
+			return L"Unknown";
 		}
+	}
 
-		void AddGpuApplication(adlx_ulong processId, const wchar_t *process_name, const wchar_t *fullPath, ADLX_APP_GPU_DEPENDENCY dependency)
+	static const wchar_t *SubSystemVendorToString(const std::wstring &vendorId)
+	{
+		unsigned int id = 0;
+
+		try
 		{
-			GPUApplicationInfo app;
-
-			app.processId = processId;
-
-			if (process_name)
-				app.name = process_name;
-
-			if (fullPath)
-				app.fullPath = fullPath;
-
-			app.dependency = dependency;
-
-			applications.push_back(std::move(app));
+			id = std::stoul(vendorId, nullptr, 16);
 		}
-
-		// ADLX GPU3 setters
-		void SetMicroArchitecture(const char *value) { microArchitecture = CharToWide(value); }
-		void SetHighestVRAMBandwidth(adlx_uint value) { highestVRAMBandwidth = value; }
-		void SetInvisibleVRAM(adlx_uint value) { invisibleVRAM = value; }
-		void SetVisibleVRAM(adlx_uint value) { visibleVRAM = value; }
-		void SetVRAMVendorRevId(adlx_uint value) { vramVendorRevId = value; }
-		void SetVRAMBandwidth(adlx_uint value) { vramBandwidth = value; }
-		void SetVRAMBitRate(adlx_uint value) { vramBitRate = value; }
-
-		void BuildToolTip() { tooltipText = GetTooltip(); }
-
-		static const wchar_t *AsicFamilyToString(adlx::ADLX_ASIC_FAMILY_TYPE family)
+		catch (...)
 		{
-			switch (family)
-			{
-			case adlx::ASIC_UNDEFINED:
-				return L"Undefined";
-
-			case adlx::ASIC_RADEON:
-				return L"Radeon";
-
-			case adlx::ASIC_FIREPRO:
-				return L"FirePro";
-
-			case adlx::ASIC_FIREMV:
-				return L"FireMV";
-
-			case adlx::ASIC_FIRESTREAM:
-				return L"FireStream";
-
-			case adlx::ASIC_FUSION:
-				return L"Fusion";
-
-			case adlx::ASIC_EMBEDDED:
-				return L"Embedded";
-
-			default:
-				return L"Unknown";
-			}
-		}
-
-		static const wchar_t *GPUTypeToString(adlx::ADLX_GPU_TYPE type)
-		{
-			switch (type)
-			{
-			case adlx::GPUTYPE_UNDEFINED:
-				return L"Undefined";
-
-			case adlx::GPUTYPE_INTEGRATED:
-				return L"Integrated";
-
-			case adlx::GPUTYPE_DISCRETE:
-				return L"Discrete";
-
-			default:
-				return L"Unknown";
-			}
-		}
-
-		static const wchar_t *GpuDependencyToString(ADLX_APP_GPU_DEPENDENCY dependency)
-		{
-			switch (dependency)
-			{
-			case ADLX_APP_GPU_DEPENDENCY::APP_GPU_BOUND:
-				return L"Bound";
-
-			case ADLX_APP_GPU_DEPENDENCY::APP_GPU_NOT_BOUND:
-				return L"Not Bound";
-
-			case ADLX_APP_GPU_DEPENDENCY::APP_GPU_UNKNOWN:
-			default:
-				return L"Unknown";
-			}
-		}
-
-		static const wchar_t *VendorIdToString(const std::wstring &vendorId)
-		{
-			if (_wcsicmp(vendorId.c_str(), L"1002") == 0)
-				return L"AMD";
-
-			if (_wcsicmp(vendorId.c_str(), L"10DE") == 0)
-				return L"NVIDIA";
-
-			if (_wcsicmp(vendorId.c_str(), L"8086") == 0)
-				return L"Intel";
-
 			return L"Unknown";
 		}
 
-		void Log() const
+		switch (id)
 		{
-			LOGLN();
-			LOG_INFO("=== GPU Information ===");
-			LOG_INFO("Name:%ls", name.c_str());
-			LOG_INFO("ShortName:%s", shortName);
-			LOG_INFO("Vendor ID:%ls (%ls)", vendorId.c_str(), std::wstring(VendorIdToString(vendorId)).c_str());
-			LOG_INFO("Device ID:%ls", deviceId.c_str());
-			LOG_INFO("Revision ID:%ls", revisionId.c_str());
-			LOG_INFO("Subsystem ID:%ls", subSystemId.c_str());
-			LOG_INFO("Subsystem Vendor ID:%ls (%ls)", subSystemVendorId.c_str(), std::wstring(SubSystemVendorToString(subSystemVendorId)).c_str());
-			LOG_INFO("Unique ID: %d", uniqueId);
-			LOG_INFO("ASIC Family:%ls", AsicFamilyToString(asicFamilyType));
-			LOG_INFO("GPU Type:%ls", GPUTypeToString(gpuType));
-			LOG_INFO("External:%ls", isExternal ? L"Yes" : L"No");
-			LOG_INFO("Driver Path:%ls", driverPath.c_str());
-			LOG_INFO("PNP String:%ls", pnpString.c_str());
-			LOG_INFO("Total VRAM: %u MB", totalVRAMMB);
-			LOG_INFO("VRAM Type:%ls", vramType.c_str());
-			LOG_INFO("BIOS Part Number:%ls", biosPartNumber.c_str());
-			LOG_INFO("BIOS Version:%ls", biosVersion.c_str());
-			LOG_INFO("BIOS Date:%ls", biosDate.c_str());
-			LOG_INFO("Has Desktops:%ls", hasDesktops ? L"Yes" : L"No");
+		case 0x1002:
+			return L"AMD";
 
-			// GPU2
-			LOG_INFO("AMD Software Edition:%s", amdSoftwareEdition.c_str());
-			LOG_INFO("AMD Software Version:%s", amdSoftwareVersion.c_str());
-			LOG_INFO("Driver Version:%s", driverVersion.c_str());
-			LOG_INFO("AMD Windows Driver Version:%s", amdWindowsDriverVersion.c_str());
-			LOG_INFO("AMD Software Release Date: %u-%02u-%02u", amdSoftwareReleaseYear, amdSoftwareReleaseMonth, amdSoftwareReleaseDay);
-			LOG_INFO("LUID: LowPart:%lu HighPart:%lu", luid.lowPart, luid.highPart);
-			LOG_INFO("Application List Supported:%ls", applicationListSupported ? L"Yes" : L"No");
-			LOG_INFO("Applications:%zu", applications.size());
-			for (const auto &app : applications)
-				LOG_INFO("  PID:%lu Name:%ls Path:%ls Dependency:%ls", app.processId, app.name.c_str(), app.fullPath.c_str(), GpuDependencyToString(app.dependency));
+		case 0x1043:
+			return L"ASUSTeK";
 
-			// GPU3
-			LOG_INFO("Micro Architecture:%ls", microArchitecture.c_str());
-			LOG_INFO("Highest VRAM Bandwidth:%u MB/s", highestVRAMBandwidth);
-			LOG_INFO("Invisible VRAM:%u MB", invisibleVRAM);
-			LOG_INFO("Visible VRAM:%u MB", visibleVRAM);
-			LOG_INFO("VRAM Vendor ID: 0x%X (%ls)", vramVendorRevId, VRAMVendorToString(vramVendorRevId));
-			LOG_INFO("VRAM Bandwidth:%u MB/s", vramBandwidth);
-			LOG_INFO("VRAM Bit Rate:%u Mbps", vramBitRate);
-			LOG_INFO("=======================");
-			LOGLN();
+		case 0x196D:
+			return L"Club 3D";
+
+		case 0x1092:
+			return L"Diamond Multimedia";
+
+		case 0x18BC:
+			return L"GeCube";
+
+		case 0x1458:
+			return L"Gigabyte";
+
+		case 0x17AF:
+			return L"HIS";
+
+		case 0x16F3:
+			return L"Jetway";
+
+		case 0x1462:
+			return L"MSI";
+
+		case 0x1DA2:
+			return L"Sapphire";
+
+		case 0x148C:
+			return L"PowerColor";
+
+		case 0x1545:
+			return L"VisionTek";
+
+		case 0x1682:
+		case 0x1EAE:
+			return L"XFX";
+
+		case 0x1025:
+			return L"Acer";
+
+		case 0x106B:
+			return L"Apple";
+
+		case 0x1028:
+			return L"Dell";
+
+		case 0x107B:
+			return L"Gateway";
+
+		case 0x103C:
+			return L"HP";
+
+		case 0x17AA:
+			return L"Lenovo";
+
+		case 0x104D:
+			return L"Sony";
+
+		case 0x1179:
+			return L"Toshiba";
+
+		default:
+			return L"Unknown";
 		}
+	}
 
-		int GetDriverPathTooltipWidth(HWND hwnd) const
-		{
-			std::wstring text = L"Driver Path: " + driverPath;
-			HDC hdc = GetDC(hwnd);
-			SIZE size = {};
-			GetTextExtentPoint32W(hdc, text.c_str(), static_cast<int>(text.length()), &size);
-			ReleaseDC(hwnd, hdc);
-			return size.cx;
-		}
-
-		static const wchar_t *VRAMVendorToString(adlx_uint vendorId)
-		{
-			switch (vendorId)
-			{
-			case 0x1:
-				return L"Samsung";
-
-			case 0x2:
-				return L"Infineon";
-
-			case 0x3:
-				return L"Elpida";
-
-			case 0x4:
-				return L"Etron";
-
-			case 0x5:
-				return L"Nanya";
-
-			case 0x6:
-				return L"Hynix (SK hynix)";
-
-			case 0x7:
-				return L"Mosel";
-
-			case 0x8:
-				return L"Winbond";
-
-			case 0x9:
-				return L"ESMT";
-
-			case 0xF:
-				return L"Micron";
-
-			default:
-				return L"Unknown";
-			}
-		}
-
-		static const wchar_t *SubSystemVendorToString(const std::wstring &vendorId)
-		{
-			unsigned int id = 0;
-
-			try
-			{
-				id = std::stoul(vendorId, nullptr, 16);
-			}
-			catch (...)
-			{
-				return L"Unknown";
-			}
-
-			switch (id)
-			{
-			case 0x1002:
-				return L"AMD";
-
-			case 0x1043:
-				return L"ASUSTeK";
-
-			case 0x196D:
-				return L"Club 3D";
-
-			case 0x1092:
-				return L"Diamond Multimedia";
-
-			case 0x18BC:
-				return L"GeCube";
-
-			case 0x1458:
-				return L"Gigabyte";
-
-			case 0x17AF:
-				return L"HIS";
-
-			case 0x16F3:
-				return L"Jetway";
-
-			case 0x1462:
-				return L"MSI";
-
-			case 0x1DA2:
-				return L"Sapphire";
-
-			case 0x148C:
-				return L"PowerColor";
-
-			case 0x1545:
-				return L"VisionTek";
-
-			case 0x1682:
-			case 0x1EAE:
-				return L"XFX";
-
-			case 0x1025:
-				return L"Acer";
-
-			case 0x106B:
-				return L"Apple";
-
-			case 0x1028:
-				return L"Dell";
-
-			case 0x107B:
-				return L"Gateway";
-
-			case 0x103C:
-				return L"HP";
-
-			case 0x17AA:
-				return L"Lenovo";
-
-			case 0x104D:
-				return L"Sony";
-
-			case 0x1179:
-				return L"Toshiba";
-
-			default:
-				return L"Unknown";
-			}
-		}
-
-		std::wstring GetTooltip() const
-		{
-			std::wstring tooltip;
-
-			// GPU INFO
-			tooltip += L"=== GPU Info ===\r\n";
-			tooltip += L"Name: " + name + L"\r\n";
-			tooltip += L"Vendor ID: " + vendorId + L" (" + std::wstring(VendorIdToString(vendorId)) + L")\r\n";
-			tooltip += L"Device ID: " + deviceId + L"\r\n";
-			tooltip += L"Revision ID: " + revisionId + L"\r\n";
-			tooltip += L"Subsystem ID: " + subSystemId + L"\r\n";
-			tooltip += L"Subsystem Vendor ID: " + subSystemVendorId + L" (" + std::wstring(SubSystemVendorToString(subSystemVendorId)) + L")\r\n";
-			tooltip += L"Unique ID: " + std::to_wstring(uniqueId) + L"\r\n";
-			tooltip += L"ASIC Family: " + std::wstring(AsicFamilyToString(asicFamilyType)) + L"\r\n";
-			tooltip += L"GPU Type: " + std::wstring(GPUTypeToString(gpuType)) + L"\r\n";
-			tooltip += L"External: " + std::wstring(isExternal ? L"Yes" : L"No") + L"\r\n";
-			tooltip += L"Micro Architecture: " + microArchitecture + L"\r\n";
-			tooltip += L"Driver Path: " + driverPath + L"\r\n";
-			tooltip += L"PNP String: " + pnpString + L"\r\n";
-			tooltip += L"Has Desktops: " + std::wstring(hasDesktops ? L"Yes" : L"No") + L"\r\n";
-
-			// BIOS INFO
-			tooltip += L"\r\n=== BIOS Info ===\r\n";
-			tooltip += L"Part Number: " + biosPartNumber + L"\r\n";
-			tooltip += L"Version: " + biosVersion + L"\r\n";
-			tooltip += L"Date: " + biosDate + L"\r\n";
-
-			// VRAM INFO
-			tooltip += L"\r\n=== VRAM Info ===\r\n";
-			tooltip += L"Total VRAM: " + std::to_wstring(totalVRAMMB) + L" MB\r\n";
-			tooltip += L"VRAM Type: " + vramType + L"\r\n";
-			tooltip += L"Visible VRAM: " + std::to_wstring(visibleVRAM) + L" MB\r\n";
-			tooltip += L"Invisible VRAM: " + std::to_wstring(invisibleVRAM) + L" MB\r\n";
-			tooltip += L"Highest VRAM Bandwidth: " + std::to_wstring(highestVRAMBandwidth) + L" MB/s\r\n";
-			tooltip += L"VRAM Bandwidth: " + std::to_wstring(vramBandwidth) + L" MB/s\r\n";
-			tooltip += L"VRAM Bit Rate: " + std::to_wstring(vramBitRate) + L" Mbps\r\n";
-
-			wchar_t buffer[64] = {};
-			swprintf_s(buffer, L"VRAM Vendor ID: 0x%02X (%ls)\r\n", vramVendorRevId, VRAMVendorToString(vramVendorRevId));
-			tooltip += buffer;
-
-			// SOFTWARE INFO
-			tooltip += L"\r\n=== Software Info ===\r\n";
-			tooltip += L"AMD Software Edition: " + CharToWide(amdSoftwareEdition.c_str()) + L"\r\n";
-			tooltip += L"AMD Software Version: " + CharToWide(amdSoftwareVersion.c_str()) + L"\r\n";
-			tooltip += L"Driver Version: " + CharToWide(driverVersion.c_str()) + L"\r\n";
-			tooltip += L"AMD Windows Driver Version: " + CharToWide(amdWindowsDriverVersion.c_str()) + L"\r\n";
-
-			if (amdSoftwareReleaseYear != 0)
-				tooltip += L"AMD Software Release Date: " + std::to_wstring(amdSoftwareReleaseYear) + L"-" + std::to_wstring(amdSoftwareReleaseMonth) + L"-" + std::to_wstring(amdSoftwareReleaseDay) + L"\r\n";
-
-			tooltip += L"LUID: " + std::to_wstring(luid.highPart) + L":" + std::to_wstring(luid.lowPart) + L"\r\n";
-			tooltip += L"Application List Supported: " + std::wstring(applicationListSupported ? L"Yes" : L"No") + L"\r\n";
-			tooltip += L"Applications: " + std::to_wstring(applications.size()) + L"\r\n";
-
-			for (const auto &app : applications)
-			{
-				tooltip += L"  PID: " + std::to_wstring(app.processId) + L"\r\n";
-				tooltip += L"  Name: " + app.name + L"\r\n";
-				tooltip += L"  Path: " + app.fullPath + L"\r\n";
-				tooltip += L"  GPU Dependency: " + std::wstring(GpuDependencyToString(app.dependency)) + L"\r\n";
-			}
-
-			return tooltip;
-		}
-	};
-
-	struct DisplayInfo
+	std::wstring GetTooltip() const
 	{
-		int index = -1;
-		wchar_t name[256] = {};
+		std::wstring tooltip;
 
-		uint16_t width = 0;
-		uint16_t height = 0;
-		uint16_t frequency = 0;
+		// GPU INFO
+		tooltip += L"=== GPU Info ===\r\n";
+		tooltip += L"Name: " + name + L"\r\n";
+		tooltip += L"Vendor ID: " + vendorId + L" (" + std::wstring(VendorIdToString(vendorId)) + L")\r\n";
+		tooltip += L"Device ID: " + deviceId + L"\r\n";
+		tooltip += L"Revision ID: " + revisionId + L"\r\n";
+		tooltip += L"Subsystem ID: " + subSystemId + L"\r\n";
+		tooltip += L"Subsystem Vendor ID: " + subSystemVendorId + L" (" + std::wstring(SubSystemVendorToString(subSystemVendorId)) + L")\r\n";
+		tooltip += L"Unique ID: " + std::to_wstring(uniqueId) + L"\r\n";
+		tooltip += L"ASIC Family: " + std::wstring(AsicFamilyToString(asicFamilyType)) + L"\r\n";
+		tooltip += L"GPU Type: " + std::wstring(GPUTypeToString(gpuType)) + L"\r\n";
+		tooltip += L"External: " + std::wstring(isExternal ? L"Yes" : L"No") + L"\r\n";
+		tooltip += L"Micro Architecture: " + microArchitecture + L"\r\n";
+		tooltip += L"Driver Path: " + driverPath + L"\r\n";
+		tooltip += L"PNP String: " + pnpString + L"\r\n";
+		tooltip += L"Has Desktops: " + std::wstring(hasDesktops ? L"Yes" : L"No") + L"\r\n";
 
-		std::wstring monitorDevicePath; // stable session identifier
+		// BIOS INFO
+		tooltip += L"\r\n=== BIOS Info ===\r\n";
+		tooltip += L"Part Number: " + biosPartNumber + L"\r\n";
+		tooltip += L"Version: " + biosVersion + L"\r\n";
+		tooltip += L"Date: " + biosDate + L"\r\n";
 
-		bool isPortrait = false;
-		bool hdr = false;
+		// VRAM INFO
+		tooltip += L"\r\n=== VRAM Info ===\r\n";
+		tooltip += L"Total VRAM: " + std::to_wstring(totalVRAMMB) + L" MB\r\n";
+		tooltip += L"VRAM Type: " + vramType + L"\r\n";
+		tooltip += L"Visible VRAM: " + std::to_wstring(visibleVRAM) + L" MB\r\n";
+		tooltip += L"Invisible VRAM: " + std::to_wstring(invisibleVRAM) + L" MB\r\n";
+		tooltip += L"Highest VRAM Bandwidth: " + std::to_wstring(highestVRAMBandwidth) + L" MB/s\r\n";
+		tooltip += L"VRAM Bandwidth: " + std::to_wstring(vramBandwidth) + L" MB/s\r\n";
+		tooltip += L"VRAM Bit Rate: " + std::to_wstring(vramBitRate) + L" Mbps\r\n";
 
-		bool isLockOn = false;
-		uint16_t lockedFrequency = 0;
+		wchar_t buffer[64] = {};
+		swprintf_s(buffer, L"VRAM Vendor ID: 0x%02X (%ls)\r\n", vramVendorRevId, VRAMVendorToString(vramVendorRevId));
+		tooltip += buffer;
 
-		std::vector<uint16_t> supportedFrequencies;
+		// SOFTWARE INFO
+		tooltip += L"\r\n=== Software Info ===\r\n";
+		tooltip += L"AMD Software Edition: " + CharToWide(amdSoftwareEdition.c_str()) + L"\r\n";
+		tooltip += L"AMD Software Version: " + CharToWide(amdSoftwareVersion.c_str()) + L"\r\n";
+		tooltip += L"Driver Version: " + CharToWide(driverVersion.c_str()) + L"\r\n";
+		tooltip += L"AMD Windows Driver Version: " + CharToWide(amdWindowsDriverVersion.c_str()) + L"\r\n";
 
-		void Log()
+		if (amdSoftwareReleaseYear != 0)
+			tooltip += L"AMD Software Release Date: " + std::to_wstring(amdSoftwareReleaseYear) + L"-" + std::to_wstring(amdSoftwareReleaseMonth) + L"-" + std::to_wstring(amdSoftwareReleaseDay) + L"\r\n";
+
+		tooltip += L"LUID: " + std::to_wstring(luid.highPart) + L":" + std::to_wstring(luid.lowPart) + L"\r\n";
+		tooltip += L"Application List Supported: " + std::wstring(applicationListSupported ? L"Yes" : L"No") + L"\r\n";
+		tooltip += L"Applications: " + std::to_wstring(applications.size()) + L"\r\n";
+
+		for (const auto &app : applications)
 		{
-			LOG_INFO("[%d] : %ls, %dx%d @%dHz, portrait=%s, HDR=%s", index, name, width, height, frequency, isPortrait ? "yes" : "no", hdr ? "yes" : "no");
-			// LOG_DEBUG("%ls", monitorDevicePath.c_str());
-			LOG_INFO("  Supported frequencies:");
-
-			for (uint16_t hz : supportedFrequencies)
-				LOG_INFO("    %d Hz%s", hz, frequency == hz ? " <-" : "");
+			tooltip += L"  PID: " + std::to_wstring(app.processId) + L"\r\n";
+			tooltip += L"  Name: " + app.name + L"\r\n";
+			tooltip += L"  Path: " + app.fullPath + L"\r\n";
+			tooltip += L"  GPU Dependency: " + std::wstring(GpuDependencyToString(app.dependency)) + L"\r\n";
 		}
-	};
 
-	class DisplayManager
+		return tooltip;
+	}
+};
+
+struct DisplayInfo
+{
+	int index = -1;
+	wchar_t name[256] = {};
+
+	uint16_t width = 0;
+	uint16_t height = 0;
+	uint16_t frequency = 0;
+
+	std::wstring monitorDevicePath; // stable session identifier
+
+	bool isPortrait = false;
+	bool hdr = false;
+
+	bool isLockOn = false;
+	uint16_t lockedFrequency = 0;
+
+	std::vector<uint16_t> supportedFrequencies;
+
+	void Log()
 	{
-	public:
-		void Add(const DisplayInfo &display) { m_displays.push_back(display); }
-		std::vector<DisplayInfo> &GetDisplays() { return m_displays; }
+		LOG_INFO("[%d] : %ls, %dx%d @%dHz, portrait=%s, HDR=%s", index, name, width, height, frequency, isPortrait ? "yes" : "no", hdr ? "yes" : "no");
+		// LOG_DEBUG("%ls", monitorDevicePath.c_str());
+		LOG_INFO("  Supported frequencies:");
 
-		using Callback = std::function<void(int index, uint16_t freq)>;
-		void setRestoreLockedFrequencyCallback(Callback callback) { m_callback = std::move(callback); }
+		for (uint16_t hz : supportedFrequencies)
+			LOG_INFO("    %d Hz%s", hz, frequency == hz ? " <-" : "");
+	}
+};
 
-		void Discover(std::unordered_map<std::wstring, int> *map = nullptr)
+class DisplayManager
+{
+  public:
+	void Add(const DisplayInfo &display) { m_displays.push_back(display); }
+	std::vector<DisplayInfo> &GetDisplays() { return m_displays; }
+
+	using Callback = std::function<void(int index, uint16_t freq)>;
+	void setRestoreLockedFrequencyCallback(Callback callback) { m_callback = std::move(callback); }
+
+	void Discover(std::unordered_map<std::wstring, int> *map = nullptr)
+	{
+		m_displays.clear();
+
+		std::unordered_set<std::wstring> currentDisplays;
+
+		UINT32 pathCount = 0;
+		UINT32 modeCount = 0;
+
+		LONG result = GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount, &modeCount);
+
+		if (result != ERROR_SUCCESS)
 		{
-			m_displays.clear();
-
-			std::unordered_set<std::wstring> currentDisplays;
-
-			UINT32 pathCount = 0;
-			UINT32 modeCount = 0;
-
-			LONG result = GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &pathCount, &modeCount);
-
-			if (result != ERROR_SUCCESS)
-			{
-				LOG_INFO("GetDisplayConfigBufferSizes failed: %ld", result);
-				return;
-			}
-
-			std::vector<DISPLAYCONFIG_PATH_INFO> paths(pathCount);
-			std::vector<DISPLAYCONFIG_MODE_INFO> modes(modeCount);
-
-			result = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pathCount, paths.data(), &modeCount, modes.data(), nullptr);
-
-			if (result != ERROR_SUCCESS)
-			{
-				LOG_INFO("QueryDisplayConfig failed: %ld", result);
-				return;
-			}
-
-			// QueryDisplayConfig can return fewer entries than the allocated buffers.
-			paths.resize(pathCount);
-			modes.resize(modeCount);
-
-			// Enumerate Win32 display devices so we can retain the device name  (\\.\DISPLAY1, \\.\DISPLAY2, ...).
-			for (DWORD i = 0;; ++i)
-			{
-				DISPLAY_DEVICE dd = {};
-				dd.cb = sizeof(dd);
-
-				if (!EnumDisplayDevices(nullptr, i, &dd, 0))
-					break;
-
-				if (!(dd.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP))
-					continue;
-
-				DisplayInfo di;
-				di.index = static_cast<int>(i);
-
-				wcscpy_s(di.name, dd.DeviceName);
-
-				DEVMODE dm = {};
-				dm.dmSize = sizeof(dm);
-
-				if (!EnumDisplaySettings(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm))
-					continue;
-
-				di.width = static_cast<uint16_t>(dm.dmPelsWidth);
-				di.height = static_cast<uint16_t>(dm.dmPelsHeight);
-				di.frequency = static_cast<uint16_t>(dm.dmDisplayFrequency);
-				di.isPortrait = dm.dmPelsHeight >= dm.dmPelsWidth;
-
-				// Supported refresh rates.
-				for (DWORD j = 0; EnumDisplaySettingsW(dd.DeviceName, j, &dm); ++j)
-					if (dm.dmPelsWidth == di.width && dm.dmPelsHeight == di.height)
-						di.supportedFrequencies.push_back(static_cast<uint16_t>(dm.dmDisplayFrequency));
-				std::sort(di.supportedFrequencies.begin(), di.supportedFrequencies.end());
-				di.supportedFrequencies.erase(std::unique(di.supportedFrequencies.begin(), di.supportedFrequencies.end()), di.supportedFrequencies.end());
-
-				for (const auto &path : paths)
-				{
-					// Get the source device name for this path  \\.\DISPLAY1, \\.\DISPLAY2, ...
-					DISPLAYCONFIG_SOURCE_DEVICE_NAME sourceName = {};
-
-					sourceName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
-					sourceName.header.size = sizeof(sourceName);
-					sourceName.header.adapterId = path.sourceInfo.adapterId;
-					sourceName.header.id = path.sourceInfo.id;
-
-					if (DisplayConfigGetDeviceInfo(&sourceName.header) != ERROR_SUCCESS)
-						continue;
-
-					// Compare with
-					if (wcscmp(sourceName.viewGdiDeviceName, dd.DeviceName) != 0)
-						continue;
-
-					// Query HDR Advanced Color state.
-					DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO colorInfo = {};
-					colorInfo.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
-					colorInfo.header.size = sizeof(colorInfo);
-					colorInfo.header.adapterId = path.targetInfo.adapterId;
-					colorInfo.header.id = path.targetInfo.id;
-
-					if (DisplayConfigGetDeviceInfo(&colorInfo.header) == ERROR_SUCCESS)
-						di.hdr = (colorInfo.value & DISPLAYCONFIG_ADVANCED_COLOR_MODE_HDR) != 0;
-
-					// monitorDevicePath as stable session identifier
-					DISPLAYCONFIG_TARGET_DEVICE_NAME targetName = {};
-					targetName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
-					targetName.header.size = sizeof(targetName);
-					targetName.header.adapterId = path.targetInfo.adapterId;
-					targetName.header.id = path.targetInfo.id;
-					DisplayConfigGetDeviceInfo(&targetName.header);
-					di.monitorDevicePath = std::wstring(targetName.monitorDevicePath);
-					if (!di.monitorDevicePath.empty())
-						currentDisplays.insert(di.monitorDevicePath);
-
-					// use provided mapping to retrieve lock state
-					if (map)
-					{
-						if (map->contains(targetName.monitorDevicePath))
-						{
-							auto &storedFreq = map->at(targetName.monitorDevicePath);
-							di.isLockOn = storedFreq != -1;
-							if (di.isLockOn && di.frequency != storedFreq)
-							{
-								LOG_WARN("[DisplayManager] Current Display %d frequency (%dHz) differs from locked frequency. Reverting to %dHz in 10 seconds.", di.index + 1, di.frequency, storedFreq);
-								m_callback(di.index, static_cast<uint16_t>(storedFreq));
-							}
-						}
-						else
-							(*map)[di.monitorDevicePath] = -1;
-					}
-
-					break;
-				}
-
-				Add(di);
-			}
-
-			LogAll();
-
-			// debug only
-			// for (auto &d : currentDisplays)
-			// 	LOG_DEBUG("%ls", d.c_str());
-			// LOG_DEBUG("---------------------------\n");
-
-			// trim stale data
-			if (map)
-			{
-				std::vector<std::wstring> toRemove;
-
-				for (const auto &[k, v] : *map)
-					if (!currentDisplays.contains(k))
-						toRemove.push_back(k);
-
-				for (const auto &k : toRemove)
-				{
-					LOG_DEBUG("Removing stale entry: %ls", k.c_str());
-					map->erase(k);
-				}
-			}
-
-			// debug only
-			// LOG_DEBUG("---------------------------\n");
-			// if (map)
-			// 	for (const auto &[key, value] : *map)
-			// 		LOG_DEBUG("%ls: %s", key.c_str(), value != -1 ? "ON" : "OFF");
+			LOG_INFO("GetDisplayConfigBufferSizes failed: %ld", result);
+			return;
 		}
 
-		void Clear()
+		std::vector<DISPLAYCONFIG_PATH_INFO> paths(pathCount);
+		std::vector<DISPLAYCONFIG_MODE_INFO> modes(modeCount);
+
+		result = QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &pathCount, paths.data(), &modeCount, modes.data(), nullptr);
+
+		if (result != ERROR_SUCCESS)
 		{
-			m_displays.clear();
-			m_current = 0;
+			LOG_INFO("QueryDisplayConfig failed: %ld", result);
+			return;
 		}
 
-		// Move the cursor to the next element of the list then returns the element.
-		const std::optional<DisplayInfo> Next()
+		// QueryDisplayConfig can return fewer entries than the allocated buffers.
+		paths.resize(pathCount);
+		modes.resize(modeCount);
+
+		// Enumerate Win32 display devices so we can retain the device name  (\\.\DISPLAY1, \\.\DISPLAY2, ...).
+		for (DWORD i = 0;; ++i)
 		{
-			if (m_displays.empty())
-				return std::nullopt;
+			DISPLAY_DEVICE dd = {};
+			dd.cb = sizeof(dd);
 
-			m_current = (m_current + 1) % m_displays.size();
-			DisplayInfo result = m_displays[m_current];
+			if (!EnumDisplayDevices(nullptr, i, &dd, 0))
+				break;
 
-			return result;
-		}
+			if (!(dd.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP))
+				continue;
 
-		void SetCurrent(int index) { m_current = index; }
+			DisplayInfo di;
+			di.index = static_cast<int>(i);
 
-		const std::optional<DisplayInfo> Current() const
-		{
-			if (m_displays.empty())
-				return std::nullopt;
+			wcscpy_s(di.name, dd.DeviceName);
 
-			return m_displays[m_current];
-		}
-
-		bool SetMonitorRefreshRate(int monitorIndex, uint16_t refreshRate)
-		{
-			if (monitorIndex >= m_displays.size())
-			{
-				LOG_ERROR("Invalid monitor index: %u", monitorIndex);
-				return false;
-			}
-
-			manuallyUpdatingRefreshRate = true; // Prevent cache update during manual change
-
-			const auto &monitor = m_displays[monitorIndex];
-
-			DEVMODEW dm = {};
+			DEVMODE dm = {};
 			dm.dmSize = sizeof(dm);
 
-			if (!EnumDisplaySettingsW(monitor.name, ENUM_CURRENT_SETTINGS, &dm))
+			if (!EnumDisplaySettings(dd.DeviceName, ENUM_CURRENT_SETTINGS, &dm))
+				continue;
+
+			di.width = static_cast<uint16_t>(dm.dmPelsWidth);
+			di.height = static_cast<uint16_t>(dm.dmPelsHeight);
+			di.frequency = static_cast<uint16_t>(dm.dmDisplayFrequency);
+			di.isPortrait = dm.dmPelsHeight >= dm.dmPelsWidth;
+
+			// Supported refresh rates.
+			for (DWORD j = 0; EnumDisplaySettingsW(dd.DeviceName, j, &dm); ++j)
+				if (dm.dmPelsWidth == di.width && dm.dmPelsHeight == di.height)
+					di.supportedFrequencies.push_back(static_cast<uint16_t>(dm.dmDisplayFrequency));
+			std::sort(di.supportedFrequencies.begin(), di.supportedFrequencies.end());
+			di.supportedFrequencies.erase(std::unique(di.supportedFrequencies.begin(), di.supportedFrequencies.end()), di.supportedFrequencies.end());
+
+			for (const auto &path : paths)
 			{
-				LOG_ERROR("EnumDisplaySettingsW failed for %ls", monitor.name);
-				return false;
+				// Get the source device name for this path  \\.\DISPLAY1, \\.\DISPLAY2, ...
+				DISPLAYCONFIG_SOURCE_DEVICE_NAME sourceName = {};
+
+				sourceName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME;
+				sourceName.header.size = sizeof(sourceName);
+				sourceName.header.adapterId = path.sourceInfo.adapterId;
+				sourceName.header.id = path.sourceInfo.id;
+
+				if (DisplayConfigGetDeviceInfo(&sourceName.header) != ERROR_SUCCESS)
+					continue;
+
+				// Compare with
+				if (wcscmp(sourceName.viewGdiDeviceName, dd.DeviceName) != 0)
+					continue;
+
+				// Query HDR Advanced Color state.
+				DISPLAYCONFIG_GET_ADVANCED_COLOR_INFO colorInfo = {};
+				colorInfo.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_ADVANCED_COLOR_INFO;
+				colorInfo.header.size = sizeof(colorInfo);
+				colorInfo.header.adapterId = path.targetInfo.adapterId;
+				colorInfo.header.id = path.targetInfo.id;
+
+				if (DisplayConfigGetDeviceInfo(&colorInfo.header) == ERROR_SUCCESS)
+					di.hdr = (colorInfo.value & DISPLAYCONFIG_ADVANCED_COLOR_MODE_HDR) != 0;
+
+				// monitorDevicePath as stable session identifier
+				DISPLAYCONFIG_TARGET_DEVICE_NAME targetName = {};
+				targetName.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_NAME;
+				targetName.header.size = sizeof(targetName);
+				targetName.header.adapterId = path.targetInfo.adapterId;
+				targetName.header.id = path.targetInfo.id;
+				DisplayConfigGetDeviceInfo(&targetName.header);
+				di.monitorDevicePath = std::wstring(targetName.monitorDevicePath);
+				if (!di.monitorDevicePath.empty())
+					currentDisplays.insert(di.monitorDevicePath);
+
+				// use provided mapping to retrieve lock state
+				if (map)
+				{
+					if (map->contains(targetName.monitorDevicePath))
+					{
+						auto &storedFreq = map->at(targetName.monitorDevicePath);
+						di.isLockOn = storedFreq != -1;
+						if (di.isLockOn && di.frequency != storedFreq)
+						{
+							LOG_WARN("[DisplayManager] Current Display %d frequency (%dHz) differs from locked frequency. Reverting to %dHz in 10 seconds.", di.index + 1, di.frequency, storedFreq);
+							m_callback(di.index, static_cast<uint16_t>(storedFreq));
+						}
+					}
+					else
+						(*map)[di.monitorDevicePath] = -1;
+				}
+
+				break;
 			}
 
-			dm.dmFields |= DM_DISPLAYFREQUENCY;
-			dm.dmDisplayFrequency = refreshRate;
-
-			LONG result = ChangeDisplaySettingsExW(monitor.name, &dm, nullptr, CDS_UPDATEREGISTRY, nullptr);
-
-			if (result != DISP_CHANGE_SUCCESSFUL)
-			{
-				LOG_ERROR("Failed to set %ls to %u Hz (error=%ld)", monitor.name, refreshRate, result);
-				return false;
-			}
-
-			LOG_DEBUG("[DisplayManager] Monitor %u (%ls) set to %u Hz", monitor.index + 1, monitor.name, refreshRate);
-
-			return true;
+			Add(di);
 		}
 
-		size_t Size() const { return m_displays.size(); }
-		bool Empty() const { return m_displays.empty(); }
+		LogAll();
 
-		void LogAll()
+		// debug only
+		// for (auto &d : currentDisplays)
+		// 	LOG_DEBUG("%ls", d.c_str());
+		// LOG_DEBUG("---------------------------\n");
+
+		// trim stale data
+		if (map)
 		{
-			LOGLN();
-			LOG_INFO("Active Displays");
-			LOG_INFO("---------------");
+			std::vector<std::wstring> toRemove;
 
-			for (auto &d : m_displays)
-				d.Log();
+			for (const auto &[k, v] : *map)
+				if (!currentDisplays.contains(k))
+					toRemove.push_back(k);
 
-			LOG_INFO("---------------");
-			LOGLN();
+			for (const auto &k : toRemove)
+			{
+				LOG_DEBUG("Removing stale entry: %ls", k.c_str());
+				map->erase(k);
+			}
 		}
 
-		const RadeonMon::Hardware::DisplayInfo &Get(int index) const { return m_displays.at(index); }
+		// debug only
+		// LOG_DEBUG("---------------------------\n");
+		// if (map)
+		// 	for (const auto &[key, value] : *map)
+		// 		LOG_DEBUG("%ls: %s", key.c_str(), value != -1 ? "ON" : "OFF");
+	}
 
-	private:
-		std::vector<DisplayInfo> m_displays;
-		size_t m_current = 0;
-		bool manuallyUpdatingRefreshRate = false;
-		Callback m_callback;
-	};
+	void Clear()
+	{
+		m_displays.clear();
+		m_current = 0;
+	}
+
+	// Move the cursor to the next element of the list then returns the element.
+	const std::optional<DisplayInfo> Next()
+	{
+		if (m_displays.empty())
+			return std::nullopt;
+
+		m_current = (m_current + 1) % m_displays.size();
+		DisplayInfo result = m_displays[m_current];
+
+		return result;
+	}
+
+	// set current by matching display index
+	void SetCurrent(int index)
+	{
+		for (std::size_t i = 0; i < m_displays.size(); ++i)
+		{
+			if (m_displays[i].index == index)
+			{
+				m_current = i;
+				return;
+			}
+		}
+	}
+
+	const std::optional<DisplayInfo> Current() const
+	{
+		if (m_displays.empty())
+			return std::nullopt;
+
+		return m_displays[m_current];
+	}
+
+	bool SetMonitorRefreshRate(int monitorIndex, uint16_t refreshRate)
+	{
+		if (monitorIndex >= m_displays.size())
+		{
+			LOG_ERROR("Invalid monitor index: %u", monitorIndex);
+			return false;
+		}
+
+		manuallyUpdatingRefreshRate = true; // Prevent cache update during manual change
+
+		const auto &monitor = m_displays[monitorIndex];
+
+		DEVMODEW dm = {};
+		dm.dmSize = sizeof(dm);
+
+		if (!EnumDisplaySettingsW(monitor.name, ENUM_CURRENT_SETTINGS, &dm))
+		{
+			LOG_ERROR("EnumDisplaySettingsW failed for %ls", monitor.name);
+			return false;
+		}
+
+		dm.dmFields |= DM_DISPLAYFREQUENCY;
+		dm.dmDisplayFrequency = refreshRate;
+
+		LONG result = ChangeDisplaySettingsExW(monitor.name, &dm, nullptr, CDS_UPDATEREGISTRY, nullptr);
+
+		if (result != DISP_CHANGE_SUCCESSFUL)
+		{
+			LOG_ERROR("Failed to set %ls to %u Hz (error=%ld)", monitor.name, refreshRate, result);
+			return false;
+		}
+
+		LOG_DEBUG("[DisplayManager] Monitor %u (%ls) set to %u Hz", monitor.index + 1, monitor.name, refreshRate);
+
+		return true;
+	}
+
+	size_t Size() const { return m_displays.size(); }
+	bool Empty() const { return m_displays.empty(); }
+
+	void LogAll()
+	{
+		LOGLN();
+		LOG_INFO("Active Displays");
+		LOG_INFO("---------------");
+
+		for (auto &d : m_displays)
+			d.Log();
+
+		LOG_INFO("---------------");
+		LOGLN();
+	}
+
+	const RadeonMon::Hardware::DisplayInfo &Get(int index) const { return m_displays.at(index); }
+
+  private:
+	std::vector<DisplayInfo> m_displays;
+	size_t m_current = 0;
+	bool manuallyUpdatingRefreshRate = false;
+	Callback m_callback;
+};
 } // namespace RadeonMon::Hardware
 
 struct AppTitle

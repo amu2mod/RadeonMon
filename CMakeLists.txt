@@ -77,7 +77,7 @@ add_executable(radeonmon WIN32
     src/linechart.cpp
     ${CMAKE_BINARY_DIR}/generated/version.rc
     src/PresentMonManager.cpp
-    src/VRRDetector.cpp
+    src/vrr_detector.cpp
     src/Screenshot.cpp
     src/JpegEncoder.cpp
     src/PngEncoder.cpp

@@ -68,7 +68,7 @@ vcpkg_installed/
 Testing/
 .cache/
 
-# ADLX
+# AMD ADLX & Ryzen SDKs
 third_party/AMD/
 
 # Intel PresentMon

@@ -220,11 +220,7 @@ void Screenshot::StripUnrealSuffix(wchar_t *name)
 		const wchar_t *value;
 		size_t length;
 	} suffixes[] = {
-		{L"-Win64-Shipping", _countof(L"-Win64-Shipping") - 1},
-		{L"-Win64-Test", _countof(L"-Win64-Test") - 1},
-		{L"-Win64-Development", _countof(L"-Win64-Development") - 1},
-		{L"-Win64-DebugGame", _countof(L"-Win64-DebugGame") - 1},
-		{L"-Win64-Debug", _countof(L"-Win64-Debug") - 1},
+		{L"-Win64-Shipping", _countof(L"-Win64-Shipping") - 1}, {L"-Win64-Test", _countof(L"-Win64-Test") - 1}, {L"-Win64-Development", _countof(L"-Win64-Development") - 1}, {L"-Win64-DebugGame", _countof(L"-Win64-DebugGame") - 1}, {L"-Win64-Debug", _countof(L"-Win64-Debug") - 1},
 	};
 
 	static constexpr size_t suffixCount = _countof(suffixes);
@@ -1249,8 +1245,7 @@ bool Screenshot::HDRCapture(HWND hwnd, const HDRInfo &info)
 
 	// Always leave the DXGI duplication in a clean state. The next
 	// normal SDR capture will recreate the normal BGRA8 duplication.
-	const auto cleanup = [&]()
-	{ ShutdownDXGI(); };
+	const auto cleanup = [&]() { ShutdownDXGI(); };
 
 	RECT clientRect{};
 
@@ -1763,88 +1758,80 @@ bool Screenshot::HDRCapture(HWND hwnd, const HDRInfo &info)
 		return false;
 	}
 
-	ComPtr<IWICImagingFactory> factory;
-	ComPtr<IWICStream> stream;
-	ComPtr<IWICBitmapEncoder> encoder;
-	ComPtr<IWICBitmapFrameEncode> frame;
-	ComPtr<IPropertyBag2> encoderOptions;
-
-	hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory));
-
-	if (FAILED(hr))
+	HRESULT jxrHr = [&]() -> HRESULT
 	{
-		LOG_ERROR("[Screenshot] WIC factory creation failed: 0x%08X", static_cast<unsigned>(hr));
+		ComPtr<IWICImagingFactory> factory;
+		ComPtr<IWICStream> stream;
+		ComPtr<IWICBitmapEncoder> encoder;
+		ComPtr<IWICBitmapFrameEncode> frame;
+		ComPtr<IPropertyBag2> encoderOptions;
 
-		if (uninitializeCOM)
-			CoUninitialize();
+		HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory));
 
-		cleanup();
-		return false;
-	}
+		if (FAILED(hr))
+		{
+			LOG_ERROR("[Screenshot] WIC factory creation failed: 0x%08X", static_cast<unsigned>(hr));
+			return hr;
+		}
 
-	hr = factory->CreateStream(&stream);
+		hr = factory->CreateStream(&stream);
 
-	if (SUCCEEDED(hr))
-		hr = stream->InitializeFromFilename(fullPath.c_str(), GENERIC_WRITE);
+		if (SUCCEEDED(hr))
+			hr = stream->InitializeFromFilename(fullPath.c_str(), GENERIC_WRITE);
 
-	if (SUCCEEDED(hr))
-		hr = factory->CreateEncoder(GUID_ContainerFormatWmp, nullptr, &encoder);
+		if (SUCCEEDED(hr))
+			hr = factory->CreateEncoder(GUID_ContainerFormatWmp, nullptr, &encoder);
 
-	if (SUCCEEDED(hr))
-		hr = encoder->Initialize(stream.Get(), WICBitmapEncoderNoCache);
+		if (SUCCEEDED(hr))
+			hr = encoder->Initialize(stream.Get(), WICBitmapEncoderNoCache);
 
-	if (SUCCEEDED(hr))
-		hr = encoder->CreateNewFrame(&frame, &encoderOptions);
+		if (SUCCEEDED(hr))
+			hr = encoder->CreateNewFrame(&frame, &encoderOptions);
 
-	if (SUCCEEDED(hr))
-		hr = frame->Initialize(encoderOptions.Get());
+		if (SUCCEEDED(hr))
+			hr = frame->Initialize(encoderOptions.Get());
 
-	if (SUCCEEDED(hr))
-		hr = frame->SetSize(static_cast<UINT>(width), static_cast<UINT>(height));
+		if (SUCCEEDED(hr))
+			hr = frame->SetSize(static_cast<UINT>(width), static_cast<UINT>(height));
 
-	if (SUCCEEDED(hr))
-		hr = frame->SetResolution(96.0, 96.0);
+		if (SUCCEEDED(hr))
+			hr = frame->SetResolution(96.0, 96.0);
 
-	WICPixelFormatGUID pixelFormat = GUID_WICPixelFormat64bppRGBAHalf;
+		WICPixelFormatGUID pixelFormat = GUID_WICPixelFormat64bppRGBAHalf;
 
-	if (SUCCEEDED(hr))
-		hr = frame->SetPixelFormat(&pixelFormat);
+		if (SUCCEEDED(hr))
+			hr = frame->SetPixelFormat(&pixelFormat);
 
-	/*
-	 * Do not allow WIC to silently convert the FP16 data to an
-	 * integer format. That would defeat native HDR capture.
-	 */
-	if (SUCCEEDED(hr) && pixelFormat != GUID_WICPixelFormat64bppRGBAHalf)
-	{
-		LOG_ERROR("[Screenshot] JPEG XR encoder did not accept 64bppRGBAHalf");
-		hr = WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT;
-	}
+		if (SUCCEEDED(hr) && pixelFormat != GUID_WICPixelFormat64bppRGBAHalf)
+		{
+			LOG_ERROR("[Screenshot] JPEG XR encoder did not accept 64bppRGBAHalf");
+			hr = WINCODEC_ERR_UNSUPPORTEDPIXELFORMAT;
+		}
 
-	if (SUCCEEDED(hr))
-		hr = frame->WritePixels(static_cast<UINT>(height), static_cast<UINT>(rowSize), static_cast<UINT>(imageSize), pixels.data());
+		if (SUCCEEDED(hr))
+			hr = frame->WritePixels(static_cast<UINT>(height), static_cast<UINT>(rowSize), static_cast<UINT>(imageSize), pixels.data());
 
-	if (SUCCEEDED(hr))
-		hr = frame->Commit();
+		if (SUCCEEDED(hr))
+			hr = frame->Commit();
 
-	if (SUCCEEDED(hr))
-		hr = encoder->Commit();
+		if (SUCCEEDED(hr))
+			hr = encoder->Commit();
 
-	if (FAILED(hr))
-	{
-		LOG_ERROR("[Screenshot] JPEG XR HDR encoding failed: 0x%08X (%ls)", static_cast<unsigned>(hr), fullPath.c_str());
-
-		// Do not leave a corrupt .jxr behind.
-		DeleteFileW(fullPath.c_str());
-
-		if (uninitializeCOM)
-			CoUninitialize();
-
-		cleanup();
-		return false;
-	}
+		return hr;
+	}(); // factory/stream/encoder/frame/encoderOptions all destruct now, apartment still valid
 
 	if (uninitializeCOM)
 		CoUninitialize();
+
+	if (FAILED(jxrHr))
+	{
+		LOG_ERROR("[Screenshot] JPEG XR HDR encoding failed: 0x%08X (%ls)", static_cast<unsigned>(jxrHr), fullPath.c_str());
+
+		DeleteFileW(fullPath.c_str());
+
+		cleanup();
+		return false;
+	}
 
 	LOG_INFO("[Screenshot] Native HDR JPEG XR saved: %ls (scRGB FP16, %dx%d, colorSpace=%d, maxLuminance=%.1f nits)", fullPath.c_str(), width, height, static_cast<int>(info.colorSpace), info.maxLuminance);
 

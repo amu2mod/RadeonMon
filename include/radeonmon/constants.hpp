@@ -98,6 +98,8 @@ constexpr int WM_APP_VERSION_ERROR = WM_APP + 3;
 constexpr int WM_APP_GPU_PWR_TUNING_CHANGE = WM_APP + 4;
 constexpr int WM_APP_APPLY_TOPMOST = WM_APP + 5;
 constexpr int WM_APP_SCREENSHOT_KEY_ERROR = WM_APP + 6;
+constexpr int WM_APP_DISPLAY_UPDATED = WM_APP + 7;
+constexpr int WM_APP_SCREENSHOT_REQUEST = WM_APP + 8;
 
 constexpr wchar_t REPOURL[] = L"https://api.github.com/repos/amu2mod/RadeonMon/releases/latest";
 constexpr wchar_t LATESTURL[] = L"https://github.com/amu2mod/RadeonMon/releases/latest";

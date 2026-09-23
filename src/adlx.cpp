@@ -349,11 +349,24 @@ void ADLXGpuTelemetry::Discover()
 
 void ADLXGpuTelemetry::Destroy()
 {
+	// Release all ADLX smart pointers BEFORE ADLXHelp.Terminate() !!
+	// Otherwise their own destructors would run too late and trigger null pointer exceptions.
+	manualPowerTuning = nullptr;
+	manualPowerTuningIfc = nullptr;
+	gpuTuningService = nullptr;
+	gpuMetricsSupport3 = nullptr;
+	gpuMetricsSupport2 = nullptr;
+	gpuMetricsSupport1 = nullptr;
+	gpuMetricsSupport = nullptr;
+	perfMonitoringService = nullptr;
+	selectedGPU = nullptr;
+
+	isInitialized = false;
+
 	ADLX_RESULT res = ADLXHelp.Terminate();
+
 	if (ADLX_FAILED(res))
-	{
 		LOG_ERROR("[ADLX] Failed to terminate ADLX Helper: %d", res);
-	}
 }
 
 template <typename T, typename MetricFn> int ADLXGpuTelemetry::ReadMetric(const char *name, MetricFn metricFn, IADLXGPUMetrics *metrics)

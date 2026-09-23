@@ -510,7 +510,8 @@ void DualSense::Disconnect()
 DualSense::ReadResult DualSense::ReadInputReports()
 {
 	auto nextProcessTime = std::chrono::steady_clock::now();
-	auto screenshotCooldownUntil = std::chrono::steady_clock::now();
+	constexpr auto CONNECT_SETTLE_MS = std::chrono::milliseconds(300); // avoid stale reports after connect
+	auto screenshotCooldownUntil = std::chrono::steady_clock::now() + (m_transport == Transport::Bluetooth ? CONNECT_SETTLE_MS : std::chrono::milliseconds(0));
 
 	while (!ShouldStop() && IsConnected())
 	{

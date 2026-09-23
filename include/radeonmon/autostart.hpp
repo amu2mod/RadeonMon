@@ -9,89 +9,89 @@
 
 static std::wstring GetCurrentExecutablePath()
 {
-    wchar_t path[MAX_PATH];
+	wchar_t path[MAX_PATH];
 
-    DWORD len = GetModuleFileNameW(nullptr, path, MAX_PATH);
+	DWORD len = GetModuleFileNameW(nullptr, path, MAX_PATH);
 
-    if (len == 0 || len == MAX_PATH)
-        return L"";
+	if (len == 0 || len == MAX_PATH)
+		return L"";
 
-    return std::wstring(path, len);
+	return std::wstring(path, len);
 }
 
 inline bool EnableStartupShortcut()
 {
-    std::wstring exePath = GetCurrentExecutablePath();
+	std::wstring exePath = GetCurrentExecutablePath();
 
-    if (exePath.empty())
-        return false;
+	if (exePath.empty())
+		return false;
 
-    wchar_t startupDir[MAX_PATH];
+	wchar_t startupDir[MAX_PATH];
 
-    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_STARTUP, nullptr, 0, startupDir)))
-        return false;
+	if (FAILED(SHGetFolderPathW(nullptr, CSIDL_STARTUP, nullptr, 0, startupDir)))
+		return false;
 
-    std::wstring shortcutPath = std::wstring(startupDir) + L"\\" + APPNAME + L".lnk";
+	std::wstring shortcutPath = std::wstring(startupDir) + L"\\" + APPNAME + L".lnk";
 
-    HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+	HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
-    bool comInitialized = SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE;
+	bool comInitialized = SUCCEEDED(hr);
 
-    IShellLinkW *link = nullptr;
-    IPersistFile *file = nullptr;
+	IShellLinkW *link = nullptr;
+	IPersistFile *file = nullptr;
 
-    hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_IShellLinkW, reinterpret_cast<void **>(&link));
+	hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_IShellLinkW, reinterpret_cast<void **>(&link));
 
-    if (FAILED(hr))
-    {
-        if (comInitialized)
-            CoUninitialize();
+	if (FAILED(hr))
+	{
+		if (comInitialized)
+			CoUninitialize();
 
-        return false;
-    }
+		return false;
+	}
 
-    link->SetPath(exePath.c_str());
+	link->SetPath(exePath.c_str());
 
-    hr = link->QueryInterface(IID_IPersistFile, reinterpret_cast<void **>(&file));
+	hr = link->QueryInterface(IID_IPersistFile, reinterpret_cast<void **>(&file));
 
-    bool result = false;
+	bool result = false;
 
-    if (SUCCEEDED(hr))
-    {
-        result = SUCCEEDED(file->Save(shortcutPath.c_str(), TRUE));
-        file->Release();
-    }
+	if (SUCCEEDED(hr))
+	{
+		result = SUCCEEDED(file->Save(shortcutPath.c_str(), TRUE));
+		file->Release();
+	}
 
-    link->Release();
+	link->Release();
 
-    if (comInitialized)
-        CoUninitialize();
+	if (comInitialized)
+		CoUninitialize();
 
-    return result;
+	return result;
 }
 
 bool DisableStartupShortcut()
 {
-    wchar_t startupDir[MAX_PATH];
+	wchar_t startupDir[MAX_PATH];
 
-    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_STARTUP, nullptr, 0, startupDir)))
-        return false;
+	if (FAILED(SHGetFolderPathW(nullptr, CSIDL_STARTUP, nullptr, 0, startupDir)))
+		return false;
 
-    std::wstring shortcutPath = std::wstring(startupDir) + L"\\" + APPNAME + L".lnk";
+	std::wstring shortcutPath = std::wstring(startupDir) + L"\\" + APPNAME + L".lnk";
 
-    return DeleteFileW(shortcutPath.c_str()) != FALSE;
+	return DeleteFileW(shortcutPath.c_str()) != FALSE;
 }
 
 bool IsAutostartEnabled()
 {
-    wchar_t startupDir[MAX_PATH];
+	wchar_t startupDir[MAX_PATH];
 
-    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_STARTUP, nullptr, 0, startupDir)))
-        return false;
+	if (FAILED(SHGetFolderPathW(nullptr, CSIDL_STARTUP, nullptr, 0, startupDir)))
+		return false;
 
-    std::wstring shortcutPath = std::wstring(startupDir) + L"\\" + APPNAME + L".lnk";
+	std::wstring shortcutPath = std::wstring(startupDir) + L"\\" + APPNAME + L".lnk";
 
-    DWORD attributes = GetFileAttributesW(shortcutPath.c_str());
+	DWORD attributes = GetFileAttributesW(shortcutPath.c_str());
 
-    return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
+	return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
 }

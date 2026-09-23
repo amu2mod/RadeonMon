@@ -18,7 +18,7 @@
 #include "radeonmon/cpugraph.hpp"
 #include "radeonmon/gpugraph.hpp"
 #include "radeonmon/PresentMonManager.hpp"
-#include "radeonmon/VRRDetector.hpp"
+#include "radeonmon/vrr_detector.hpp"
 #include "radeonmon/Screenshot.hpp"
 // #include "radeonmon/ScreenshotKeyBinder.hpp"
 #include "radeonmon/gamepad.hpp"
