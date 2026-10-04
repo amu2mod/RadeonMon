@@ -85,6 +85,7 @@ add_executable(radeonmon WIN32
     src/dualsense.cpp
     src/xboxwirelesscontroller.cpp
     src/switchprocontroller.cpp
+    src/gpusampler.cpp
 )
 
 option(ENABLE_TESTMODE "Enable TEST preprocessor define" OFF)

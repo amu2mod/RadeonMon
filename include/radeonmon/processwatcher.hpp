@@ -1,5 +1,6 @@
 #pragma once
 #include "radeonmon/ryzen.hpp"
+#include "radeonmon/gpusampler.hpp"
 
 #include <windows.h>
 #include <tlhelp32.h>
@@ -11,11 +12,7 @@
 #include <vector>
 #include <unordered_set>
 
-typedef NTSTATUS(NTAPI *pNtQuerySystemInformation_t)(
-    SYSTEM_INFORMATION_CLASS SystemInformationClass,
-    PVOID SystemInformation,
-    ULONG SystemInformationLength,
-    PULONG ReturnLength);
+typedef NTSTATUS(NTAPI *pNtQuerySystemInformation_t)(SYSTEM_INFORMATION_CLASS SystemInformationClass, PVOID SystemInformation, ULONG SystemInformationLength, PULONG ReturnLength);
 
 #ifndef STATUS_INFO_LENGTH_MISMATCH
 #define STATUS_INFO_LENGTH_MISMATCH ((NTSTATUS)0xC0000004L)
@@ -24,52 +21,53 @@ typedef NTSTATUS(NTAPI *pNtQuerySystemInformation_t)(
 // After your includes
 typedef struct _MY_SYSTEM_PROCESS_INFORMATION
 {
-    ULONG NextEntryOffset;
-    ULONG NumberOfThreads;
+	ULONG NextEntryOffset;
+	ULONG NumberOfThreads;
 
-    ULONGLONG Reserved1[3];
+	ULONGLONG Reserved1[3];
 
-    LARGE_INTEGER CreateTime;
-    LARGE_INTEGER UserTime;
-    LARGE_INTEGER KernelTime;
+	LARGE_INTEGER CreateTime;
+	LARGE_INTEGER UserTime;
+	LARGE_INTEGER KernelTime;
 
-    UNICODE_STRING ImageName;
+	UNICODE_STRING ImageName;
 
-    KPRIORITY BasePriority;
+	KPRIORITY BasePriority;
 
-    HANDLE UniqueProcessId;
-    HANDLE InheritedFromUniqueProcessId;
+	HANDLE UniqueProcessId;
+	HANDLE InheritedFromUniqueProcessId;
 
-    ULONG HandleCount;
-    ULONG SessionId;
-    ULONG_PTR PageDirectoryBase;
+	ULONG HandleCount;
+	ULONG SessionId;
+	ULONG_PTR PageDirectoryBase;
 
-    SIZE_T PeakVirtualSize;
-    SIZE_T VirtualSize;
+	SIZE_T PeakVirtualSize;
+	SIZE_T VirtualSize;
 
-    ULONG PageFaultCount;
+	ULONG PageFaultCount;
 
-    SIZE_T PeakWorkingSetSize;
-    SIZE_T WorkingSetSize;
+	SIZE_T PeakWorkingSetSize;
+	SIZE_T WorkingSetSize;
 
-    SIZE_T QuotaPeakPagedPoolUsage;
-    SIZE_T QuotaPagedPoolUsage;
+	SIZE_T QuotaPeakPagedPoolUsage;
+	SIZE_T QuotaPagedPoolUsage;
 
-    SIZE_T QuotaPeakNonPagedPoolUsage;
-    SIZE_T QuotaNonPagedPoolUsage;
+	SIZE_T QuotaPeakNonPagedPoolUsage;
+	SIZE_T QuotaNonPagedPoolUsage;
 
-    SIZE_T PagefileUsage;
-    SIZE_T PeakPagefileUsage;
+	SIZE_T PagefileUsage;
+	SIZE_T PeakPagefileUsage;
 
-    SIZE_T PrivatePageCount;
+	SIZE_T PrivatePageCount;
 
 } MY_SYSTEM_PROCESS_INFORMATION, *PMY_SYSTEM_PROCESS_INFORMATION;
 
 struct ProcessInfo
 {
-    std::string name;
-    double cpu;
-    uint64_t ramUsage; // Memory usage in bytes
+	std::string name;
+	double cpu;
+	uint64_t ramUsage;	   // bytes
+	uint64_t gpuVramUsage; // bytes
 };
 
 /**
@@ -77,31 +75,29 @@ struct ProcessInfo
  */
 class ProcessWatcher
 {
-public:
-    RyzenMetrics m_ryzenMetrics;
+  public:
+	RyzenMetrics m_ryzenMetrics;
 
-public:
-    ProcessWatcher(RyzenCpu &cpuRef) : m_cpu(cpuRef)
-    {
-        Initialize();
-    }
+  public:
+	ProcessWatcher(RyzenCpu &cpuRef) : m_cpu(cpuRef) { Initialize(); }
 
-    void Initialize();
-    std::vector<ProcessInfo> Poll();
-    int BuildJson(char *buffer, int bufferSize) const;
+	void Initialize();
+	std::vector<ProcessInfo> Poll();
+	int BuildJson(char *buffer, int bufferSize) const;
 
-    inline std::vector<ProcessInfo> GetProcessList() const { return m_LastTop; }
+	inline std::vector<ProcessInfo> GetProcessList() const { return m_LastTop; }
 
 #ifdef _DEBUG
-    void Log() const;
+	void Log() const;
 #endif
 
-private:
-    using NtQuerySystemInformation_t = NTSTATUS(NTAPI *)(SYSTEM_INFORMATION_CLASS, PVOID, ULONG, PULONG);
-    NtQuerySystemInformation_t pNtQuerySystemInformation = nullptr;
-    std::vector<uint8_t> m_Buffer; // reuse buffer
-    uint64_t m_LastSystemTime = 0;
-    std::unordered_map<DWORD, uint64_t> m_ProcessTimes;
-    std::vector<ProcessInfo> m_LastTop;
-    RyzenCpu &m_cpu;
+  private:
+	using NtQuerySystemInformation_t = NTSTATUS(NTAPI *)(SYSTEM_INFORMATION_CLASS, PVOID, ULONG, PULONG);
+	NtQuerySystemInformation_t pNtQuerySystemInformation = nullptr;
+	std::vector<uint8_t> m_Buffer; // reuse buffer
+	uint64_t m_LastSystemTime = 0;
+	std::unordered_map<DWORD, uint64_t> m_ProcessTimes;
+	std::vector<ProcessInfo> m_LastTop;
+	RyzenCpu &m_cpu;
+	GpuSampler m_gpuSampler;
 };

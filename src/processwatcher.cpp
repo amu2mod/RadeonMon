@@ -3,304 +3,342 @@
 /// Helpers
 static std::string WideToUtf8(PCWSTR wstr, int length = -1)
 {
-    if (!wstr || length == 0)
-        return {};
+	if (!wstr || length == 0)
+		return {};
 
-    // Get required size
-    int size = WideCharToMultiByte(CP_UTF8, 0, wstr, length, nullptr, 0, nullptr, nullptr);
-    if (size <= 0)
-        return {};
+	// Get required size
+	int size = WideCharToMultiByte(CP_UTF8, 0, wstr, length, nullptr, 0, nullptr, nullptr);
+	if (size <= 0)
+		return {};
 
-    std::string result(size, '\0');
+	std::string result(size, '\0');
 
-    WideCharToMultiByte(CP_UTF8, 0, wstr, length, result.data(), size, nullptr, nullptr);
+	WideCharToMultiByte(CP_UTF8, 0, wstr, length, result.data(), size, nullptr, nullptr);
 
-    // Remove trailing null if length was -1
-    if (length == -1 && !result.empty() && result.back() == '\0')
-        result.pop_back();
+	// Remove trailing null if length was -1
+	if (length == -1 && !result.empty() && result.back() == '\0')
+		result.pop_back();
 
-    return result;
+	return result;
 }
 
 static uint64_t FileTimeToUInt64(const FILETIME &ft)
 {
-    ULARGE_INTEGER li;
-    li.LowPart = ft.dwLowDateTime;
-    li.HighPart = ft.dwHighDateTime;
-    return li.QuadPart;
+	ULARGE_INTEGER li;
+	li.LowPart = ft.dwLowDateTime;
+	li.HighPart = ft.dwHighDateTime;
+	return li.QuadPart;
 }
 
 /// Class Methods
 void ProcessWatcher::Initialize()
 {
-    m_Buffer.resize(1024 * 1024); // 1 MB
-    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
-    pNtQuerySystemInformation = (NtQuerySystemInformation_t)GetProcAddress(ntdll, "NtQuerySystemInformation");
+	m_Buffer.resize(1024 * 1024); // 1 MB
+	HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+	pNtQuerySystemInformation = (NtQuerySystemInformation_t)GetProcAddress(ntdll, "NtQuerySystemInformation");
 }
 
 std::vector<ProcessInfo> ProcessWatcher::Poll()
 {
-    if (!pNtQuerySystemInformation)
-        return m_LastTop;
+	if (!pNtQuerySystemInformation)
+		return m_LastTop;
 
-    // START_CHRONO(gpusampler);
-    // auto map = m_gpuSampler.Sample();
-    // END_CHRONO(gpusampler, "gpusampler");
+	ULONG returnLength = 0;
 
-    ULONG returnLength = 0;
-    NTSTATUS status = pNtQuerySystemInformation(SystemProcessInformation, m_Buffer.data(), (ULONG)m_Buffer.size(), &returnLength);
+	NTSTATUS status = pNtQuerySystemInformation(SystemProcessInformation, m_Buffer.data(), (ULONG)m_Buffer.size(), &returnLength);
 
-    if (status == STATUS_INFO_LENGTH_MISMATCH)
-    {
-        m_Buffer.resize(returnLength + 65536); // Increased padding
-        status = pNtQuerySystemInformation(SystemProcessInformation, m_Buffer.data(), (ULONG)m_Buffer.size(), &returnLength);
-    }
+	if (status == STATUS_INFO_LENGTH_MISMATCH)
+	{
+		m_Buffer.resize(returnLength + 65536);
+		status = pNtQuerySystemInformation(SystemProcessInformation, m_Buffer.data(), (ULONG)m_Buffer.size(), &returnLength);
+	}
 
-    if (!NT_SUCCESS(status))
-        return m_LastTop;
+	if (!NT_SUCCESS(status))
+		return m_LastTop;
 
-    FILETIME idle, kernel, user;
-    GetSystemTimes(&idle, &kernel, &user);
+	// System CPU time
+	FILETIME idle, kernel, user;
+	GetSystemTimes(&idle, &kernel, &user);
+	uint64_t systemTime = FileTimeToUInt64(kernel) + FileTimeToUInt64(user);
+	uint64_t systemDelta = (m_LastSystemTime != 0 && systemTime >= m_LastSystemTime) ? systemTime - m_LastSystemTime : 0;
+	m_LastSystemTime = systemTime;
 
-    uint64_t systemTime = FileTimeToUInt64(kernel) + FileTimeToUInt64(user);
-    uint64_t systemDelta = (m_LastSystemTime != 0 && systemTime >= m_LastSystemTime) ? systemTime - m_LastSystemTime : 0;
+	// Temporary process entry
+	struct Entry
+	{
+		const WCHAR *namePtr;
+		USHORT nameLen;
+		DWORD pid;
+		double cpu;
+		uint64_t ramUsage;
+	};
 
-    m_LastSystemTime = systemTime;
+	std::vector<Entry> usage;
+	std::unordered_set<DWORD> activePids;
 
-    struct Entry
-    {
-        const WCHAR *namePtr;
-        USHORT nameLen;
-        DWORD pid;
-        double cpu;
-        uint64_t ramUsage;
-    };
+	auto *spi = reinterpret_cast<MY_SYSTEM_PROCESS_INFORMATION *>(m_Buffer.data());
 
-    std::vector<Entry> usage;
-    std::unordered_set<DWORD> activePids;
+	// Enumerate processes
+	while (true)
+	{
+		DWORD pid = static_cast<DWORD>(reinterpret_cast<ULONG_PTR>(spi->UniqueProcessId));
 
-    auto *spi = (MY_SYSTEM_PROCESS_INFORMATION *)m_Buffer.data();
+		if (pid == 0)
+		{
+			if (spi->NextEntryOffset == 0)
+				break;
 
-    while (true)
-    {
-        DWORD pid = (DWORD)(ULONG_PTR)spi->UniqueProcessId;
+			spi = reinterpret_cast<MY_SYSTEM_PROCESS_INFORMATION *>(reinterpret_cast<BYTE *>(spi) + spi->NextEntryOffset);
 
-        if (pid == 0)
-        {
-            if (spi->NextEntryOffset == 0)
-                break;
-            spi = (MY_SYSTEM_PROCESS_INFORMATION *)((BYTE *)spi + spi->NextEntryOffset);
-            continue;
-        }
+			continue;
+		}
 
-        activePids.insert(pid);
+		activePids.insert(pid);
 
-        uint64_t procTime = spi->UserTime.QuadPart + spi->KernelTime.QuadPart;
+		// Process CPU time
+		uint64_t procTime = static_cast<uint64_t>(spi->UserTime.QuadPart) + static_cast<uint64_t>(spi->KernelTime.QuadPart);
+		double cpu = 0.0;
+		auto it = m_ProcessTimes.find(pid);
 
-        double cpu = 0.0;
-        auto it = m_ProcessTimes.find(pid);
+		if (systemDelta > 0 && it != m_ProcessTimes.end() && procTime >= it->second)
+		{
+			uint64_t delta = procTime - it->second;
+			cpu = 100.0 * static_cast<double>(delta) / static_cast<double>(systemDelta);
+			if (!std::isfinite(cpu) || cpu < 0.0)
+				cpu = 0.0;
+		}
 
-        if (systemDelta > 0 && it != m_ProcessTimes.end() && procTime >= it->second)
-        {
-            uint64_t delta = procTime - it->second;
-            cpu = 100.0 * static_cast<double>(delta) / static_cast<double>(systemDelta);
-            if (!std::isfinite(cpu) || cpu < 0.0)
-                cpu = 0.0;
-        }
+		m_ProcessTimes[pid] = procTime;
 
-        m_ProcessTimes[pid] = procTime;
+		// RAM
+		usage.push_back({spi->ImageName.Buffer, spi->ImageName.Length, pid, cpu, static_cast<uint64_t>(spi->WorkingSetSize)});
 
-        usage.push_back({spi->ImageName.Buffer, spi->ImageName.Length, pid, cpu, static_cast<uint64_t>(spi->WorkingSetSize)});
+		if (spi->NextEntryOffset == 0)
+			break;
 
-        if (spi->NextEntryOffset == 0)
-            break;
+		spi = reinterpret_cast<MY_SYSTEM_PROCESS_INFORMATION *>(reinterpret_cast<BYTE *>(spi) + spi->NextEntryOffset);
+	}
 
-        spi = (MY_SYSTEM_PROCESS_INFORMATION *)((BYTE *)spi + spi->NextEntryOffset);
-    }
+	// Cleanup stale process history
+	static int cleanupCounter = 0;
 
-    // Cleanup stale process history (every 8 polls)
-    static int cleanupCounter = 0;
-    if (++cleanupCounter >= 8)
-    {
-        cleanupCounter = 0;
-        for (auto it = m_ProcessTimes.begin(); it != m_ProcessTimes.end();)
-        {
-            if (activePids.find(it->first) == activePids.end())
-                it = m_ProcessTimes.erase(it);
-            else
-                ++it;
-        }
-    }
+	if (++cleanupCounter >= 8)
+	{
+		cleanupCounter = 0;
 
-    // === Improved Filtering ===
-    constexpr double MIN_CPU = 0.001;
+		for (auto it = m_ProcessTimes.begin(); it != m_ProcessTimes.end();)
+		{
+			if (activePids.find(it->first) == activePids.end())
+				it = m_ProcessTimes.erase(it);
+			else
+				++it;
+		}
+	}
 
-    usage.erase(std::remove_if(usage.begin(), usage.end(), [&](const Entry &e)
-                               {
-            if (e.pid == 4) // Always show System process
-                return false;
-            return e.cpu < MIN_CPU; }),
-                usage.end());
+	// Filter processes
+	constexpr double MIN_CPU = 0.001;
+	usage.erase(std::remove_if(usage.begin(), usage.end(),
+							   [](const Entry &e)
+							   {
+								   // Always keep System
+								   if (e.pid == 4)
+									   return false;
 
-    // === Improved Normalization with better precision ===
-    double processTotal = 0.0;
-    for (const auto &entry : usage)
-        processTotal += entry.cpu;
+								   return e.cpu < MIN_CPU;
+							   }),
+				usage.end());
 
-    // double realCpu = m_cpu.GetAverageUsage();
-    m_ryzenMetrics = m_cpu.GetMetrics();
-    double &realCpu = m_ryzenMetrics.usage;
+	// CPU normalization
+	double processTotal = 0.0;
 
-    if (processTotal > 0.0 && realCpu >= 0.0)
-    {
-        double scale = realCpu / processTotal;
+	for (const auto &entry : usage)
+		processTotal += entry.cpu;
 
-        for (auto &entry : usage)
-        {
-            entry.cpu = entry.cpu * scale;
+	m_ryzenMetrics = m_cpu.GetMetrics();
 
-            // Preserve small differences to avoid identical values in frontend
-            if (entry.cpu > 0.0)
-            {
-                // Tiny PID-based bias (negligible visually, but breaks ties)
-                entry.cpu += (entry.pid % 100) * 0.00001;
-            }
-        }
-    }
+	double &realCpu = m_ryzenMetrics.usage;
 
-    // Sort by scaled CPU (with stable tie-breaker)
-    std::sort(usage.begin(), usage.end(), [](const Entry &a, const Entry &b)
-              {
-            if (std::abs(a.cpu - b.cpu) < 0.0001)
-                return a.pid < b.pid; // stable secondary sort by PID
-            return a.cpu > b.cpu; });
+	if (processTotal > 0.0 && realCpu >= 0.0)
+	{
+		double scale = realCpu / processTotal;
 
-    // Return top 5 (or adjust as needed)
-    std::vector<ProcessInfo> result;
-    size_t count = std::min<size_t>(5, usage.size());
-    result.reserve(count);
+		for (auto &entry : usage)
+		{
+			entry.cpu *= scale;
 
-    for (size_t i = 0; i < count; ++i)
-    {
-        std::string name;
+			if (entry.cpu > 0.0) // Preserve small visual differences
+				entry.cpu += (entry.pid % 100) * 0.00001;
+		}
+	}
 
-        if (usage[i].namePtr && usage[i].nameLen > 0)
-            name = WideToUtf8(usage[i].namePtr, usage[i].nameLen / sizeof(WCHAR));
-        else if (usage[i].pid == 4)
-            name = "System";
-        else
-            name = "<unknown>";
+	// Sort by CPU
+	std::sort(usage.begin(), usage.end(),
+			  [](const Entry &a, const Entry &b)
+			  {
+				  if (std::abs(a.cpu - b.cpu) < 0.0001)
+					  return a.pid < b.pid;
 
-        result.push_back({std::move(name), usage[i].cpu, usage[i].ramUsage});
-    }
+				  return a.cpu > b.cpu;
+			  });
 
-    m_LastTop = result;
-    return result;
+	// 5 top processes
+	constexpr size_t MAX_PROCESSES = 5;
+	const size_t count = std::min<size_t>(MAX_PROCESSES, usage.size());
+
+	// GPU VRAM
+	std::vector<DWORD> gpuPids;
+	gpuPids.reserve(count);
+
+	for (size_t i = 0; i < count; ++i)
+		gpuPids.push_back(usage[i].pid);
+
+	std::unordered_map<DWORD, uint64_t> gpuUsage;
+
+	// START_CHRONO(gpusampler);
+	if (!gpuPids.empty())
+		gpuUsage = m_gpuSampler.Sample(gpuPids);
+	// END_CHRONO(gpusampler, "Gpu Sampler");
+
+	// Build final result
+	std::vector<ProcessInfo> result;
+	result.reserve(count);
+
+	for (size_t i = 0; i < count; ++i)
+	{
+		const Entry &entry = usage[i];
+
+		std::string name;
+
+		if (entry.namePtr && entry.nameLen > 0)
+			name = WideToUtf8(entry.namePtr, entry.nameLen / sizeof(WCHAR));
+		else if (entry.pid == 4)
+			name = "System";
+		else
+			name = "<unknown>";
+
+		uint64_t gpuVramUsage = 0;
+
+		auto gpuIt = gpuUsage.find(entry.pid);
+
+		if (gpuIt != gpuUsage.end())
+			gpuVramUsage = gpuIt->second;
+
+		result.push_back({std::move(name), entry.cpu, entry.ramUsage, gpuVramUsage});
+	}
+
+	m_LastTop = result;
+
+	// Log();
+
+	return result;
 }
 
 #ifdef _DEBUG
 void ProcessWatcher::Log() const
 {
-    for (const auto &process : m_LastTop)
-    {
-        double ramMB = static_cast<double>(process.ramUsage) / (1024.0 * 1024.0);
-        LOG_DEBUG("%s, %.1fMB (%.1f%%)", process.name.c_str(), ramMB, process.cpu);
-    }
+	for (const auto &process : m_LastTop)
+	{
+		double ramMB = static_cast<double>(process.ramUsage) / (1024.0 * 1024.0);
+		double gpuVramMB = static_cast<double>(process.gpuVramUsage) / (1024.0 * 1024.0);
+
+		LOG_DEBUG("%s, RAM %.1fMB, VRAM %.1fMB (%.1f%%)", process.name.c_str(), ramMB, gpuVramMB, process.cpu);
+	}
 }
+
 #endif
 
 int ProcessWatcher::BuildJson(char *buffer, int bufferSize) const
 {
-    if (bufferSize < 64)
-        return -1;
+	if (bufferSize < 64)
+		return -1;
 
-    char *p = buffer;
-    char *end = buffer + bufferSize - 1;
+	char *p = buffer;
+	char *end = buffer + bufferSize - 1;
 
-    auto write = [&](const char *s)
-    {
-        while (*s && p < end)
-            *p++ = *s++;
-    };
+	auto write = [&](const char *s)
+	{
+		while (*s && p < end)
+			*p++ = *s++;
+	};
 
-    auto writeJsonString = [&](const char *s)
-    {
-        if (p >= end)
-            return;
+	auto writeJsonString = [&](const char *s)
+	{
+		if (p >= end)
+			return;
 
-        *p++ = '"';
+		*p++ = '"';
 
-        while (*s && p < end)
-        {
-            switch (*s)
-            {
-            case '"':
-            case '\\':
-                if (p + 2 >= end)
-                    break;
-                *p++ = '\\';
-                *p++ = *s;
-                break;
+		while (*s && p < end)
+		{
+			switch (*s)
+			{
+			case '"':
+			case '\\':
+				if (p + 2 >= end)
+					break;
+				*p++ = '\\';
+				*p++ = *s;
+				break;
 
-            case '\n':
-                if (p + 2 >= end)
-                    break;
-                *p++ = '\\';
-                *p++ = 'n';
-                break;
+			case '\n':
+				if (p + 2 >= end)
+					break;
+				*p++ = '\\';
+				*p++ = 'n';
+				break;
 
-            case '\r':
-                if (p + 2 >= end)
-                    break;
-                *p++ = '\\';
-                *p++ = 'r';
-                break;
+			case '\r':
+				if (p + 2 >= end)
+					break;
+				*p++ = '\\';
+				*p++ = 'r';
+				break;
 
-            case '\t':
-                if (p + 2 >= end)
-                    break;
-                *p++ = '\\';
-                *p++ = 't';
-                break;
+			case '\t':
+				if (p + 2 >= end)
+					break;
+				*p++ = '\\';
+				*p++ = 't';
+				break;
 
-            default:
-                *p++ = *s;
-                break;
-            }
+			default:
+				*p++ = *s;
+				break;
+			}
 
-            ++s;
-        }
+			++s;
+		}
 
-        if (p < end)
-            *p++ = '"';
-    };
+		if (p < end)
+			*p++ = '"';
+	};
 
-    auto writeDouble = [&](double value)
-    {
-        char tmp[32];
-        snprintf(tmp, sizeof(tmp), "%.1f", value);
-        write(tmp);
-    };
+	auto writeDouble = [&](double value)
+	{
+		char tmp[32];
+		snprintf(tmp, sizeof(tmp), "%.1f", value);
+		write(tmp);
+	};
 
-    write("[");
+	write("[");
 
-    for (size_t i = 0; i < m_LastTop.size(); ++i)
-    {
-        if (i)
-            write(",");
+	for (size_t i = 0; i < m_LastTop.size(); ++i)
+	{
+		if (i)
+			write(",");
 
-        write("{\"name\":");
-        writeJsonString(m_LastTop[i].name.c_str());
+		write("{\"name\":");
+		writeJsonString(m_LastTop[i].name.c_str());
 
-        write(",\"cpu\":");
-        writeDouble(m_LastTop[i].cpu);
+		write(",\"cpu\":");
+		writeDouble(m_LastTop[i].cpu);
 
-        write("}");
-    }
+		write("}");
+	}
 
-    write("]");
+	write("]");
 
-    *p = '\0';
+	*p = '\0';
 
-    return static_cast<int>(p - buffer);
+	return static_cast<int>(p - buffer);
 }

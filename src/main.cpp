@@ -1049,7 +1049,7 @@ void DrawTag(HDC hdc, int x, int y, LPCWSTR text, int topPadding, int sidePaddin
 
 	SetTextColor(hdc, color);
 
-	Rectangle(hdc, tagRc.left, tagRc.top, tagRc.right, tagRc.bottom);
+	// Rectangle(hdc, tagRc.left, tagRc.top, tagRc.right, tagRc.bottom);
 	TextOutW(hdc, x, y, text, textLen);
 
 	SelectObject(hdc, oldBrush);
@@ -1202,58 +1202,58 @@ void PaintFpsTags(HDC hdc)
 	SelectObject(hdc, oldFont);
 }
 
-void PaintDisplayTags(HDC hdc)
+void PaintDisplayTags(HDC hdc, bool force = false)
 {
-	if (!g_isVRREnabled || !g_vrrDetector.IsRunning())
+	static bool s_valid = false;
+	static bool s_hdr = false, s_vrr = false, s_lfc = false;
+
+	bool hdr = false, vrr = false, lfc = false;
+
+	if (g_isVRREnabled && g_vrrDetector.IsRunning())
+	{
+		hdr = g_displayManager.GetDisplays()[g_currentDisplayIndex].hdr;
+		vrr = g_vrrDetector.IsVRROn();
+
+		const int fps = g_AdlxGPUTelemetry.GetSnapshotFPS();
+		if (vrr && fps > 0)
+			lfc = (static_cast<double>(g_vrrDetector.CurrentHz()) / fps) >= 1.80;
+	}
+
+	if (!force && s_valid && hdr == s_hdr && vrr == s_vrr && lfc == s_lfc)
 		return;
+
+	s_valid = true;
+	s_hdr = hdr;
+	s_vrr = vrr;
+	s_lfc = lfc;
 
 	const RECT &labelRc = g_props[MetricsIndex::Display].textLabelRc;
 
-	int x = labelRc.right + g_layoutMetrics.charWidth + g_layoutMetrics.tagGap;
+	int x = labelRc.right + (g_layoutMetrics.charWidth / 6);
 	int y = labelRc.top + (labelRc.bottom - labelRc.top - g_layoutMetrics.tagCharHeight) / 2;
 
+	const int tagWidth = g_layoutMetrics.tagCharWidth * 3;
+	const int tagAdvance = tagWidth + g_layoutMetrics.tagGap;
+
+	RECT tagRc = {x, y, x + tagAdvance * 3 - g_layoutMetrics.tagGap, y + g_layoutMetrics.tagCharHeight};
+	FillRect(hdc, &tagRc, g_bgBrush);
+
+	if (!hdr && !vrr && !lfc)
+		return;
+
 	HFONT oldFont = (HFONT)SelectObject(hdc, g_tagFont);
-
 	const int topPadding = g_layoutMetrics.tagTopPadding;
-	const int sidePadding = g_layoutMetrics.tagSidePadding;
 
-	static bool vrrTagCleared = false;
+	if (hdr)
+		DrawTag(hdc, x, y, L"HDR", topPadding, 0, BRIGHT_RED);
+	x += tagAdvance;
 
-	if (g_vrrDetector.IsVRROn())
-	{
-		DrawTag(hdc, x, y, L"VRR", topPadding, sidePadding, BRIGHT_BLUE);
-		vrrTagCleared = false;
-	}
-	else if (!vrrTagCleared)
-	{
-		RECT vrrTagRc = {x - sidePadding, y - topPadding, x + g_layoutMetrics.tagCharWidth * 3 + 2 * sidePadding, y + g_layoutMetrics.tagCharHeight + topPadding};
-		FillRect(hdc, &vrrTagRc, g_bgBrush);
-		vrrTagCleared = true;
-	}
+	if (vrr)
+		DrawTag(hdc, x, y, L"VRR", topPadding, 0, BRIGHT_BLUE);
+	x += tagAdvance;
 
-	x += g_layoutMetrics.tagCharWidth * 3 + g_layoutMetrics.tagGap + 2 + 2 * sidePadding;
-
-	static bool lfcTagCleared = false;
-	bool lfcActive = false;
-
-	const int fps = g_AdlxGPUTelemetry.GetSnapshotFPS();
-	if (fps > 0)
-	{
-		const double ratio = static_cast<double>(g_vrrDetector.CurrentHz()) / static_cast<double>(fps);
-		lfcActive = ratio >= 1.80; // large jitter tolerance without average smoothing
-	}
-
-	if (lfcActive && g_vrrDetector.IsVRROn())
-	{
-		DrawTag(hdc, x, y, L"LFC", topPadding, sidePadding, BRIGHT_ORANGE);
-		lfcTagCleared = false;
-	}
-	else if (!lfcTagCleared)
-	{
-		RECT lfcTagRc = {x - sidePadding, y - topPadding, x + g_layoutMetrics.tagCharWidth * 3 + 2 * sidePadding, y + g_layoutMetrics.tagCharHeight + topPadding};
-		FillRect(hdc, &lfcTagRc, g_bgBrush);
-		lfcTagCleared = true;
-	}
+	if (lfc)
+		DrawTag(hdc, x, y, L"LFC", topPadding, 0, BRIGHT_ORANGE);
 
 	SelectObject(hdc, oldFont);
 }
@@ -1304,8 +1304,6 @@ std::wstring SelectFolder(HWND hOwner)
 
 	return folder;
 }
-
-// ── window procedure ─────────────────────────────────────────────────────────
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -2465,8 +2463,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			auto current = g_displayManager.Next();
 			if (current.has_value())
 			{
-				SetDisplayLine(current.value(), hwnd);
 				g_currentDisplayIndex = current.value().index;
+				SetDisplayLine(current.value(), hwnd);
 			}
 		}
 		// else if (PtInRect(&g_props[MetricsIndex::Display].valueRc, pt)) // display value

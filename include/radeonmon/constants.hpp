@@ -36,7 +36,7 @@ constexpr int TITLE_PADDING = 4;
 constexpr int SEPARATOR_HEIGHT = 1;
 constexpr int SPACER = 10;
 constexpr int CARD_PADDING = 2;
-constexpr int TAG_GAP = 6;
+constexpr int TAG_GAP = 5;
 constexpr int TAG_PADDING = 3;
 
 // Fonts
@@ -51,7 +51,7 @@ constexpr int TITLE_FONTSIZE = 15;
 constexpr int FONTSIZE = 16;
 constexpr int NOTIFICATION_FONTSIZE = 11;
 constexpr int CARD_FONTSIZE = 13;
-constexpr int TAG_FONTSIZE = 10;
+constexpr int TAG_FONTSIZE = 11;
 
 constexpr UINT FONTSIZE_MIN = 10;
 constexpr UINT FONTSIZE_MAX = 26;
