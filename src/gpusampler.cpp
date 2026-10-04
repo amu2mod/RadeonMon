@@ -6,12 +6,17 @@
 
 #include <wrl/client.h>
 
+#include <pdh.h>
+#include <pdhmsg.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <unordered_set>
 #include <vector>
+#include <string>
 
 #pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "pdh.lib")
 
 using Microsoft::WRL::ComPtr;
 
@@ -108,52 +113,101 @@ struct GpuSampler::Impl
 		adapters = EnumerateAdapters();
 	}
 
+	// Helper: extract PID from a GPU Process Memory instance name.
+	// Typical form: "pid_12345_luid_0x00000000_0x00001234_phys_0"
+	static DWORD PidFromInstance(const std::wstring &instance)
+	{
+		const std::wstring prefix = L"pid_";
+		size_t pos = instance.find(prefix);
+		if (pos == std::wstring::npos)
+			return 0;
+		pos += prefix.size();
+		size_t end = instance.find(L'_', pos);
+		if (end == std::wstring::npos)
+			end = instance.size();
+		try
+		{
+			return static_cast<DWORD>(std::stoul(instance.substr(pos, end - pos)));
+		}
+		catch (...)
+		{
+			return 0;
+		}
+	}
+
+	// -------------------------------------------------
+	// Helper – detect Desktop Window Manager
+	// -------------------------------------------------
+	static bool IsDwmProcess(DWORD pid)
+	{
+		HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+		if (!h)
+			return false;
+
+		wchar_t path[MAX_PATH]{};
+		DWORD size = MAX_PATH;
+		bool isDwm = false;
+
+		if (QueryFullProcessImageNameW(h, 0, path, &size))
+		{
+			const wchar_t *name = wcsrchr(path, L'\\');
+			name = name ? name + 1 : path;
+			isDwm = (_wcsicmp(name, L"dwm.exe") == 0);
+		}
+
+		CloseHandle(h);
+		return isDwm;
+	}
+
 	ProcessGpuUsage Sample(const std::vector<DWORD> &pids)
 	{
 		ProcessGpuUsage result;
-
-		if (!queryStatistics || adapters.empty())
+		if (!queryStatistics || adapters.empty() || pids.empty())
 			return result;
 
-		if (pids.empty())
-			return result;
-
-		// Remove duplicate PIDs.
+		// -------------------------------------------------
+		// 1. Deduplicate & prepare
+		// -------------------------------------------------
 		std::unordered_set<DWORD> uniquePids;
-
 		uniquePids.reserve(pids.size());
-
 		for (DWORD pid : pids)
-		{
 			if (pid != 0)
 				uniquePids.insert(pid);
-		}
 
+		std::vector<DWORD> failedPids; // PIDs that D3DKMT could not open / query
+		failedPids.reserve(uniquePids.size());
+
+		// -------------------------------------------------
+		// 2. Primary path – D3DKMT (accurate numbers)
+		// -------------------------------------------------
 		for (DWORD pid : uniquePids)
 		{
-			HANDLE process = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
+			// Prefer limited rights first (works for more protected processes)
+			HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+			if (!process)
+				process = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
 
 			if (!process)
+			{
+				failedPids.push_back(pid);
 				continue;
+			}
 
 			uint64_t totalDedicated = 0;
 
-			// Query every physical DXGI adapter.
 			for (const AdapterInfo &adapter : adapters)
 			{
-				// First determine how many memory segments this process has on this adapter
 				D3DKMT_QUERYSTATISTICS processAdapterQuery{};
 				processAdapterQuery.Type = D3DKMT_QUERYSTATISTICS_PROCESS_ADAPTER;
 				processAdapterQuery.AdapterLuid = adapter.luid;
 				processAdapterQuery.hProcess = process;
-				NTSTATUS status = queryStatistics(&processAdapterQuery);
 
+				NTSTATUS status = queryStatistics(&processAdapterQuery);
 				if (status < 0)
 					continue;
 
 				const ULONG segmentCount = processAdapterQuery.QueryResult.ProcessAdapterInformation.NbSegments;
 
-				// Query each process segment
 				for (ULONG segment = 0; segment < segmentCount; ++segment)
 				{
 					D3DKMT_QUERYSTATISTICS segmentQuery{};
@@ -161,27 +215,25 @@ struct GpuSampler::Impl
 					segmentQuery.AdapterLuid = adapter.luid;
 					segmentQuery.hProcess = process;
 					segmentQuery.QueryProcessSegment.SegmentId = segment;
-					status = queryStatistics(&segmentQuery);
 
+					status = queryStatistics(&segmentQuery);
 					if (status < 0)
 						continue;
 
 					const auto &segmentInfo = segmentQuery.QueryResult.ProcessSegmentInformation;
 
-					// We need to know whether this segment is an aperture/shared segment or actual dedicated video memory
-					// Query the adapter's corresponding segment
+					// Check whether this segment is dedicated (Aperture == 0)
 					D3DKMT_QUERYSTATISTICS adapterSegmentQuery{};
 					adapterSegmentQuery.Type = D3DKMT_QUERYSTATISTICS_SEGMENT;
 					adapterSegmentQuery.AdapterLuid = adapter.luid;
 					adapterSegmentQuery.QuerySegment.SegmentId = segment;
-					status = queryStatistics(&adapterSegmentQuery);
 
+					status = queryStatistics(&adapterSegmentQuery);
 					if (status < 0)
 						continue;
 
 					const auto &adapterSegmentInfo = adapterSegmentQuery.QueryResult.SegmentInformation;
 
-					// Aperture == 0 means this is a dedicated video-memory segment
 					if (adapterSegmentInfo.Aperture == 0)
 						totalDedicated += segmentInfo.BytesCommitted;
 				}
@@ -191,6 +243,60 @@ struct GpuSampler::Impl
 
 			if (totalDedicated > 0)
 				result.emplace(pid, totalDedicated);
+			else
+				// Handle opened but zero dedicated → only fall back if NOT DWM
+				if (!IsDwmProcess(pid))
+					failedPids.push_back(pid); // got a handle but zero / failed queries → try PDH
+		}
+
+		// -------------------------------------------------
+		// 3. Fallback – PDH only for the PIDs that failed
+		// -------------------------------------------------
+		if (!failedPids.empty())
+		{
+			std::unordered_set<DWORD> wanted(failedPids.begin(), failedPids.end());
+
+			PDH_HQUERY query = nullptr;
+			if (PdhOpenQueryW(nullptr, 0, &query) == ERROR_SUCCESS)
+			{
+				PDH_HCOUNTER counter = nullptr;
+				const wchar_t *path = L"\\GPU Process Memory(*)\\Dedicated Usage";
+
+				if (PdhAddEnglishCounterW(query, path, 0, &counter) == ERROR_SUCCESS)
+				{
+					// Two collects are required for the first sample after adding a counter
+					PdhCollectQueryData(query);
+					Sleep(30); // small delay helps on some systems
+					PdhCollectQueryData(query);
+
+					DWORD bufSize = 0;
+					DWORD itemCount = 0;
+					PDH_STATUS st = PdhGetFormattedCounterArrayW(counter, PDH_FMT_LARGE, &bufSize, &itemCount, nullptr);
+
+					if (st == PDH_MORE_DATA && bufSize > 0)
+					{
+						std::vector<BYTE> buffer(bufSize);
+						auto items = reinterpret_cast<PDH_FMT_COUNTERVALUE_ITEM_W *>(buffer.data());
+
+						st = PdhGetFormattedCounterArrayW(counter, PDH_FMT_LARGE, &bufSize, &itemCount, items);
+
+						if (st == ERROR_SUCCESS)
+						{
+							for (DWORD i = 0; i < itemCount; ++i)
+							{
+								DWORD pid = PidFromInstance(items[i].szName);
+								if (pid == 0 || wanted.find(pid) == wanted.end())
+									continue;
+
+								uint64_t bytes = static_cast<uint64_t>(items[i].FmtValue.largeValue);
+								if (bytes > 0)
+									result[pid] += bytes; // sum across phys adapters
+							}
+						}
+					}
+				}
+				PdhCloseQuery(query);
+			}
 		}
 
 		return result;
