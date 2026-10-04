@@ -67,25 +67,34 @@ void SelectGamePad(GamePad::Type type, HWND hwnd)
 
 	case GamePad::Type::DualSense:
 		g_gamepad = &g_dualsense;
-		g_gamepad->SetOnConnected([]() { LOG_INFO("[APP] DualSense connected"); });
-		g_gamepad->SetOnDisconnected([]() { LOG_INFO("[APP] DualSense disconnected"); });
-		g_gamepad->SetOnButtonPressed([hwnd]() { PostMessageW(hwnd, WM_APP_SCREENSHOT_REQUEST, 0, 0); });
+		g_gamepad->SetOnConnected([]()
+								  { LOG_INFO("[APP] DualSense connected"); });
+		g_gamepad->SetOnDisconnected([]()
+									 { LOG_INFO("[APP] DualSense disconnected"); });
+		g_gamepad->SetOnButtonPressed([hwnd]()
+									  { PostMessageW(hwnd, WM_APP_SCREENSHOT_REQUEST, 0, 0); });
 		g_gamepad->Start();
 		break;
 
 	case GamePad::Type::XboxWirelessController:
 		g_gamepad = &g_xboxWC;
-		g_gamepad->SetOnConnected([]() { LOG_INFO("[APP] Xbox Wireless Controller connected"); });
-		g_gamepad->SetOnDisconnected([]() { LOG_INFO("[APP] Xbox Wireless Controller disconnected"); });
-		g_gamepad->SetOnButtonPressed([hwnd]() { PostMessageW(hwnd, WM_APP_SCREENSHOT_REQUEST, 0, 0); });
+		g_gamepad->SetOnConnected([]()
+								  { LOG_INFO("[APP] Xbox Wireless Controller connected"); });
+		g_gamepad->SetOnDisconnected([]()
+									 { LOG_INFO("[APP] Xbox Wireless Controller disconnected"); });
+		g_gamepad->SetOnButtonPressed([hwnd]()
+									  { PostMessageW(hwnd, WM_APP_SCREENSHOT_REQUEST, 0, 0); });
 		g_gamepad->Start();
 		break;
 
 	case GamePad::Type::NintendoSwitchProController:
 		g_gamepad = &g_switchPC;
-		g_gamepad->SetOnConnected([]() { LOG_INFO("[APP] Switch Pro Controller connected"); });
-		g_gamepad->SetOnDisconnected([]() { LOG_INFO("[APP] Switch Pro Controller disconnected"); });
-		g_gamepad->SetOnButtonPressed([hwnd]() { PostMessageW(hwnd, WM_APP_SCREENSHOT_REQUEST, 0, 0); });
+		g_gamepad->SetOnConnected([]()
+								  { LOG_INFO("[APP] Switch Pro Controller connected"); });
+		g_gamepad->SetOnDisconnected([]()
+									 { LOG_INFO("[APP] Switch Pro Controller disconnected"); });
+		g_gamepad->SetOnButtonPressed([hwnd]()
+									  { PostMessageW(hwnd, WM_APP_SCREENSHOT_REQUEST, 0, 0); });
 		g_gamepad->Start();
 		break;
 
@@ -338,7 +347,8 @@ void SetDisplayLine(const DisplayInfo &display, HWND hwnd = nullptr)
 	PropertyItem &prop = g_props[MetricsIndex::Display];
 	const std::wstring label = L"Mon " + std::to_wstring(display.index + 1) + (display.isLockOn ? std::wstring(L" 🔒 ") : std::wstring(L"   "));
 	int widthToDisplay = display.isPortrait ? display.width : display.height;
-	std::wstring resolution = widthToDisplay == 4320 ? L"8K @" : widthToDisplay == 2160 ? L"4K @" : std::to_wstring(widthToDisplay) + L"p @";
+	std::wstring resolution = widthToDisplay == 4320 ? L"8K @" : widthToDisplay == 2160 ? L"4K @"
+																						: std::to_wstring(widthToDisplay) + L"p @";
 	std::wstring value = resolution + std::to_wstring(display.frequency) + L"Hz";
 
 	if (value.length() < MAXTXTVALUE_LENGTH)
@@ -437,7 +447,8 @@ LayoutMetrics CalculateLayoutMetrics(HDC hdc)
 
 	const float fontScale = static_cast<float>(fontHeight) / static_cast<float>(FONTSIZE);
 
-	auto ScaleFontMetric = [&](int value) -> int { return max(1, static_cast<int>(roundf(value * fontScale))); };
+	auto ScaleFontMetric = [&](int value) -> int
+	{ return max(1, static_cast<int>(roundf(value * fontScale))); };
 
 	LOG_DEBUG("[UI] fontHeight=%ld scale=%.2f", fontHeight, fontScale);
 
@@ -1207,11 +1218,11 @@ void PaintDisplayTags(HDC hdc, bool force = false)
 	static bool s_valid = false;
 	static bool s_hdr = false, s_vrr = false, s_lfc = false;
 
-	bool hdr = false, vrr = false, lfc = false;
+	bool hdr = g_displayManager.GetDisplays()[g_currentDisplayIndex].hdr;
+	bool vrr = false, lfc = false;
 
 	if (g_isVRREnabled && g_vrrDetector.IsRunning())
 	{
-		hdr = g_displayManager.GetDisplays()[g_currentDisplayIndex].hdr;
 		vrr = g_vrrDetector.IsVRROn();
 
 		const int fps = g_AdlxGPUTelemetry.GetSnapshotFPS();
@@ -1500,7 +1511,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				dirty = true;
 				wchar_t tempBuffer[16];
 				FormatTemperature(tempBuffer, static_cast<int>(snapshot.temperature.value));
-				TextLevel level = snapshot.temperature.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.temperature.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning : TextLevel::Neutral;
+				TextLevel level = snapshot.temperature.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.temperature.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning
+																																											 : TextLevel::Neutral;
 				SetPropertyValueAtIndex(MetricsIndex::Temp, static_cast<int>(snapshot.temperature.value), tempBuffer, 16, level);
 			}
 
@@ -1510,7 +1522,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				dirty = true;
 				wchar_t hotspotBuffer[16];
 				FormatHotspot(hotspotBuffer, static_cast<int>(snapshot.temperature.value), static_cast<int>(snapshot.hotspot.value));
-				TextLevel level = snapshot.hotspot.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.hotspot.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning : TextLevel::Neutral;
+				TextLevel level = snapshot.hotspot.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.hotspot.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning
+																																									 : TextLevel::Neutral;
 				SetPropertyValueAtIndex(MetricsIndex::Hotspot, static_cast<int>(snapshot.hotspot.value), hotspotBuffer, 16, level);
 			}
 
@@ -1520,7 +1533,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				dirty = true;
 				wchar_t vramBuffer[16];
 				FormatTemperature(vramBuffer, static_cast<int>(snapshot.memoryTemperature.value));
-				TextLevel level = snapshot.memoryTemperature.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.memoryTemperature.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning : TextLevel::Neutral;
+				TextLevel level = snapshot.memoryTemperature.value >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : snapshot.memoryTemperature.value >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning
+																																														 : TextLevel::Neutral;
 				SetPropertyValueAtIndex(MetricsIndex::Vram, static_cast<int>(snapshot.memoryTemperature.value), vramBuffer, 16, level);
 			}
 
@@ -1575,7 +1589,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					dirty = true;
 					wchar_t cpuBuffer[20];
 					FormatCpuMetrics(cpuBuffer, cpuIntegerTemp, cpuIntegerPower);
-					TextLevel level = cpuIntegerTemp >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : cpuIntegerTemp >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning : TextLevel::Neutral;
+					TextLevel level = cpuIntegerTemp >= TEMPERATURE_ALERT_THRESHOLD ? TextLevel::Alert : cpuIntegerTemp >= TEMPERATURE_WARNING_THRESHOLD ? TextLevel::Warning
+																																						 : TextLevel::Neutral;
 					SetPropertyValueAtIndex(MetricsIndex::Cpu, cpuIntegerTemp, cpuBuffer, 16, level);
 					SetPropertyValue2OnlyAtIndex(MetricsIndex::Cpu, cpuIntegerPower);
 				}
@@ -1597,7 +1612,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				wchar_t fpsBuffer[16];
 				int delta = current - old;
 				FormatFPS(fpsBuffer, current, old);
-				TextLevel level = delta <= -20 ? TextLevel::Alert : delta <= -10 ? TextLevel::Warning : TextLevel::Neutral;
+				TextLevel level = delta <= -20 ? TextLevel::Alert : delta <= -10 ? TextLevel::Warning
+																				 : TextLevel::Neutral;
 				SetPropertyValueAtIndex(MetricsIndex::Fps, snapshot.fps, fpsBuffer, 16, level);
 			}
 
@@ -1736,7 +1752,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 				wchar_t text[32] = {};
 				swprintf_s(text, L"%d Hz", frequency);
 				const UINT commandId = IDM_DISPLAY_FREQUENCY_BASE + static_cast<UINT>(displayIndex) * IDM_DISPLAY_FREQUENCY_STRIDE + static_cast<UINT>(frequencyIndex);
-				AppendMenuW(hDisplaySubMenu, MF_STRING | ((frequency == display.frequency) ? (MF_CHECKED | MF_DISABLED) : display.isLockOn ? MF_DISABLED : MF_UNCHECKED), commandId, text);
+				AppendMenuW(hDisplaySubMenu, MF_STRING | ((frequency == display.frequency) ? (MF_CHECKED | MF_DISABLED) : display.isLockOn ? MF_DISABLED
+																																		   : MF_UNCHECKED),
+							commandId, text);
 			}
 
 			// Display name
@@ -1814,7 +1832,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			AppendMenuW(hGamepadMenu, flags, id, label);
 		};
 
-		auto AddGamepadButtonOption = [&](UINT id, const wchar_t *label, GamePad::Type type, auto button, auto &gamepad) { AddGamepadOption(id, label, g_gamepadType == type && gamepad.GetButton() == button); };
+		auto AddGamepadButtonOption = [&](UINT id, const wchar_t *label, GamePad::Type type, auto button, auto &gamepad)
+		{ AddGamepadOption(id, label, g_gamepadType == type && gamepad.GetButton() == button); };
 
 		AddGamepadOption(IDM_ENABLEGAMEPAD_BASE, L"Off", g_gamepadType == GamePad::Type::None);
 		AppendMenu(hGamepadMenu, MF_SEPARATOR, 0, nullptr);
@@ -2960,7 +2979,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
 	g_AdlxGPUTelemetry.Discover();
 	g_AdlxGPUTelemetry.Probe();
 
-	g_displayManager.setRestoreLockedFrequencyCallback([hwnd](int index, uint16_t freq) { RestoreLockedFrequency(hwnd, index, freq); });
+	g_displayManager.setRestoreLockedFrequencyCallback([hwnd](int index, uint16_t freq)
+													   { RestoreLockedFrequency(hwnd, index, freq); });
 	g_displayManager.Discover();
 	if (!g_displayManager.GetDisplays().empty())
 	{
