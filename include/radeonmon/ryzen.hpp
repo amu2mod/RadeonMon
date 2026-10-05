@@ -20,55 +20,57 @@
 
 class RyzenCpu
 {
-public:
-    RyzenCpu() = default;
-    ~RyzenCpu()
-    {
-        Stop();
-        Shutdown();
-    }
-    RyzenCpu(const RyzenCpu &) = delete;
-    RyzenCpu &operator=(const RyzenCpu &) = delete;
+  public:
+	RyzenCpu() = default;
+	~RyzenCpu()
+	{
+		// SDK-dependent cleanup must happen explicitly before CRT/static destruction.
+		// Calling it from ~RyzenCpu() can access already-shutting-down SDK state.
 
-    bool Init();
-    bool Update(); // Refreshes the cached metrics.
+		// Stop();
+		// Shutdown();
+	}
+	RyzenCpu(const RyzenCpu &) = delete;
+	RyzenCpu &operator=(const RyzenCpu &) = delete;
 
-    // Threading
-    bool Start(std::chrono::milliseconds interval = std::chrono::milliseconds(APP_REFRESH_TIMER));
-    void Stop();
+	bool Init();
+	bool Update(); // Refreshes the cached metrics.
 
-    inline double GetTemperature() const
-    {
-        std::lock_guard<std::mutex> lock(m_metricsMutex);
-        return m_metrics.dTemperature;
-    }
-    inline double GetPower() const
-    {
-        std::lock_guard<std::mutex> lock(m_metricsMutex);
-        return m_metrics.dPower;
-    }
-    inline RyzenMetrics GetMetrics() const
-    {
-        std::lock_guard<std::mutex> lock(m_metricsMutex);
-        return m_metrics;
-    }
-    inline double GetAverageUsage() const
-    {
-        std::lock_guard<std::mutex> lock(m_metricsMutex);
-        return m_metrics.usage;
-    }
+	// Threading
+	bool Start(std::chrono::milliseconds interval = std::chrono::milliseconds(APP_REFRESH_TIMER));
+	void Stop();
+	void Shutdown();
 
-    inline bool IsInitialized() const { return m_isInitialized; }
+	inline double GetTemperature() const
+	{
+		std::lock_guard<std::mutex> lock(m_metricsMutex);
+		return m_metrics.dTemperature;
+	}
+	inline double GetPower() const
+	{
+		std::lock_guard<std::mutex> lock(m_metricsMutex);
+		return m_metrics.dPower;
+	}
+	inline RyzenMetrics GetMetrics() const
+	{
+		std::lock_guard<std::mutex> lock(m_metricsMutex);
+		return m_metrics;
+	}
+	inline double GetAverageUsage() const
+	{
+		std::lock_guard<std::mutex> lock(m_metricsMutex);
+		return m_metrics.usage;
+	}
 
-private:
-    void Shutdown();
+	inline bool IsInitialized() const { return m_isInitialized; }
 
-    mutable std::mutex m_metricsMutex;
-    CPUParameters m_data;
-    RyzenMetrics m_metrics{};
-    ICPUEx *m_pCpu = nullptr;
-    IPlatform *m_pPlatform = nullptr;
-    std::atomic<bool> m_isInitialized{false};
-    std::thread m_worker;
-    std::atomic<bool> m_running{false};
+  private:
+	mutable std::mutex m_metricsMutex;
+	CPUParameters m_data;
+	RyzenMetrics m_metrics{};
+	ICPUEx *m_pCpu = nullptr;
+	IPlatform *m_pPlatform = nullptr;
+	std::atomic<bool> m_isInitialized{false};
+	std::thread m_worker;
+	std::atomic<bool> m_running{false};
 };
