@@ -50,6 +50,7 @@ std::vector<ProcessInfo> ProcessWatcher::Poll()
 	if (status == STATUS_INFO_LENGTH_MISMATCH)
 	{
 		m_Buffer.resize(returnLength + 65536);
+
 		status = pNtQuerySystemInformation(SystemProcessInformation, m_Buffer.data(), (ULONG)m_Buffer.size(), &returnLength);
 	}
 
@@ -59,16 +60,18 @@ std::vector<ProcessInfo> ProcessWatcher::Poll()
 	// System CPU time
 	FILETIME idle, kernel, user;
 	GetSystemTimes(&idle, &kernel, &user);
+
 	uint64_t systemTime = FileTimeToUInt64(kernel) + FileTimeToUInt64(user);
+
 	uint64_t systemDelta = (m_LastSystemTime != 0 && systemTime >= m_LastSystemTime) ? systemTime - m_LastSystemTime : 0;
+
 	m_LastSystemTime = systemTime;
 
 	// Temporary process entry
 	struct Entry
 	{
-		const WCHAR *namePtr;
-		USHORT nameLen;
 		DWORD pid;
+		std::string name;
 		double cpu;
 		uint64_t ramUsage;
 	};
@@ -97,21 +100,34 @@ std::vector<ProcessInfo> ProcessWatcher::Poll()
 
 		// Process CPU time
 		uint64_t procTime = static_cast<uint64_t>(spi->UserTime.QuadPart) + static_cast<uint64_t>(spi->KernelTime.QuadPart);
+
 		double cpu = 0.0;
+
 		auto it = m_ProcessTimes.find(pid);
 
 		if (systemDelta > 0 && it != m_ProcessTimes.end() && procTime >= it->second)
 		{
 			uint64_t delta = procTime - it->second;
+
 			cpu = 100.0 * static_cast<double>(delta) / static_cast<double>(systemDelta);
+
 			if (!std::isfinite(cpu) || cpu < 0.0)
 				cpu = 0.0;
 		}
 
 		m_ProcessTimes[pid] = procTime;
 
-		// RAM
-		usage.push_back({spi->ImageName.Buffer, spi->ImageName.Length, pid, cpu, static_cast<uint64_t>(spi->WorkingSetSize)});
+		// Resolve process name now.
+		std::string name;
+
+		if (spi->ImageName.Buffer && spi->ImageName.Length > 0)
+			name = WideToUtf8(spi->ImageName.Buffer, spi->ImageName.Length / sizeof(WCHAR));
+		else if (pid == 4)
+			name = "System";
+		else
+			name = "<unknown>";
+
+		usage.push_back({pid, std::move(name), cpu, static_cast<uint64_t>(spi->WorkingSetSize)});
 
 		if (spi->NextEntryOffset == 0)
 			break;
@@ -137,6 +153,7 @@ std::vector<ProcessInfo> ProcessWatcher::Poll()
 
 	// Filter processes
 	constexpr double MIN_CPU = 0.001;
+
 	usage.erase(std::remove_if(usage.begin(), usage.end(),
 							   [](const Entry &e)
 							   {
@@ -166,8 +183,8 @@ std::vector<ProcessInfo> ProcessWatcher::Poll()
 		{
 			entry.cpu *= scale;
 
-			if (entry.cpu > 0.0) // Preserve small visual differences
-				entry.cpu += (entry.pid % 100) * 0.00001;
+			if (entry.cpu > 0.0)
+				entry.cpu += (entry.pid % 100) * 0.00001; // Preserve small visual differences
 		}
 	}
 
@@ -186,17 +203,19 @@ std::vector<ProcessInfo> ProcessWatcher::Poll()
 	const size_t count = std::min<size_t>(MAX_PROCESSES, usage.size());
 
 	// GPU VRAM
-	std::vector<DWORD> gpuPids;
-	gpuPids.reserve(count);
+	std::vector<GpuSampler::GpuProcess> gpuProcesses;
+	gpuProcesses.reserve(count);
 
 	for (size_t i = 0; i < count; ++i)
-		gpuPids.push_back(usage[i].pid);
+	{
+		gpuProcesses.push_back({usage[i].pid, usage[i].name});
+	}
 
 	std::unordered_map<DWORD, uint64_t> gpuUsage;
 
 	// START_CHRONO(gpusampler);
-	if (!gpuPids.empty())
-		gpuUsage = m_gpuSampler.Sample(gpuPids);
+	if (!gpuProcesses.empty())
+		gpuUsage = m_gpuSampler.Sample(gpuProcesses);
 	// END_CHRONO(gpusampler, "Gpu Sampler");
 
 	// Build final result
@@ -207,15 +226,6 @@ std::vector<ProcessInfo> ProcessWatcher::Poll()
 	{
 		const Entry &entry = usage[i];
 
-		std::string name;
-
-		if (entry.namePtr && entry.nameLen > 0)
-			name = WideToUtf8(entry.namePtr, entry.nameLen / sizeof(WCHAR));
-		else if (entry.pid == 4)
-			name = "System";
-		else
-			name = "<unknown>";
-
 		uint64_t gpuVramUsage = 0;
 
 		auto gpuIt = gpuUsage.find(entry.pid);
@@ -223,7 +233,7 @@ std::vector<ProcessInfo> ProcessWatcher::Poll()
 		if (gpuIt != gpuUsage.end())
 			gpuVramUsage = gpuIt->second;
 
-		result.push_back({std::move(name), entry.cpu, entry.ramUsage, gpuVramUsage});
+		result.push_back({entry.name, entry.cpu, entry.ramUsage, gpuVramUsage});
 	}
 
 	m_LastTop = result;

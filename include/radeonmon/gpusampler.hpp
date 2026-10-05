@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
+#include <string>
+
 #include <windows.h>
 
 /**
@@ -16,6 +18,12 @@
 class GpuSampler
 {
   public:
+	struct GpuProcess
+	{
+		DWORD pid;
+		std::string_view name;
+	};
+
 	using ProcessGpuUsage = std::unordered_map<DWORD, uint64_t>;
 
   public:
@@ -33,7 +41,7 @@ class GpuSampler
 	 *
 	 * Processes for which GPU usage cannot be obtained are omitted.
 	 */
-	ProcessGpuUsage Sample(const std::vector<DWORD> &pids);
+	ProcessGpuUsage Sample(const std::vector<GpuProcess> &pids);
 
   private:
 	struct Impl;
