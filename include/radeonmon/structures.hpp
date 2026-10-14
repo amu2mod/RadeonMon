@@ -1043,9 +1043,10 @@ struct GPUInfo
 	adlx_uint vramBandwidth = 0;
 	adlx_uint vramBitRate = 0;
 
-	// For tooltip
-	std::wstring tooltipText;
+  private:
+	std::wstring tooltip; // cached gpu info part
 
+  public:
 	// Helpers
 	static std::wstring CharToWide(const char *value)
 	{
@@ -1167,8 +1168,6 @@ struct GPUInfo
 	void SetVRAMVendorRevId(adlx_uint value) { vramVendorRevId = value; }
 	void SetVRAMBandwidth(adlx_uint value) { vramBandwidth = value; }
 	void SetVRAMBitRate(adlx_uint value) { vramBitRate = value; }
-
-	void BuildToolTip() { tooltipText = GetTooltip(); }
 
 	static const wchar_t *AsicFamilyToString(adlx::ADLX_ASIC_FAMILY_TYPE family)
 	{
@@ -1429,68 +1428,75 @@ struct GPUInfo
 		}
 	}
 
-	std::wstring GetTooltip() const
+	void BuildToolTip()
 	{
-		std::wstring tooltip;
-
-		// GPU INFO
-		tooltip += L"=== GPU Info ===\r\n";
-		tooltip += L"Name: " + name + L"\r\n";
-		tooltip += L"Vendor ID: " + vendorId + L" (" + std::wstring(VendorIdToString(vendorId)) + L")\r\n";
-		tooltip += L"Device ID: " + deviceId + L"\r\n";
-		tooltip += L"Revision ID: " + revisionId + L"\r\n";
-		tooltip += L"Subsystem ID: " + subSystemId + L"\r\n";
-		tooltip += L"Subsystem Vendor ID: " + subSystemVendorId + L" (" + std::wstring(SubSystemVendorToString(subSystemVendorId)) + L")\r\n";
-		tooltip += L"Unique ID: " + std::to_wstring(uniqueId) + L"\r\n";
-		tooltip += L"ASIC Family: " + std::wstring(AsicFamilyToString(asicFamilyType)) + L"\r\n";
-		tooltip += L"GPU Type: " + std::wstring(GPUTypeToString(gpuType)) + L"\r\n";
-		tooltip += L"External: " + std::wstring(isExternal ? L"Yes" : L"No") + L"\r\n";
-		tooltip += L"Micro Architecture: " + microArchitecture + L"\r\n";
-		tooltip += L"Driver Path: " + driverPath + L"\r\n";
-		tooltip += L"PNP String: " + pnpString + L"\r\n";
-		tooltip += L"Has Desktops: " + std::wstring(hasDesktops ? L"Yes" : L"No") + L"\r\n";
-
-		// BIOS INFO
-		tooltip += L"\r\n=== BIOS Info ===\r\n";
-		tooltip += L"Part Number: " + biosPartNumber + L"\r\n";
-		tooltip += L"Version: " + biosVersion + L"\r\n";
-		tooltip += L"Date: " + biosDate + L"\r\n";
-
-		// VRAM INFO
-		tooltip += L"\r\n=== VRAM Info ===\r\n";
-		tooltip += L"Total VRAM: " + std::to_wstring(totalVRAMMB) + L" MB\r\n";
-		tooltip += L"VRAM Type: " + vramType + L"\r\n";
-		tooltip += L"Visible VRAM: " + std::to_wstring(visibleVRAM) + L" MB\r\n";
-		tooltip += L"Invisible VRAM: " + std::to_wstring(invisibleVRAM) + L" MB\r\n";
-		tooltip += L"Highest VRAM Bandwidth: " + std::to_wstring(highestVRAMBandwidth) + L" MB/s\r\n";
-		tooltip += L"VRAM Bandwidth: " + std::to_wstring(vramBandwidth) + L" MB/s\r\n";
-		tooltip += L"VRAM Bit Rate: " + std::to_wstring(vramBitRate) + L" Mbps\r\n";
-
-		wchar_t buffer[64] = {};
-		swprintf_s(buffer, L"VRAM Vendor ID: 0x%02X (%ls)\r\n", vramVendorRevId, VRAMVendorToString(vramVendorRevId));
-		tooltip += buffer;
-
-		// SOFTWARE INFO
-		tooltip += L"\r\n=== Software Info ===\r\n";
-		tooltip += L"AMD Software Edition: " + CharToWide(amdSoftwareEdition.c_str()) + L"\r\n";
-		tooltip += L"AMD Software Version: " + CharToWide(amdSoftwareVersion.c_str()) + L"\r\n";
-		tooltip += L"Driver Version: " + CharToWide(driverVersion.c_str()) + L"\r\n";
-		tooltip += L"AMD Windows Driver Version: " + CharToWide(amdWindowsDriverVersion.c_str()) + L"\r\n";
-
-		if (amdSoftwareReleaseYear != 0)
-			tooltip += L"AMD Software Release Date: " + std::to_wstring(amdSoftwareReleaseYear) + L"-" + std::to_wstring(amdSoftwareReleaseMonth) + L"-" + std::to_wstring(amdSoftwareReleaseDay) + L"\r\n";
-
-		tooltip += L"LUID: " + std::to_wstring(luid.highPart) + L":" + std::to_wstring(luid.lowPart) + L"\r\n";
-		tooltip += L"Application List Supported: " + std::wstring(applicationListSupported ? L"Yes" : L"No") + L"\r\n";
-		tooltip += L"Applications: " + std::to_wstring(applications.size()) + L"\r\n";
-
-		for (const auto &app : applications)
+		if (tooltip.empty()) // double check to avoid dup work
 		{
-			tooltip += L"  PID: " + std::to_wstring(app.processId) + L"\r\n";
-			tooltip += L"  Name: " + app.name + L"\r\n";
-			tooltip += L"  Path: " + app.fullPath + L"\r\n";
-			tooltip += L"  GPU Dependency: " + std::wstring(GpuDependencyToString(app.dependency)) + L"\r\n";
+			// GPU INFO
+			tooltip += L"=== GPU Info ===\r\n";
+			tooltip += L"Name: " + name + L"\r\n";
+			tooltip += L"Vendor ID: " + vendorId + L" (" + std::wstring(VendorIdToString(vendorId)) + L")\r\n";
+			tooltip += L"Device ID: " + deviceId + L"\r\n";
+			tooltip += L"Revision ID: " + revisionId + L"\r\n";
+			tooltip += L"Subsystem ID: " + subSystemId + L"\r\n";
+			tooltip += L"Subsystem Vendor ID: " + subSystemVendorId + L" (" + std::wstring(SubSystemVendorToString(subSystemVendorId)) + L")\r\n";
+			tooltip += L"Unique ID: " + std::to_wstring(uniqueId) + L"\r\n";
+			tooltip += L"ASIC Family: " + std::wstring(AsicFamilyToString(asicFamilyType)) + L"\r\n";
+			tooltip += L"GPU Type: " + std::wstring(GPUTypeToString(gpuType)) + L"\r\n";
+			tooltip += L"External: " + std::wstring(isExternal ? L"Yes" : L"No") + L"\r\n";
+			tooltip += L"Micro Architecture: " + microArchitecture + L"\r\n";
+			tooltip += L"Driver Path: " + driverPath + L"\r\n";
+			tooltip += L"PNP String: " + pnpString + L"\r\n";
+			tooltip += L"Has Desktops: " + std::wstring(hasDesktops ? L"Yes" : L"No") + L"\r\n";
+
+			// BIOS INFO
+			tooltip += L"\r\n=== BIOS Info ===\r\n";
+			tooltip += L"Part Number: " + biosPartNumber + L"\r\n";
+			tooltip += L"Version: " + biosVersion + L"\r\n";
+			tooltip += L"Date: " + biosDate + L"\r\n";
+
+			// VRAM INFO
+			tooltip += L"\r\n=== VRAM Info ===\r\n";
+			tooltip += L"Total VRAM: " + std::to_wstring(totalVRAMMB) + L" MB\r\n";
+			tooltip += L"VRAM Type: " + vramType + L"\r\n";
+			tooltip += L"Visible VRAM: " + std::to_wstring(visibleVRAM) + L" MB\r\n";
+			tooltip += L"Invisible VRAM: " + std::to_wstring(invisibleVRAM) + L" MB\r\n";
+			tooltip += L"Highest VRAM Bandwidth: " + std::to_wstring(highestVRAMBandwidth) + L" MB/s\r\n";
+			tooltip += L"VRAM Bandwidth: " + std::to_wstring(vramBandwidth) + L" MB/s\r\n";
+			tooltip += L"VRAM Bit Rate: " + std::to_wstring(vramBitRate) + L" Mbps\r\n";
+
+			wchar_t buffer[64] = {};
+			swprintf_s(buffer, L"VRAM Vendor ID: 0x%02X (%ls)\r\n", vramVendorRevId, VRAMVendorToString(vramVendorRevId));
+			tooltip += buffer;
+
+			// SOFTWARE INFO
+			tooltip += L"\r\n=== Software Info ===\r\n";
+			tooltip += L"AMD Software Edition: " + CharToWide(amdSoftwareEdition.c_str()) + L"\r\n";
+			tooltip += L"AMD Software Version: " + CharToWide(amdSoftwareVersion.c_str()) + L"\r\n";
+			tooltip += L"Driver Version: " + CharToWide(driverVersion.c_str()) + L"\r\n";
+			tooltip += L"AMD Windows Driver Version: " + CharToWide(amdWindowsDriverVersion.c_str()) + L"\r\n";
+
+			if (amdSoftwareReleaseYear != 0)
+				tooltip += L"AMD Software Release Date: " + std::to_wstring(amdSoftwareReleaseYear) + L"-" + std::to_wstring(amdSoftwareReleaseMonth) + L"-" + std::to_wstring(amdSoftwareReleaseDay) + L"\r\n";
+
+			tooltip += L"LUID: " + std::to_wstring(luid.highPart) + L":" + std::to_wstring(luid.lowPart) + L"\r\n";
+			tooltip += L"Application List Supported: " + std::wstring(applicationListSupported ? L"Yes" : L"No") + L"\r\n";
+			tooltip += L"Applications: " + std::to_wstring(applications.size()) + L"\r\n";
+
+			for (const auto &app : applications)
+			{
+				tooltip += L"  PID: " + std::to_wstring(app.processId) + L"\r\n";
+				tooltip += L"  Name: " + app.name + L"\r\n";
+				tooltip += L"  Path: " + app.fullPath + L"\r\n";
+				tooltip += L"  GPU Dependency: " + std::wstring(GpuDependencyToString(app.dependency)) + L"\r\n";
+			}
 		}
+	}
+
+	const std::wstring &GetTooltip()
+	{
+		if (tooltip.empty())
+			BuildToolTip();
 
 		return tooltip;
 	}

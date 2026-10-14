@@ -38,6 +38,47 @@ using namespace RadeonMon::Hardware;
 void OnScreenshotAction(HWND hwnd);
 void ClearGamepadIcon(HDC hdc);
 void SetDisplayLine(const DisplayInfo &, HWND);
+void UpdateToolTipText(HWND hwnd, UINT_PTR toolId, std::wstring &text, int maxWidth);
+
+void OnShaderCacheChange(HWND hwnd)
+{
+	const auto caches = g_shaderCache.GetCacheSizes();
+
+	std::wstring shaderCacheText = L"\r\n=== AMD Shader Cache ===\r\n";
+
+	double totalSizeGB = 0.0;
+
+	for (const auto &cache : caches)
+		totalSizeGB += cache.sizeGB;
+
+	wchar_t sizeBuffer[32]{};
+	swprintf_s(sizeBuffer, L"%.2f", totalSizeGB);
+
+	shaderCacheText += L"Total: ";
+	shaderCacheText += sizeBuffer;
+	shaderCacheText += L" GB\r\n";
+
+	for (const auto &cache : caches)
+	{
+		shaderCacheText += cache.APIName;
+		shaderCacheText += L": ";
+
+		swprintf_s(sizeBuffer, L"%.2f", cache.sizeGB);
+
+		shaderCacheText += sizeBuffer;
+		shaderCacheText += L" GB\r\n";
+	}
+
+	auto gpuInfoText = g_AdlxGPUTelemetry.GetGpuInfo().GetTooltip();
+
+	std::wstring tooltipText = gpuInfoText + shaderCacheText;
+
+	int max = g_AdlxGPUTelemetry.GetGpuInfo().GetDriverPathTooltipWidth(g_hwndTooltip);
+
+	UpdateToolTipText(hwnd, TOOLID_GPUINFO, tooltipText, max);
+
+	LOG_DEBUG("Shader Cache changed: %ls", shaderCacheText.c_str());
+}
 
 void RestoreLockedFrequency(HWND hwnd, int index, uint16_t frequency)
 {
@@ -384,16 +425,13 @@ void DeleteFonts()
 	}
 }
 
-void UpdateToolTipText(HWND hwnd, UINT_PTR toolId, const std::wstring &text, int maxWidth)
+void UpdateToolTipText(HWND hwnd, UINT_PTR toolId, std::wstring &text, int maxWidth)
 {
-	static std::wstring tooltipText;
-	tooltipText = text;
-
 	TOOLINFO ti = {};
 	ti.cbSize = sizeof(TOOLINFO);
 	ti.hwnd = hwnd;
 	ti.uId = toolId;
-	ti.lpszText = const_cast<LPWSTR>(tooltipText.c_str());
+	ti.lpszText = const_cast<LPWSTR>(text.c_str());
 
 	SendMessage(g_hwndTooltip, TTM_UPDATETIPTEXT, 0, reinterpret_cast<LPARAM>(&ti));
 	SendMessage(g_hwndTooltip, TTM_SETMAXTIPWIDTH, 0, maxWidth); // set max width large enough for multiline
@@ -2985,8 +3023,18 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
 	if (g_isVRREnabled)
 		g_vrrDetector.Start();
 
+	// if (g_AdlxGPUTelemetry.isInitialized)
+	// UpdateToolTipText(hwnd, TOOLID_GPUINFO, g_AdlxGPUTelemetry.GetGpuInfo().GetTooltip(), g_AdlxGPUTelemetry.GetGpuInfo().GetDriverPathTooltipWidth(g_hwndTooltip));
+
 	if (g_AdlxGPUTelemetry.isInitialized)
-		UpdateToolTipText(hwnd, TOOLID_GPUINFO, g_AdlxGPUTelemetry.GetGpuInfo().GetTooltip(), g_AdlxGPUTelemetry.GetGpuInfo().GetDriverPathTooltipWidth(g_hwndTooltip));
+	{
+		g_shaderCache.Init(hwnd);
+
+		if (g_shaderCache.Start(OnShaderCacheChange))
+			LOG_INFO("Shader Cache Monitoring started");
+		else
+			LOG_ERROR("Shader Cache Monitoring failed");
+	}
 
 	LOG_DEBUG("[Main] Admin mode: %s", g_isAdmin ? "yes" : "no");
 
@@ -3086,6 +3134,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, [[maybe_unused]] int 
 	g_borderBrush = nullptr;
 	DeleteObject(g_bgBrush);
 	g_bgBrush = nullptr;
+
+	g_shaderCache.Stop();
 
 	return static_cast<int>(msg.wParam);
 }

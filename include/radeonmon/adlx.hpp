@@ -12,69 +12,65 @@ using namespace RadeonMon::Hardware;
 
 class ADLXGpuTelemetry : public IADLXGPUTuningChangedListener
 {
-public:
-    bool isInitialized = false;
-    RadeonMon::Hardware::GPUInfo gpuInfo;
+  public:
+	bool isInitialized = false;
+	RadeonMon::Hardware::GPUInfo gpuInfo;
 
-    inline explicit ADLXGpuTelemetry(const bool &fpsEnabled) : isFpsEnabled(fpsEnabled) {}
+	inline explicit ADLXGpuTelemetry(const bool &fpsEnabled) : isFpsEnabled(fpsEnabled) {}
 
-    void Init(HWND hwnd);
-    void Discover(); // Discover all supported metrics functions
-    void Probe();    // initizalize min/max values
-    void Destroy();
+	void Init(HWND hwnd);
+	void Discover(); // Discover all supported metrics functions
+	void Probe();	 // initizalize min/max values
+	void Destroy();
 
-    inline void Tick() { m_snapshot = Query(); }
-    inline const GpuMetricsSnapshot &Get() const { return m_snapshot; }
+	inline void Tick() { m_snapshot = Query(); }
+	inline const GpuMetricsSnapshot &Get() const { return m_snapshot; }
 
-    adlx_bool ADLX_STD_CALL OnGPUTuningChanged(IADLXGPUTuningChangedEvent *pGPUTuningChangedEvent) override;
+	adlx_bool ADLX_STD_CALL OnGPUTuningChanged(IADLXGPUTuningChangedEvent *pGPUTuningChangedEvent) override;
 
-    inline bool IsEnabled(uint32_t flag) const { return (gpuCaps & flag) != 0; }
-    inline const RadeonMon::Hardware::GPUInfo GetGpuInfo() const { return gpuInfo; }
-    inline int GetSnapshotFPS() const { return m_snapshot.fps; }
+	inline bool IsEnabled(uint32_t flag) const { return (gpuCaps & flag) != 0; }
+	inline RadeonMon::Hardware::GPUInfo GetGpuInfo() { return gpuInfo; }
+	inline int GetSnapshotFPS() const { return m_snapshot.fps; }
 
-    template <typename MetricT>
-    inline void ClearChanged(MetricT RadeonMon::Hardware::GpuMetricsSnapshot::*member) { (m_snapshot.*member).hasChanged = false; }
+	template <typename MetricT> inline void ClearChanged(MetricT RadeonMon::Hardware::GpuMetricsSnapshot::*member) { (m_snapshot.*member).hasChanged = false; }
 
-private:
-    ADLXHelper ADLXHelp;
-    IADLXGPUPtr selectedGPU;
-    IADLXPerformanceMonitoringServicesPtr perfMonitoringService;
-    IADLXGPUMetricsSupportPtr gpuMetricsSupport = nullptr;
-    IADLXGPUMetricsSupport1Ptr gpuMetricsSupport1 = nullptr;
-    IADLXGPUMetricsSupport2Ptr gpuMetricsSupport2 = nullptr;
-    IADLXGPUMetricsSupport3Ptr gpuMetricsSupport3 = nullptr;
-    IADLXGPUTuningServicesPtr gpuTuningService = nullptr;
-    IADLXInterfacePtr manualPowerTuningIfc;
-    IADLXManualPowerTuningPtr manualPowerTuning = nullptr;
+  private:
+	ADLXHelper ADLXHelp;
+	IADLXGPUPtr selectedGPU;
+	IADLXPerformanceMonitoringServicesPtr perfMonitoringService;
+	IADLXGPUMetricsSupportPtr gpuMetricsSupport = nullptr;
+	IADLXGPUMetricsSupport1Ptr gpuMetricsSupport1 = nullptr;
+	IADLXGPUMetricsSupport2Ptr gpuMetricsSupport2 = nullptr;
+	IADLXGPUMetricsSupport3Ptr gpuMetricsSupport3 = nullptr;
+	IADLXGPUTuningServicesPtr gpuTuningService = nullptr;
+	IADLXInterfacePtr manualPowerTuningIfc;
+	IADLXManualPowerTuningPtr manualPowerTuning = nullptr;
 
-    uint32_t gpuCaps = 0;
+	uint32_t gpuCaps = 0;
 
-    GpuMetricsSnapshot m_snapshot;
+	GpuMetricsSnapshot m_snapshot;
 
-    const bool &isFpsEnabled;
+	const bool &isFpsEnabled;
 
-    HANDLE m_blockEvent = nullptr;
-    HWND m_hwnd = nullptr;
+	HANDLE m_blockEvent = nullptr;
+	HWND m_hwnd = nullptr;
 
-    // Generic template to read ADLX metrics
-    template <typename T, typename MetricFn>
-    int ReadMetric(const char *name, MetricFn metricFn, IADLXGPUMetrics *metrics);
+	// Generic template to read ADLX metrics
+	template <typename T, typename MetricFn> int ReadMetric(const char *name, MetricFn metricFn, IADLXGPUMetrics *metrics);
 
-    // Use IADLXGPUMetrics1Ptr for newer metrics of ADLX 1.5
-    template <typename T, typename MetricFn>
-    int ReadMetricV1(const char *name, MetricFn metricFn, IADLXGPUMetrics *metrics);
+	// Use IADLXGPUMetrics1Ptr for newer metrics of ADLX 1.5
+	template <typename T, typename MetricFn> int ReadMetricV1(const char *name, MetricFn metricFn, IADLXGPUMetrics *metrics);
 
-    template <typename T, typename MetricFn>
-    int ReadMetricV3(const char *name, MetricFn metricFn, IADLXGPUMetrics *gpuMetrics);
+	template <typename T, typename MetricFn> int ReadMetricV3(const char *name, MetricFn metricFn, IADLXGPUMetrics *gpuMetrics);
 
-    // heavy function to get all metrics
-    GpuMetricsSnapshot Query();
+	// heavy function to get all metrics
+	GpuMetricsSnapshot Query();
 
-    // Retrieve all gpu info
-    void PopulateGPUInfo(IADLXGPU *gpu);
+	// Retrieve all gpu info
+	void PopulateGPUInfo(IADLXGPU *gpu);
 
-    // Helper to update power limit
-    void UpdateManualPowerTuning();
+	// Helper to update power limit
+	void UpdateManualPowerTuning();
 
-    int GetFPS();
+	int GetFPS();
 };

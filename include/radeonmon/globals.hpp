@@ -25,6 +25,7 @@
 #include "radeonmon/dualsense.hpp"
 #include "radeonmon/xboxwirelesscontroller.hpp"
 #include "radeonmon/switchprocontroller.hpp"
+#include "radeonmon/amd_shadercache.hpp"
 
 inline UINT g_dpi = 96;
 inline GdiBackBuffer g_backBuffer;
@@ -144,3 +145,4 @@ inline uint8_t g_screenshotRate = 1u;
 inline uint8_t g_hdrMode = 0u;
 inline bool g_gpuTooltipVisible = false;
 inline std::unordered_map<std::wstring, int> g_monitorsLockMap; // mapping for locked frequencies, -1 = not set, positive value = locked freq
+inline AmdShaderCache g_shaderCache;
