@@ -990,6 +990,12 @@ struct GPUInfo
 	std::string strName;
 	std::wstring driverPath;
 	std::wstring pnpString;
+	std::wstring productName;
+
+	// Extra Info
+	std::wstring GPUMode;
+	std::wstring PCIBusType;
+	std::wstring PCIBusLaneWidth;
 
 	// Precomputed for json
 	char shortName[32] = "";
@@ -1066,13 +1072,9 @@ struct GPUInfo
 	}
 
 	void SetVendorId(const char *value) { vendorId = CharToWide(value); }
-
 	void SetDeviceId(const char *value) { deviceId = CharToWide(value); }
-
 	void SetRevisionId(const char *value) { revisionId = CharToWide(value); }
-
 	void SetSubSystemId(const char *value) { subSystemId = CharToWide(value); }
-
 	void SetSubSystemVendorId(const char *value) { subSystemVendorId = CharToWide(value); }
 
 	void SetShortName(const char *value)
@@ -1123,6 +1125,11 @@ struct GPUInfo
 	void SetBiosPartNumber(const char *value) { biosPartNumber = CharToWide(value); }
 	void SetBiosVersion(const char *value) { biosVersion = CharToWide(value); }
 	void SetBiosDate(const char *value) { biosDate = CharToWide(value); }
+
+	void SetProductName(const char *value) { productName = CharToWide(value); }
+	void SetMultiGPUMode(const char *value) { GPUMode = CharToWide(value); }
+	void SetPCIBusType(const wchar_t *value) { PCIBusType = std::wstring(value); }
+	void SetPCIBusLaneWidth(uint32_t value) { PCIBusLaneWidth = std::to_wstring(value); }
 
 	// ADLX GPU2 setters
 	void SetAMDSoftwareEdition(const char *value) { amdSoftwareEdition = value ? value : ""; }
@@ -1435,9 +1442,12 @@ struct GPUInfo
 			// GPU INFO
 			tooltip += L"=== GPU Info ===\r\n";
 			tooltip += L"Name: " + name + L"\r\n";
+			tooltip += L"Product Name: " + productName + L"\r\n";
 			tooltip += L"Vendor ID: " + vendorId + L" (" + std::wstring(VendorIdToString(vendorId)) + L")\r\n";
 			tooltip += L"Device ID: " + deviceId + L"\r\n";
 			tooltip += L"Revision ID: " + revisionId + L"\r\n";
+			tooltip += L"PCI Bus Type: " + PCIBusType + L"\r\n";
+			tooltip += L"PCI Lane Width: " + PCIBusLaneWidth + L"\r\n";
 			tooltip += L"Subsystem ID: " + subSystemId + L"\r\n";
 			tooltip += L"Subsystem Vendor ID: " + subSystemVendorId + L" (" + std::wstring(SubSystemVendorToString(subSystemVendorId)) + L")\r\n";
 			tooltip += L"Unique ID: " + std::to_wstring(uniqueId) + L"\r\n";
@@ -1448,6 +1458,7 @@ struct GPUInfo
 			tooltip += L"Driver Path: " + driverPath + L"\r\n";
 			tooltip += L"PNP String: " + pnpString + L"\r\n";
 			tooltip += L"Has Desktops: " + std::wstring(hasDesktops ? L"Yes" : L"No") + L"\r\n";
+			tooltip += L"Multi-GPU: " + GPUMode + L"\r\n";
 
 			// BIOS INFO
 			tooltip += L"\r\n=== BIOS Info ===\r\n";

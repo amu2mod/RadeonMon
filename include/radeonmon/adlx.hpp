@@ -60,7 +60,6 @@ class ADLXGpuTelemetry : public IADLXGPUTuningChangedListener
 
 	// Use IADLXGPUMetrics1Ptr for newer metrics of ADLX 1.5
 	template <typename T, typename MetricFn> int ReadMetricV1(const char *name, MetricFn metricFn, IADLXGPUMetrics *metrics);
-
 	template <typename T, typename MetricFn> int ReadMetricV3(const char *name, MetricFn metricFn, IADLXGPUMetrics *gpuMetrics);
 
 	// heavy function to get all metrics

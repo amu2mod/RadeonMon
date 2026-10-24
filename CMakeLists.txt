@@ -86,6 +86,7 @@ add_executable(radeonmon WIN32
     src/xboxwirelesscontroller.cpp
     src/switchprocontroller.cpp
     src/gpusampler.cpp
+    src/amd_shadercache.cpp
 )
 
 option(ENABLE_TESTMODE "Enable TEST preprocessor define" OFF)

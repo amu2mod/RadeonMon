@@ -792,6 +792,60 @@ void ADLXGpuTelemetry::PopulateGPUInfo(IADLXGPU *gpu)
 	if (gpu->VRAMType(&value) == ADLX_OK)
 		gpuInfo.SetVramType(value);
 
+	// Product Name, Multi GPU, PCI Lanes
+	IADLXGPU1Ptr gpu1(gpu);
+	if (gpu1)
+	{
+		// Product Name
+		const char *productName = nullptr;
+		if (gpu1->ProductName(&productName) == ADLX_OK)
+			gpuInfo.SetProductName(productName);
+		else
+			LOG_WARN("[ADLX] Failed to get <ProductName>");
+
+		// Multi GPU Mode
+		ADLX_MGPU_MODE mode = MGPU_NONE;
+		if (gpu1->MultiGPUMode(&mode) == ADLX_OK)
+		{
+
+			switch (mode)
+			{
+			case MGPU_PRIMARY:
+				gpuInfo.SetMultiGPUMode("GPU is the primary GPU");
+				break;
+			case MGPU_SECONDARY:
+				gpuInfo.SetMultiGPUMode("GPU is the secondary GPU");
+				break;
+			default:
+				gpuInfo.SetMultiGPUMode("GPU is not in Multi-GPU");
+			}
+		}
+		else
+			LOG_WARN("[ADLX] Failed to get <MultiGPUMode>");
+
+		// PCI Lane
+		static constexpr const wchar_t *busTypeNames[] = {L"Undefined", L"PCI", L"AGP", L"PCI Express", L"PCI Express 2.0", L"PCI Express 3.0", L"PCI Express 4.0", L"PCI Express 5.0"};
+		static constexpr const size_t BUS_TYPE_COUNT = _countof(busTypeNames);
+
+		ADLX_PCI_BUS_TYPE busType = UNDEFINED;
+		if (gpu1->PCIBusType(&busType) == ADLX_OK)
+		{
+			const auto index = static_cast<int>(busType);
+			if (index >= 0 && index < BUS_TYPE_COUNT)
+				gpuInfo.SetPCIBusType(busTypeNames[index]);
+			else
+				gpuInfo.SetPCIBusType(L"Unknown");
+		}
+		else
+			LOG_WARN("[ADLX] Failed to get <PCIBusType>");
+
+		adlx_uint laneWidth = 0;
+		if (gpu1->PCIBusLaneWidth(&laneWidth) == ADLX_OK)
+			gpuInfo.SetPCIBusLaneWidth(static_cast<uint32_t>(laneWidth));
+		else
+			LOG_WARN("[ADLX] Failed to get <PCIBusLaneWidth>");
+	}
+
 	// Extended VRAM information - ADLX GPU3
 	IADLXGPU3Ptr gpu3(gpu);
 
