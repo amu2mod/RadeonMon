@@ -13,7 +13,7 @@
 
 class AmdShaderCache
 {
-  public:
+public:
 	enum class CacheType : uint8_t
 	{
 		DX9,
@@ -56,16 +56,16 @@ class AmdShaderCache
 	// Returns a thread-safe snapshot of the latest cache sizes.
 	CacheArray GetCacheSizes() const;
 
-  private:
+private:
 	static constexpr std::chrono::seconds ScanInterval{60};
 
-	static constexpr const wchar_t *CacheFolders[] = {L"dx9cache", L"dxcache", L"dxccache", L"oglcache", L"vkcache"};
-	static constexpr int FOLDER_COUNT = _countof(CacheFolders);
-	static constexpr CacheType types[] = {CacheType::DX9, CacheType::DX11, CacheType::DX12, CacheType::OpenGL, CacheType::Vulkan};
-	static constexpr const wchar_t *apis[] = {L"DirectX 9", L"DirectX 11", L"DirectX 12", L"OpenGL", L"Vulkan"};
+	static constexpr const wchar_t *c_cacheFolders[] = {L"dx9cache", L"dxcache", L"dxccache", L"oglcache", L"vkcache"};
+	static constexpr int c_folderCount = _countof(c_cacheFolders);
+	static constexpr CacheType c_types[] = {CacheType::DX9, CacheType::DX11, CacheType::DX12, CacheType::OpenGL, CacheType::Vulkan};
+	static constexpr const wchar_t *c_apis[] = {L"DirectX 9", L"DirectX 11", L"DirectX 12", L"OpenGL", L"Vulkan"};
 
-	static_assert(_countof(types) == _countof(apis), "Cache types and API names must have the same size");
-	static_assert(_countof(types) == static_cast<uint8_t>(CacheType::Count), "CacheType enum and arrays are out of sync");
+	static_assert(_countof(c_types) == _countof(c_apis), "Cache c_types and API names must have the same size");
+	static_assert(_countof(c_types) == static_cast<uint8_t>(CacheType::Count), "CacheType enum and arrays are out of sync");
 
 	// Worker thread entry point.
 	void WatchThread();

@@ -20,7 +20,7 @@ bool AmdShaderCache::IsCachePath(const std::wstring &relativePath)
 
 	const std::wstring firstComponent = relativePath.substr(0, separator);
 
-	for (const wchar_t *folder : CacheFolders)
+	for (const wchar_t *folder : c_cacheFolders)
 	{
 		if (_wcsicmp(firstComponent.c_str(), folder) == 0)
 			return true;
@@ -185,13 +185,13 @@ AmdShaderCache::CacheArray AmdShaderCache::ScanCacheSizes() const
 {
 	CacheArray result{};
 
-	for (std::size_t i = 0; i < FOLDER_COUNT; ++i)
+	for (std::size_t i = 0; i < c_folderCount; ++i)
 	{
-		result[i].type = types[i];
-		result[i].folderName = CacheFolders[i];
-		result[i].APIName = apis[i];
+		result[i].type = c_types[i];
+		result[i].folderName = c_cacheFolders[i];
+		result[i].APIName = c_apis[i];
 
-		const std::wstring directory = m_cachePath + L"\\" + CacheFolders[i];
+		const std::wstring directory = m_cachePath + L"\\" + c_cacheFolders[i];
 
 		result[i].sizeGB = IsDirectory(directory) ? CalculateDirectorySizeGB(directory) : 0.0;
 	}
